@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 
+// Using a slightly newer version or sticking to the one that works.
+// v10 is old but reliable for simple JS.
+// However, for "Coach mode" we might want something faster, but let's stick to this to ensure it works on GitHub pages without WASM headers issues.
 const STOCKFISH_URL = 'https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.0/stockfish.js';
 
 export interface EvalScore {
@@ -25,6 +28,7 @@ export const useStockfish = () => {
 
         worker.onmessage = (e) => {
           const line = e.data;
+          // console.log("SF:", line); // Debug
           
           if (line === 'uciok') {
             setIsReady(true);

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Chessboard from './Chessboard';
 import { Settings, Flag, XCircle, Search, ChevronRight, RotateCcw } from 'lucide-react';
 import GameReviewPanel from './GameReviewPanel';
-import PlayBotsPanel from './PlayBotsPanel';
+import PlayBotsPanel, { BotProfile } from './PlayBotsPanel';
 import { Chess } from 'chess.js';
 import { useStockfish } from '../hooks/useStockfish';
 
@@ -13,7 +13,8 @@ interface GameInterfaceProps {
 
 const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', onAnalyze }) => {
   const [activePanel, setActivePanel] = useState<'play' | 'review' | 'bots'>(initialMode);
-  
+  const [activeBot, setActiveBot] = useState<BotProfile | null>(null);
+
   // Game State
   const [game, setGame] = useState(new Chess());
   const [fen, setFen] = useState(game.fen());
@@ -22,7 +23,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', onA
   const [gameResult, setGameResult] = useState<string>('');
   
   // Engine
-  const { bestMove, sendCommand, resetBestMove } = useStockfish();
+  const { bestMove, sendCommand, resetBestMove, isReady } = useStockfish();
 
   // Sync state if prop changes
   useEffect(() => {
@@ -56,19 +57,26 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', onA
               setGame(new Chess(game.fen())); // Immutable update for re-render
               
               // Trigger Bot Response if in Bot Mode and game not over
-              if (isBotMode && !game.isGameOver()) {
+              // Only if it's black's turn (user plays white usually)
+              if (isBotMode && activeBot && !game.isGameOver()) {
                   resetBestMove();
                   // Small delay for realism
                   setTimeout(() => {
+                      if (activeBot.skillLevel !== undefined) {
+                           sendCommand(`setoption name Skill Level value ${activeBot.skillLevel}`);
+                           // Some older stockfish versions or JS ports might use UCI_LimitStrength
+                           sendCommand(`setoption name UCI_LimitStrength value true`);
+                           sendCommand(`setoption name UCI_Elo value ${activeBot.rating}`);
+                      }
                       sendCommand(`position fen ${game.fen()}`);
-                      sendCommand('go depth 10'); // Adjust depth for difficulty
+                      sendCommand(`go depth ${activeBot.depth || 10}`);
                   }, 500);
               }
           }
       } catch (e) {
           // Illegal move
       }
-  }, [game, isBotMode, sendCommand, resetBestMove]);
+  }, [game, isBotMode, activeBot, sendCommand, resetBestMove]);
 
   // Handle Engine Move (Bot)
   useEffect(() => {
@@ -96,11 +104,17 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', onA
 
   // Reset game when switching modes
   useEffect(() => {
-      const newGame = new Chess();
-      setGame(newGame);
-      setFen(newGame.fen());
-      setLastMove(null);
-      setIsGameOver(false);
+      if (!isReviewMode) {
+          // Don't reset if switching to review, we want to review the current game
+          // But wait, if we switch modes we might want to reset.
+          // Usually 'review' mode comes from clicking 'Game Review' which calls onAnalyze
+          // but here we have a tab switcher.
+          if (activePanel === 'play' || activePanel === 'bots') {
+              // Only reset if actually changing context?
+              // For now, let's reset if we go TO play or bots.
+              // But if we are in 'bots' and select a bot, we don't want to reset until 'Play' is clicked.
+          }
+      }
   }, [activePanel]);
 
   const handleNewGame = () => {
@@ -109,6 +123,17 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', onA
       setFen(newGame.fen());
       setLastMove(null);
       setIsGameOver(false);
+      setGameResult('');
+  };
+
+  const handleStartBotGame = (bot: BotProfile) => {
+      setActiveBot(bot);
+      handleNewGame();
+      // Ensure we are in bot view but with the board active.
+      // Actually 'bots' panel overlays the sidebar.
+      // We want to hide the bot selection panel or indicate game started.
+      // But currently PlayBotsPanel takes up the sidebar.
+      // That is fine.
   };
 
   return (
@@ -132,8 +157,8 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', onA
             <div className="flex justify-between items-end mb-1 px-1">
                 <div className="flex items-center gap-2 md:gap-3">
                     <div className="w-8 h-8 md:w-10 md:h-10 rounded bg-gray-500 overflow-hidden border border-white/20 relative group">
-                        {isBotMode ? (
-                           <img src="https://images.chesscomfiles.com/uploads/v1/user/165768852.17066896.200x200o.e40702464731.jpeg" alt="Martin" className="w-full h-full object-cover" />
+                        {isBotMode && activeBot ? (
+                           <img src={activeBot.avatar} alt={activeBot.name} className="w-full h-full object-cover" />
                         ) : (
                            <img src="https://picsum.photos/id/64/100" alt="Opponent" className="w-full h-full object-cover" />
                         )}
@@ -142,16 +167,16 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', onA
                     <div className="flex flex-col justify-center">
                         <div className="flex items-center gap-1.5">
                            <span className="text-white font-bold text-sm leading-none">
-                              {isBotMode ? "New Year's Martin" : "martin-2026-BOT"}
+                              {isBotMode && activeBot ? activeBot.name : "Opponent"}
                            </span>
-                           <img src="https://upload.wikimedia.org/wikipedia/commons/9/9a/Flag_of_Bulgaria.svg" className="w-3 h-2 shadow-sm" alt="Flag" />
+                           {isBotMode && activeBot && <img src={activeBot.flag} className="w-3 h-2 shadow-sm" alt="Flag" />}
                            {(!isBotMode || isReviewMode) && (
                                <span className="bg-yellow-600 text-[9px] px-1 rounded text-white font-bold leading-tight border border-white/10 hidden md:inline-block" title="Bot">BOT</span>
                            )}
                         </div>
                         <div className="flex items-center gap-2 mt-1">
-                             {isBotMode ? (
-                                <span className="text-xs text-gray-400 font-semibold">(260)</span>
+                             {isBotMode && activeBot ? (
+                                <span className="text-xs text-gray-400 font-semibold">({activeBot.rating})</span>
                              ) : (
                                 <span className="text-xs text-gray-500">1200</span>
                              )}
@@ -241,9 +266,14 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', onA
           </div>
 
           {activePanel === 'review' ? (
-              <GameReviewPanel />
+              <GameReviewPanel
+                  pgn={game.pgn()}
+                  onStartReview={() => {
+                      if (onAnalyze) onAnalyze(game.pgn());
+                  }}
+              />
           ) : activePanel === 'bots' ? (
-              <PlayBotsPanel />
+              <PlayBotsPanel onStartGame={handleStartBotGame} />
           ) : (
             <>
                 {/* Play Panel Content */}

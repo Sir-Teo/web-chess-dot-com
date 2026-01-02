@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import Chessboard from './Chessboard';
 import AnalysisPanel from './AnalysisPanel';
-import { User } from 'lucide-react';
+import GameReviewPanel from './GameReviewPanel';
+import { User, ChevronRight } from 'lucide-react';
 import { Chess } from 'chess.js';
 import { useStockfish } from '../hooks/useStockfish';
 
@@ -11,6 +12,8 @@ interface AnalysisInterfaceProps {
 }
 
 const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initialFen }) => {
+  const [activeTab, setActiveTab] = useState<'analysis' | 'review'>('review');
+
   // Master game record
   const [game, setGame] = useState(new Chess());
   // Current position index (0 = start)
@@ -19,15 +22,13 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
   // Initialize game from PGN/FEN
   useEffect(() => {
       const newGame = new Chess();
-      // Heuristic to check if initialPgn is actually a FEN (contains slashes and no move numbers usually, but PGN can have slashes in comments)
-      // Safest: Try loadPgn, if fails, try load.
       if (initialPgn) {
           try {
-              // Check if it looks like a FEN (simple check)
               if (initialPgn.split('/').length > 7 && !initialPgn.includes('[')) {
                  newGame.load(initialPgn);
                  setGame(newGame);
                  setCurrentMoveIndex(0);
+                 // If loaded from FEN, probably analysis, but here we assume PGN usually for review
               } else {
                  newGame.loadPgn(initialPgn);
                  setGame(newGame);
@@ -41,29 +42,20 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
           setGame(newGame);
           setCurrentMoveIndex(0);
       }
+
+      // Default to review tab if we have a game history
+      if (initialPgn) setActiveTab('review');
   }, [initialPgn, initialFen]);
 
   // Derived state for current display
   const currentFen = useMemo(() => {
       const history = game.history({ verbose: true });
       if (currentMoveIndex === 0) {
-        // We need to return the 'start' fen of the game instance, not generic start
-        // However, chess.js history doesn't easily give us the start FEN if it wasn't standard.
-        // But for standard games:
-        // If we loaded from FEN, history is empty.
-        // If we loaded from PGN, history is populated.
-        // If history is empty, return game.fen()
         if (history.length === 0) return game.fen();
-        
-        // If history exists, we need to reconstruct from start. 
-        // We assume standard start for PGNs unless we want to parse Setup tags (complex).
-        // Let's assume standard start for now.
         return 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
       }
       
       const tempGame = new Chess();
-      // If the master game was loaded from FEN and has no history, currentMoveIndex can only be 0.
-      // If master game has history, we replay.
       for (let i = 0; i < currentMoveIndex; i++) {
           if (history[i]) tempGame.move(history[i]);
       }
@@ -109,8 +101,6 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
     try {
         const move = tempGame.move({ from, to, promotion: 'q' });
         if (move) {
-            // New master game history: 0..currentMoveIndex + new move
-            // We need to rebuild the master game
             const history = game.history();
             const newMasterGame = new Chess();
             for(let i=0; i<currentMoveIndex; i++) {
@@ -120,6 +110,9 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
             
             setGame(newMasterGame);
             setCurrentMoveIndex(prev => prev + 1);
+
+            // If user moves, switch to analysis to see result
+            setActiveTab('analysis');
         }
     } catch (e) {}
   };
@@ -209,16 +202,45 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
 
       {/* Right Sidebar */}
       <div className="flex-1 lg:flex-none w-full lg:w-[350px] xl:w-[420px] bg-[#262522] flex flex-col border-l border-white/10 shrink-0 h-auto lg:h-auto z-10 relative shadow-2xl overflow-hidden">
-          <AnalysisPanel 
-             evalScore={displayEval} 
-             bestLine={bestLine} 
-             onNext={handleNext}
-             onPrev={handlePrev}
-             onFirst={handleFirst}
-             onLast={handleLast}
-             currentMove={currentMoveIndex}
-             totalMoves={game.history().length}
-          />
+
+          {/* Tab Toggle */}
+          <div className="flex bg-[#211f1c] text-sm font-semibold border-b border-white/5">
+              <button
+                  onClick={() => setActiveTab('review')}
+                  className={`flex-1 py-3 border-b-2 hover:bg-[#2a2926] transition-colors ${activeTab === 'review' ? 'text-white border-chess-green' : 'text-[#c3c3c3] border-transparent'}`}
+              >
+                  Review
+              </button>
+              <button
+                  onClick={() => setActiveTab('analysis')}
+                  className={`flex-1 py-3 border-b-2 hover:bg-[#2a2926] transition-colors ${activeTab === 'analysis' ? 'text-white border-chess-green' : 'text-[#c3c3c3] border-transparent'}`}
+              >
+                  Analysis
+              </button>
+          </div>
+
+          <div className="flex-1 overflow-hidden relative">
+              {activeTab === 'review' ? (
+                  <GameReviewPanel
+                     pgn={game.pgn()}
+                     onStartReview={() => {
+                         setActiveTab('analysis');
+                         handleFirst(); // Start at beginning
+                     }}
+                  />
+              ) : (
+                  <AnalysisPanel
+                    evalScore={displayEval}
+                    bestLine={bestLine}
+                    onNext={handleNext}
+                    onPrev={handlePrev}
+                    onFirst={handleFirst}
+                    onLast={handleLast}
+                    currentMove={currentMoveIndex}
+                    totalMoves={game.history().length}
+                  />
+              )}
+          </div>
       </div>
     </div>
   );
