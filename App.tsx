@@ -9,9 +9,11 @@ import OpeningsInterface from './components/OpeningsInterface';
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [analysisPgn, setAnalysisPgn] = useState<string>('');
+  const [analysisTab, setAnalysisTab] = useState<'analysis' | 'review'>('analysis');
 
-  const handleAnalyze = (pgn: string) => {
+  const handleAnalyze = (pgn: string, tab: 'analysis' | 'review' = 'analysis') => {
     setAnalysisPgn(pgn);
+    setAnalysisTab(tab);
     setActiveTab('analysis');
   };
 
@@ -24,7 +26,7 @@ const App: React.FC = () => {
       case 'puzzles':
         return <PuzzlesInterface />;
       case 'analysis':
-        return <AnalysisInterface initialPgn={analysisPgn} />;
+        return <AnalysisInterface initialPgn={analysisPgn} defaultTab={analysisTab} />;
       case 'learn-openings':
         return <OpeningsInterface onAnalyze={handleAnalyze} />;
       case 'dashboard':

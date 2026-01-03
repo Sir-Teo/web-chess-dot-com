@@ -11,9 +11,10 @@ import { Arrow } from '../hooks/useCoach';
 interface AnalysisInterfaceProps {
   initialPgn?: string;
   initialFen?: string;
+  defaultTab?: 'analysis' | 'review';
 }
 
-const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initialFen }) => {
+const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initialFen, defaultTab }) => {
   const [activeTab, setActiveTab] = useState<'analysis' | 'review'>('analysis');
 
   // Master game record
@@ -32,12 +33,10 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
                  newGame.load(initialPgn);
                  setGame(newGame);
                  setCurrentMoveIndex(0);
-                 setActiveTab('analysis');
               } else {
                  newGame.loadPgn(initialPgn);
                  setGame(newGame);
                  setCurrentMoveIndex(newGame.history().length);
-                 setActiveTab('review');
               }
           } catch (e) {
               console.error("Failed to load PGN/FEN", e);
@@ -46,9 +45,20 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
           newGame.load(initialFen);
           setGame(newGame);
           setCurrentMoveIndex(0);
-          setActiveTab('analysis');
       }
   }, [initialPgn, initialFen]);
+
+  // Set default tab on mount or prop change
+  useEffect(() => {
+      if (defaultTab) {
+          setActiveTab(defaultTab);
+      } else if (initialPgn && initialPgn.includes('[')) {
+           // Fallback heuristic if no defaultTab provided
+           setActiveTab('review');
+      } else {
+           setActiveTab('analysis');
+      }
+  }, [defaultTab, initialPgn, initialFen]);
 
   // Derived state for current display
   const currentFen = useMemo(() => {
