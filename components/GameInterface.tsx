@@ -5,6 +5,7 @@ import GameReviewPanel from './GameReviewPanel';
 import PlayBotsPanel, { BotProfile } from './PlayBotsPanel';
 import { Chess } from 'chess.js';
 import { useStockfish } from '../hooks/useStockfish';
+import { useGameTimer } from '../hooks/useGameTimer';
 
 interface GameInterfaceProps {
   initialMode?: 'play' | 'bots' | 'review';
@@ -22,6 +23,18 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', onA
   const [isGameOver, setIsGameOver] = useState(false);
   const [gameResult, setGameResult] = useState<string>('');
   
+  // Timer State
+  const [timeControl, setTimeControl] = useState(600); // 10 minutes default
+  const { whiteTime, blackTime, formatTime, startTimer, stopTimer, resetTimer } = useGameTimer(
+    timeControl,
+    game.turn(),
+    isGameOver,
+    (loser) => {
+      setIsGameOver(true);
+      setGameResult(loser === 'w' ? 'Black Won (Time)' : 'White Won (Time)');
+    }
+  );
+
   // Engine
   const { bestMove, sendCommand, resetBestMove, isReady } = useStockfish();
 
@@ -37,20 +50,23 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', onA
   useEffect(() => {
      if (game.isGameOver()) {
          setIsGameOver(true);
+         stopTimer();
          if (game.isCheckmate()) setGameResult(game.turn() === 'w' ? 'Black Won' : 'White Won');
          else if (game.isDraw()) setGameResult('Draw');
          else setGameResult('Game Over');
      } else {
-         setIsGameOver(false);
+         if (!isGameOver && game.history().length > 0) {
+             startTimer();
+         }
      }
-  }, [game, fen]);
+  }, [game, fen, stopTimer, startTimer, isGameOver]);
 
   // Handle User Move
-  const onMove = useCallback((from: string, to: string) => {
+  const onMove = useCallback((from: string, to: string, promotion: string = 'q') => {
       if (game.isGameOver()) return;
 
       try {
-          const move = game.move({ from, to, promotion: 'q' });
+          const move = game.move({ from, to, promotion });
           if (move) {
               setFen(game.fen());
               setLastMove({ from, to });
@@ -105,35 +121,37 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', onA
   // Reset game when switching modes
   useEffect(() => {
       if (!isReviewMode) {
-          // Don't reset if switching to review, we want to review the current game
-          // But wait, if we switch modes we might want to reset.
-          // Usually 'review' mode comes from clicking 'Game Review' which calls onAnalyze
-          // but here we have a tab switcher.
           if (activePanel === 'play' || activePanel === 'bots') {
               // Only reset if actually changing context?
               // For now, let's reset if we go TO play or bots.
               // But if we are in 'bots' and select a bot, we don't want to reset until 'Play' is clicked.
           }
       }
-  }, [activePanel]);
+  }, [activePanel, isReviewMode]);
 
-  const handleNewGame = () => {
+  const handleNewGame = useCallback(() => {
       const newGame = new Chess();
       setGame(newGame);
       setFen(newGame.fen());
       setLastMove(null);
       setIsGameOver(false);
       setGameResult('');
-  };
+      resetTimer();
+  }, [resetTimer]);
 
   const handleStartBotGame = (bot: BotProfile) => {
       setActiveBot(bot);
       handleNewGame();
-      // Ensure we are in bot view but with the board active.
-      // Actually 'bots' panel overlays the sidebar.
-      // We want to hide the bot selection panel or indicate game started.
-      // But currently PlayBotsPanel takes up the sidebar.
-      // That is fine.
+  };
+
+  // Update timer on new game or time control change
+  useEffect(() => {
+      resetTimer();
+  }, [timeControl, resetTimer]);
+
+  const getTimeControlLabel = (seconds: number) => {
+      const mins = Math.floor(seconds / 60);
+      return `${mins} min`;
   };
 
   return (
@@ -153,7 +171,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', onA
 
         <div className="w-full max-w-[400px] lg:max-w-[85vh] aspect-square relative flex flex-col justify-center">
             
-            {/* Opponent Info */}
+            {/* Opponent Info (Black) */}
             <div className="flex justify-between items-end mb-1 px-1">
                 <div className="flex items-center gap-2 md:gap-3">
                     <div className="w-8 h-8 md:w-10 md:h-10 rounded bg-gray-500 overflow-hidden border border-white/20 relative group">
@@ -183,19 +201,23 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', onA
                         </div>
                     </div>
                 </div>
-                {activePanel === 'play' && (
-                    <div className="bg-[#262421] text-white px-2 py-1 md:px-3 md:py-1.5 rounded font-mono font-bold text-lg md:text-xl shadow-inner border border-white/5">
-                        10:00
+                {(activePanel === 'play' || isBotMode) && (
+                    <div className={`
+                        px-2 py-1 md:px-3 md:py-1.5 rounded font-mono font-bold text-lg md:text-xl shadow-inner border
+                        ${game.turn() === 'b' && !isGameOver ? 'bg-white text-black' : 'bg-[#262421] text-white border-white/5'}
+                    `}>
+                        {formatTime(blackTime)}
                     </div>
                 )}
             </div>
 
             <div className="rounded-sm overflow-hidden shadow-2xl ring-4 ring-black/10 relative">
                  <Chessboard 
-                    interactable={!isGameOver && (activePanel === 'play' || isBotMode)} 
+                    interactable={!isGameOver && (activePanel === 'play' || isBotMode) && game.turn() === 'w'}
                     fen={fen}
                     onMove={onMove}
                     lastMove={lastMove}
+                    boardOrientation="white"
                  />
 
                  {/* Game Over Overlay */}
@@ -224,7 +246,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', onA
                  )}
             </div>
 
-            {/* Player Info */}
+            {/* Player Info (White) */}
             <div className="flex justify-between items-start mt-1 px-1">
                 <div className="flex items-center gap-2 md:gap-3">
                     <div className="w-8 h-8 md:w-10 md:h-10 rounded bg-gray-500 overflow-hidden border border-white/20 relative group">
@@ -240,9 +262,12 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', onA
                         </div>
                     </div>
                 </div>
-                {activePanel === 'play' && (
-                    <div className="bg-[#c3c3c3] text-black px-2 py-1 md:px-3 md:py-1.5 rounded font-mono font-bold text-lg md:text-xl shadow-[0_4px_0_0_rgba(160,160,160,1)] cursor-default">
-                        09:56
+                {(activePanel === 'play' || isBotMode) && (
+                    <div className={`
+                        px-2 py-1 md:px-3 md:py-1.5 rounded font-mono font-bold text-lg md:text-xl shadow-[0_4px_0_0_rgba(160,160,160,1)] cursor-default
+                        ${game.turn() === 'w' && !isGameOver ? 'bg-white text-black' : 'bg-[#c3c3c3] text-black'}
+                    `}>
+                        {formatTime(whiteTime)}
                     </div>
                 )}
             </div>
@@ -290,7 +315,10 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', onA
                     </div>
                     
                     <div className="w-full space-y-2">
-                        <button className="w-full bg-chess-green hover:bg-chess-greenHover text-white font-bold py-3 md:py-4 rounded-lg shadow-[0_4px_0_0_#537a32] active:shadow-none active:translate-y-[4px] transition-all text-xl flex items-center justify-center gap-2">
+                        <button
+                            onClick={handleNewGame}
+                            className="w-full bg-chess-green hover:bg-chess-greenHover text-white font-bold py-3 md:py-4 rounded-lg shadow-[0_4px_0_0_#537a32] active:shadow-none active:translate-y-[4px] transition-all text-xl flex items-center justify-center gap-2"
+                        >
                             <span>Play</span>
                         </button>
                         <div className="grid grid-cols-2 gap-2">
@@ -312,9 +340,16 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', onA
                             <Settings className="w-4 h-4 text-gray-500 cursor-pointer hover:text-white" />
                         </div>
                         <div className="grid grid-cols-3 gap-2">
-                            {['10 min', '1 min', '15 | 10'].map(t => (
-                                <button key={t} className="bg-[#211f1c] hover:bg-[#302e2b] text-[#c3c3c3] py-2 rounded text-sm font-semibold border border-transparent hover:border-white/10 transition-colors">
-                                    {t}
+                            {[600, 60, 900].map(t => (
+                                <button
+                                    key={t}
+                                    onClick={() => setTimeControl(t)}
+                                    className={`
+                                        py-2 rounded text-sm font-semibold border border-transparent transition-colors
+                                        ${timeControl === t ? 'bg-[#302e2b] text-white border-white/20' : 'bg-[#211f1c] text-[#c3c3c3] hover:bg-[#302e2b] hover:border-white/10'}
+                                    `}
+                                >
+                                    {getTimeControlLabel(t)}
                                 </button>
                             ))}
                         </div>
