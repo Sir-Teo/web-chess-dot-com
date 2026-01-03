@@ -18,28 +18,35 @@ export interface GameReviewData {
 }
 
 // A simple promise-based wrapper for Stockfish commands
-class StockfishClient {
+export class StockfishClient {
     private worker: Worker;
     private resolveCurrent: ((value: any) => void) | null = null;
     private currentCommand: 'uci' | 'go' | null = null;
-    private searchOutput: string[] = [];
     private bestMove: string | null = null;
     private score: number | null = null; // cp
 
-    constructor(workerUrl: string) {
-        // We need to fetch blob locally or use the URL directly if allowed
-        // Since we are in a browser environment in the app, this logic mirrors the hook.
-        // But for this utility, we'll initialize it asynchronously.
-        this.worker = new Worker(workerUrl); // Placeholder, real initialization in init()
+    // Make constructor private to force usage of async create
+    private constructor(worker: Worker) {
+        this.worker = worker;
     }
 
     static async create(url: string): Promise<StockfishClient> {
+        // Fetch script content to create a local Blob URL
+        // This bypasses Cross-Origin Worker restrictions (CORS) when using CDNs
         const response = await fetch(url);
+        if (!response.ok) throw new Error(`Failed to fetch Stockfish from ${url}`);
+
         const blob = await response.blob();
         const objectURL = URL.createObjectURL(blob);
-        const client = new StockfishClient(objectURL);
+        const worker = new Worker(objectURL);
 
+        const client = new StockfishClient(worker);
         await client.init();
+
+        // Clean up object URL after init (worker has loaded)
+        // Note: Some browsers might need it longer if they lazy load, but usually fine.
+        // Actually safer to keep it or let browser handle gc? We'll leave it for now.
+
         return client;
     }
 
@@ -93,6 +100,8 @@ class StockfishClient {
     }
 
     public async go(depth: number): Promise<{ bestMove: string, score: number | null }> {
+        // If a command is already running, we might want to wait or throw, but here we assume sequential usage
+        // or that the previous one will be overwritten by 'stop' if we implement it.
         return new Promise((resolve) => {
             this.currentCommand = 'go';
             this.score = null;
@@ -100,6 +109,13 @@ class StockfishClient {
             this.resolveCurrent = resolve;
             this.worker.postMessage(`go depth ${depth}`);
         });
+    }
+
+    public stop(): void {
+        if (this.currentCommand === 'go') {
+            this.worker.postMessage('stop');
+            // The worker will emit 'bestmove' which will resolve the promise in handleMessage
+        }
     }
 
     public terminate() {
@@ -121,7 +137,7 @@ export const analyzeGame = async (pgn: string): Promise<GameReviewData> => {
     const movesToAnalyze: { fenBefore: string, fenAfter: string, move: any }[] = [];
 
     // Start FEN
-    let currentFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+    // let currentFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 
     for (const move of history) {
         const fenBefore = tempGame.fen();
@@ -154,9 +170,6 @@ export const analyzeGame = async (pgn: string): Promise<GameReviewData> => {
 
         if (bestMove === playedMoveUci) {
             classification = 'best';
-            // If best move played, the new evaluation is simply the evaluation we just found.
-            // Why? Because `scoreBefore` is the evaluation of `fenBefore` ASSUMING best play.
-            // So after playing best move, the evaluation remains roughly `scoreBefore`.
             lastEvalCp = scoreBefore;
         } else {
             // C. If not best move, we need to evaluate the RESULTING position (`fenAfter`)
@@ -177,6 +190,7 @@ export const analyzeGame = async (pgn: string): Promise<GameReviewData> => {
             const isWhite = move.color === 'w';
             const loss = isWhite ? (scoreBefore - scoreAfter) : (scoreAfter - scoreBefore);
 
+            // Thresholds calibrated for typical engine evaluations (CP)
             if (loss <= 20) classification = 'excellent';
             else if (loss <= 50) classification = 'good';
             else if (loss <= 100) classification = 'inaccuracy';

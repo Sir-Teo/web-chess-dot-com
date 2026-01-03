@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { Chessboard as ReactChessboard } from 'react-chessboard';
+import { Arrow } from '../hooks/useCoach';
 
 interface ChessboardProps {
   interactable?: boolean;
@@ -7,6 +8,7 @@ interface ChessboardProps {
   onMove?: (from: string, to: string, promotion?: string) => void;
   lastMove?: { from: string; to: string } | null;
   boardOrientation?: 'white' | 'black';
+  customArrows?: Arrow[];
 }
 
 const Chessboard: React.FC<ChessboardProps> = ({
@@ -14,7 +16,8 @@ const Chessboard: React.FC<ChessboardProps> = ({
   fen,
   onMove,
   lastMove,
-  boardOrientation = 'white'
+  boardOrientation = 'white',
+  customArrows
 }) => {
   
   // Custom styles for squares
@@ -62,6 +65,7 @@ const Chessboard: React.FC<ChessboardProps> = ({
         customDarkSquareStyle={{ backgroundColor: '#769656' }}
         customLightSquareStyle={{ backgroundColor: '#eeeed2' }}
         customSquareStyles={customSquareStyles}
+        customArrows={customArrows}
         animationDuration={200}
       />
     </div>
