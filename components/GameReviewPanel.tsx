@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from 'react';
-import { Search, Star, HelpCircle, Loader2 } from 'lucide-react';
+import React, { useEffect, useState, useRef } from 'react';
+import { Search, Star, HelpCircle, Loader2, BookOpen, ThumbsUp, Check, AlertCircle, XCircle, AlertTriangle } from 'lucide-react';
 import { analyzeGame, GameReviewData, MoveAnalysis } from '../utils/gameAnalysis';
 
 interface GameReviewPanelProps {
     pgn?: string;
     onStartReview?: () => void;
+    onMoveSelect?: (moveIndex: number) => void;
 }
 
 const MoveStatRow: React.FC<{
@@ -23,12 +24,42 @@ const MoveStatRow: React.FC<{
   </div>
 );
 
-const GameReviewPanel: React.FC<GameReviewPanelProps> = ({ pgn, onStartReview }) => {
+const ClassificationIcon: React.FC<{ classification: MoveAnalysis['classification'] }> = ({ classification }) => {
+    switch (classification) {
+        case 'brilliant': return <div className="text-[#1baca6] font-black text-xs">!!</div>;
+        case 'great': return <div className="text-[#5c8bb0] font-black text-xs">!</div>;
+        case 'best': return <Star className="w-3 h-3 text-[#95b776] fill-current" />;
+        case 'excellent': return <ThumbsUp className="w-3 h-3 text-[#96bc4b]" />;
+        case 'good': return <Check className="w-3 h-3 text-[#96bc4b]" />;
+        case 'inaccuracy': return <div className="text-[#f7c045] font-black text-xs">?!</div>;
+        case 'mistake': return <div className="text-[#e6912c] font-black text-xs">?</div>;
+        case 'blunder': return <div className="text-[#fa412d] font-black text-xs">??</div>;
+        case 'book': return <BookOpen className="w-3 h-3 text-[#a38d79]" />;
+        default: return null;
+    }
+};
+
+const getClassificationColor = (classification: MoveAnalysis['classification']) => {
+    switch (classification) {
+        case 'brilliant': return 'bg-[#1baca6]/20 text-[#1baca6]';
+        case 'great': return 'bg-[#5c8bb0]/20 text-[#5c8bb0]';
+        case 'best': return 'bg-[#95b776]/20 text-[#95b776]';
+        case 'blunder': return 'bg-[#fa412d]/20 text-[#fa412d]';
+        case 'mistake': return 'bg-[#e6912c]/20 text-[#e6912c]';
+        case 'inaccuracy': return 'bg-[#f7c045]/20 text-[#f7c045]';
+        default: return 'hover:bg-white/5';
+    }
+}
+
+const GameReviewPanel: React.FC<GameReviewPanelProps> = ({ pgn, onStartReview, onMoveSelect }) => {
   const [data, setData] = useState<GameReviewData | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-      if (pgn && !data && !isAnalyzing) {
+      if (pgn && !isAnalyzing) {
+          // If data exists and PGN hasn't changed effectively (we could check checksum), skip?
+          // For now, simple re-analysis on PGN prop change.
           setIsAnalyzing(true);
           analyzeGame(pgn).then(result => {
               setData(result);
@@ -41,6 +72,18 @@ const GameReviewPanel: React.FC<GameReviewPanelProps> = ({ pgn, onStartReview })
       if (!data) return 0;
       return data.moves.filter(m => m.classification === classification && m.color === color).length;
   };
+
+  // Group moves for display
+  const moveRows: { moveNumber: number, w?: MoveAnalysis, b?: MoveAnalysis }[] = [];
+  if (data) {
+      for (let i = 0; i < data.moves.length; i += 2) {
+          moveRows.push({
+              moveNumber: Math.floor(i / 2) + 1,
+              w: data.moves[i],
+              b: data.moves[i + 1]
+          });
+      }
+  }
 
   return (
     <div className="flex flex-col h-full bg-[#262522] text-[#c3c3c3]">
@@ -66,7 +109,7 @@ const GameReviewPanel: React.FC<GameReviewPanelProps> = ({ pgn, onStartReview })
       )}
 
       {!isAnalyzing && data && (
-      <div className="flex-1 overflow-y-auto custom-scrollbar">
+      <div className="flex-1 overflow-y-auto custom-scrollbar" ref={scrollRef}>
         
         {/* Coach Bubble */}
         <div className="p-4 flex gap-4">
@@ -140,13 +183,44 @@ const GameReviewPanel: React.FC<GameReviewPanelProps> = ({ pgn, onStartReview })
                 colorClass="text-[#fa412d]"
                 icon={<div className="w-5 h-5 rounded-full bg-[#fa412d] flex items-center justify-center text-white font-black text-[10px] shadow-sm">??</div>} 
             />
-             <MoveStatRow 
-                label="Inaccuracy" 
-                p1Value={countMoves('inaccuracy', 'w')} p2Value={countMoves('inaccuracy', 'b')}
-                colorClass="text-[#f7c045]"
-                icon={<div className="w-5 h-5 rounded-full bg-[#f7c045] flex items-center justify-center text-white font-black text-[10px] shadow-sm">?!</div>} 
-            />
         </div>
+
+        {/* Moves List with Analysis */}
+        <div className="mt-4 border-t border-white/10 pt-2">
+            <h3 className="px-4 text-xs font-bold text-gray-500 uppercase mb-2">Move by Move</h3>
+            <div className="flex flex-col">
+                {moveRows.map((row, i) => (
+                    <div key={i} className="flex text-sm py-0.5 hover:bg-white/5">
+                        <div className="w-10 flex items-center justify-center text-gray-500 font-mono text-xs">{row.moveNumber}.</div>
+
+                        {/* White Move */}
+                        {row.w && (
+                            <div
+                                onClick={() => onMoveSelect && onMoveSelect(i * 2 + 1)}
+                                className={`flex-1 flex items-center gap-2 px-2 py-1 cursor-pointer rounded transition-colors ${getClassificationColor(row.w.classification)}`}
+                            >
+                                <span className="font-bold text-white">{row.w.san}</span>
+                                <ClassificationIcon classification={row.w.classification} />
+                            </div>
+                        )}
+
+                        {/* Black Move */}
+                        {row.b ? (
+                            <div
+                                onClick={() => onMoveSelect && onMoveSelect(i * 2 + 2)}
+                                className={`flex-1 flex items-center gap-2 px-2 py-1 cursor-pointer rounded transition-colors ${getClassificationColor(row.b.classification)}`}
+                            >
+                                <span className="font-bold text-white">{row.b.san}</span>
+                                <ClassificationIcon classification={row.b.classification} />
+                            </div>
+                        ) : (
+                            <div className="flex-1"></div>
+                        )}
+                    </div>
+                ))}
+            </div>
+        </div>
+
       </div>
       )}
 
