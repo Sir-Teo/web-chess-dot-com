@@ -1,19 +1,22 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { StockfishClient } from '../utils/gameAnalysis';
-import { Chess } from 'chess.js';
 
 interface CoachFeedback {
     message: string;
-    type: 'best' | 'good' | 'inaccuracy' | 'mistake' | 'blunder' | 'neutral';
+    type: 'best' | 'good' | 'inaccuracy' | 'mistake' | 'blunder' | 'neutral' | 'excellent';
     scoreDiff?: number;
     bestMove?: string;
 }
+
+// Arrow definition: [from, to, color]
+export type Arrow = [string, string, string];
 
 const STOCKFISH_URL = 'https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.0/stockfish.js';
 
 export const useCoach = (isEnabled: boolean) => {
     const clientRef = useRef<StockfishClient | null>(null);
     const [feedback, setFeedback] = useState<CoachFeedback | null>(null);
+    const [arrows, setArrows] = useState<Arrow[]>([]);
     const [isThinking, setIsThinking] = useState(false);
 
     // Cache the best move for the CURRENT position (before player moves)
@@ -64,6 +67,7 @@ export const useCoach = (isEnabled: boolean) => {
 
         setIsThinking(true);
         setFeedback(null);
+        setArrows([]);
 
         // 1. Did we have the "Before" analysis?
         let beforeAnalysis = currentPositionAnalysis.current;
@@ -80,14 +84,20 @@ export const useCoach = (isEnabled: boolean) => {
         }
 
         const playedMoveUci = move.from + move.to + (move.promotion || '');
+        const bestMove = beforeAnalysis.bestMove;
+
+        const bestFrom = bestMove.substring(0, 2);
+        const bestTo = bestMove.substring(2, 4);
 
         // 2. Check if best move
-        if (beforeAnalysis.bestMove === playedMoveUci) {
+        if (bestMove === playedMoveUci) {
              setFeedback({
                  message: "Excellent! That's the best move.",
                  type: 'best',
                  bestMove: beforeAnalysis.bestMove
              });
+             // Draw green arrow for best move
+             setArrows([[move.from, move.to, '#81b64c']]); // Chess.com Green
              setIsThinking(false);
              return;
         }
@@ -96,49 +106,66 @@ export const useCoach = (isEnabled: boolean) => {
         clientRef.current.setPosition(fenAfter);
         const afterResult = await clientRef.current.go(10);
 
-        // Calculate Loss (Assume White for now, logic similar to gameAnalysis)
-        // Adjust for perspective
-        const turnBefore = fenBefore.split(' ')[1];
+        // --- SCORE CALCULATION ---
+        // We need to determine how much the player lost by making this move.
+        // `score` from stockfish is generally "centipawns from the side to move's perspective".
+        // But stockfish.js 10 typically reports score relative to White in UCI?
+        // Let's assume standard UCI behavior: "score cp x" is relative to the side to move?
+        // Actually, many UCI engines report relative to side to move.
+        // Let's verify standard assumption:
+        // If White to move, +100 means White is winning.
+        // If Black to move, +100 means Black is winning.
+
+        // HOWEVER, stockfish.js 10 usually normalizes to White?
+        // Let's stick to the previous `gameAnalysis` logic which worked:
+        // "Normalized Score for "Before" position (White's perspective)"
+        // This implies we treated raw engine output as White-centric?
+        // Let's look at `gameAnalysis.ts`: `if (turnBefore === 'b') scoreBefore = -scoreBefore;`
+        // This implies the engine outputs "Side to Move" score.
+        // So let's stick to that.
+
+        const turnBefore = fenBefore.split(' ')[1]; // 'w' or 'b'
         let scoreBefore = beforeAnalysis.score;
-        if (turnBefore === 'b') scoreBefore = -scoreBefore;
 
-        let scoreAfter = afterResult.score || 0;
-        const turnAfter = fenAfter.split(' ')[1]; // This is the OTHER person's turn now
-        // Wait, fenAfter turn is the opponent.
-        // If I played white, it's now black's turn.
-        // Stockfish eval is always white-centric or side-to-move centric?
-        // Stockfish UCI `score cp` is from the engine's side (side to move)? No, typically White-centric in some protocols, but UCI usually says:
-        // "The score is from the perspective of the side to move." -> Wait, let's verify.
-        // Stockfish 10 usually gives score relative to side to move.
-        // Let's assume standard UCI: score is for the side to move.
+        // Convert to "Player Perspective" (The one who just moved)
+        // If I am White, and it's my turn, scoreBefore is my advantage.
+        // If I am Black, and it's my turn, scoreBefore is my advantage.
+        // So `scoreBefore` is ALREADY "Player Advantage" if engine reports relative to side-to-move.
 
-        // So, `scoreBefore`: side to move was Player. Score is how good it is for Player.
-        // `scoreAfter`: side to move is Opponent. Score is how good it is for Opponent.
-        // So Score for Player = -scoreAfter.
+        // Now `scoreAfter`:
+        // It's the opponent's turn.
+        // So `scoreAfter` is "Opponent Advantage".
+        // So "Player Advantage After" is `-scoreAfter`.
 
         const playerValBefore = scoreBefore;
-        const playerValAfter = -(scoreAfter); // Negate because it's opponent's turn
+        const playerValAfter = -(afterResult.score || 0);
 
         const loss = playerValBefore - playerValAfter;
 
         let type: CoachFeedback['type'] = 'good';
         let message = "Good move.";
+        let arrowColor = '#f1c40f'; // Default yellow/orange
 
         if (loss <= 20) {
+            type = 'excellent';
+            message = "Excellent move.";
+            arrowColor = '#96bc4b'; // Light green
+        } else if (loss <= 50) {
             type = 'good';
             message = "Good move.";
-        } else if (loss <= 50) {
-            type = 'good'; // or excellent/good distinction
-            message = "Solid move.";
-        } else if (loss <= 150) {
+             arrowColor = '#96bc4b';
+        } else if (loss <= 100) {
             type = 'inaccuracy';
             message = "Inaccuracy. There was a better option.";
-        } else if (loss <= 300) {
+            arrowColor = '#f7c045'; // Yellow
+        } else if (loss <= 200) {
             type = 'mistake';
             message = "Mistake. You lost some advantage.";
+            arrowColor = '#ffa459'; // Orange
         } else {
             type = 'blunder';
             message = "Blunder! That was a costly move.";
+            arrowColor = '#fa412d'; // Red
         }
 
         setFeedback({
@@ -147,16 +174,29 @@ export const useCoach = (isEnabled: boolean) => {
             scoreDiff: loss,
             bestMove: beforeAnalysis.bestMove
         });
+
+        // Draw Arrows:
+        // 1. Played move (Color based on quality)
+        // 2. Best move (Green)
+        setArrows([
+            [move.from, move.to, arrowColor],       // Played
+            [bestFrom, bestTo, '#81b64c']  // Best
+        ]);
+
         setIsThinking(false);
 
     }, [isEnabled]);
 
-    const resetFeedback = () => setFeedback(null);
+    const resetFeedback = () => {
+        setFeedback(null);
+        setArrows([]);
+    };
 
     return {
         onTurnStart,
         evaluateMove,
         feedback,
+        arrows,
         isThinking,
         resetFeedback
     };

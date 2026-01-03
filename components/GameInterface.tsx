@@ -51,7 +51,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', onA
   const { bestMove, sendCommand, resetBestMove, isReady } = useStockfish();
 
   // Coach Hook
-  const { onTurnStart, evaluateMove, feedback, isThinking: isCoachThinking, resetFeedback } = useCoach(isCoachMode);
+  const { onTurnStart, evaluateMove, feedback, arrows: coachArrows, isThinking: isCoachThinking, resetFeedback } = useCoach(isCoachMode);
 
   // Sync state if prop changes
   useEffect(() => {
@@ -290,6 +290,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', onA
                     onMove={onMove}
                     lastMove={lastMove}
                     boardOrientation="white"
+                    customArrows={isCoachMode ? coachArrows : undefined}
                  />
 
                  {/* Game Over Overlay */}

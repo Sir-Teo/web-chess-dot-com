@@ -25,17 +25,28 @@ export class StockfishClient {
     private bestMove: string | null = null;
     private score: number | null = null; // cp
 
-    constructor(workerUrl: string) {
-        this.worker = new Worker(workerUrl);
+    // Make constructor private to force usage of async create
+    private constructor(worker: Worker) {
+        this.worker = worker;
     }
 
     static async create(url: string): Promise<StockfishClient> {
+        // Fetch script content to create a local Blob URL
+        // This bypasses Cross-Origin Worker restrictions (CORS) when using CDNs
         const response = await fetch(url);
+        if (!response.ok) throw new Error(`Failed to fetch Stockfish from ${url}`);
+
         const blob = await response.blob();
         const objectURL = URL.createObjectURL(blob);
-        const client = new StockfishClient(objectURL);
+        const worker = new Worker(objectURL);
 
+        const client = new StockfishClient(worker);
         await client.init();
+
+        // Clean up object URL after init (worker has loaded)
+        // Note: Some browsers might need it longer if they lazy load, but usually fine.
+        // Actually safer to keep it or let browser handle gc? We'll leave it for now.
+
         return client;
     }
 
@@ -179,6 +190,7 @@ export const analyzeGame = async (pgn: string): Promise<GameReviewData> => {
             const isWhite = move.color === 'w';
             const loss = isWhite ? (scoreBefore - scoreAfter) : (scoreAfter - scoreBefore);
 
+            // Thresholds calibrated for typical engine evaluations (CP)
             if (loss <= 20) classification = 'excellent';
             else if (loss <= 50) classification = 'good';
             else if (loss <= 100) classification = 'inaccuracy';
