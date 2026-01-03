@@ -51,21 +51,55 @@ const getClassificationColor = (classification: MoveAnalysis['classification']) 
     }
 }
 
+const getEvalDisplay = (move: MoveAnalysis) => {
+    if (move.mate !== undefined) {
+        // Display mate sign. If it's mate for the side who just moved, it's usually positive.
+        // But move.mate is "moves to mate". Positive = White wins. Negative = Black wins.
+        // If Black moved and it's Mate -3 (Black mates in 3), we want to show M3.
+        // If White moved and it's Mate 3 (White mates in 3), we want to show M3.
+        // So abs is generally correct for "Moves until mate".
+        return `M${Math.abs(move.mate)}`;
+    }
+    if (move.eval !== undefined) {
+        const val = move.eval / 100;
+        return (val > 0 ? "+" : "") + val.toFixed(1);
+    }
+    return "";
+}
+
 const GameReviewPanel: React.FC<GameReviewPanelProps> = ({ pgn, onStartReview, onMoveSelect }) => {
   const [data, setData] = useState<GameReviewData | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const analysisAbortController = useRef<AbortController | null>(null);
 
   useEffect(() => {
-      if (pgn && !isAnalyzing) {
-          // If data exists and PGN hasn't changed effectively (we could check checksum), skip?
-          // For now, simple re-analysis on PGN prop change.
-          setIsAnalyzing(true);
-          analyzeGame(pgn).then(result => {
-              setData(result);
-              setIsAnalyzing(false);
-          });
+      if (!pgn) return;
+
+      // Cancel previous analysis if any (not truly supported by analyzeGame yet, but we can ignore result)
+      if (analysisAbortController.current) {
+          analysisAbortController.current.abort();
       }
+      analysisAbortController.current = new AbortController();
+
+      const currentPgn = pgn;
+      setIsAnalyzing(true);
+      setData(null);
+
+      analyzeGame(pgn).then(result => {
+          // Check if we should still apply this result
+          if (currentPgn === pgn) {
+             setData(result);
+             setIsAnalyzing(false);
+          }
+      }).catch(e => {
+          console.error("Analysis failed", e);
+          setIsAnalyzing(false);
+      });
+
+      return () => {
+          // Cleanup if component unmounts
+      };
   }, [pgn]);
 
   const countMoves = (classification: MoveAnalysis['classification'], color: 'w' | 'b') => {
@@ -197,10 +231,13 @@ const GameReviewPanel: React.FC<GameReviewPanelProps> = ({ pgn, onStartReview, o
                         {row.w && (
                             <div
                                 onClick={() => onMoveSelect && onMoveSelect(i * 2 + 1)}
-                                className={`flex-1 flex items-center gap-2 px-2 py-1 cursor-pointer rounded transition-colors ${getClassificationColor(row.w.classification)}`}
+                                className={`flex-1 flex items-center justify-between gap-2 px-2 py-1 cursor-pointer rounded transition-colors ${getClassificationColor(row.w.classification)}`}
                             >
-                                <span className="font-bold text-white">{row.w.san}</span>
-                                <ClassificationIcon classification={row.w.classification} />
+                                <div className="flex items-center gap-2">
+                                    <span className="font-bold text-white">{row.w.san}</span>
+                                    <ClassificationIcon classification={row.w.classification} />
+                                </div>
+                                <span className="text-[10px] font-mono opacity-70">{getEvalDisplay(row.w)}</span>
                             </div>
                         )}
 
@@ -208,10 +245,13 @@ const GameReviewPanel: React.FC<GameReviewPanelProps> = ({ pgn, onStartReview, o
                         {row.b ? (
                             <div
                                 onClick={() => onMoveSelect && onMoveSelect(i * 2 + 2)}
-                                className={`flex-1 flex items-center gap-2 px-2 py-1 cursor-pointer rounded transition-colors ${getClassificationColor(row.b.classification)}`}
+                                className={`flex-1 flex items-center justify-between gap-2 px-2 py-1 cursor-pointer rounded transition-colors ${getClassificationColor(row.b.classification)}`}
                             >
-                                <span className="font-bold text-white">{row.b.san}</span>
-                                <ClassificationIcon classification={row.b.classification} />
+                                <div className="flex items-center gap-2">
+                                    <span className="font-bold text-white">{row.b.san}</span>
+                                    <ClassificationIcon classification={row.b.classification} />
+                                </div>
+                                <span className="text-[10px] font-mono opacity-70">{getEvalDisplay(row.b)}</span>
                             </div>
                         ) : (
                             <div className="flex-1"></div>
