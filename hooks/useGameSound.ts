@@ -10,6 +10,8 @@ const SOUNDS = {
   promote: 'https://images.chesscomfiles.com/chess-themes/sounds/_Common/standard/promote.mp3',
   notify: 'https://images.chesscomfiles.com/chess-themes/sounds/_Common/standard/notify.mp3',
   gameEnd: 'https://images.chesscomfiles.com/chess-themes/sounds/_Common/standard/game-end.mp3',
+  illegal: 'https://images.chesscomfiles.com/chess-themes/sounds/_Common/standard/illegal.mp3',
+  gameStart: 'https://images.chesscomfiles.com/chess-themes/sounds/_Common/standard/game-start.mp3',
 };
 
 export const useGameSound = () => {

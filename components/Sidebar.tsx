@@ -79,7 +79,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => {
         label: 'Learn', 
         icon: GraduationCap,
         subItems: [
-            { label: 'Lessons', icon: GraduationCap, action: 'dashboard' },
+            { label: 'Lessons', icon: GraduationCap, action: 'learn-lessons' },
             { label: 'Analysis', icon: Search, action: 'analysis' },
             { label: 'Openings', icon: BookOpen, action: 'learn-openings' },
         ]
