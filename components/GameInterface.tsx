@@ -104,9 +104,6 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', onA
                   setTimeout(() => {
                       if (activeBot.skillLevel !== undefined) {
                            sendCommand(`setoption name Skill Level value ${activeBot.skillLevel}`);
-                           // Some older stockfish versions or JS ports might use UCI_LimitStrength
-                           sendCommand(`setoption name UCI_LimitStrength value true`);
-                           sendCommand(`setoption name UCI_Elo value ${activeBot.rating}`);
                       }
                       sendCommand(`position fen ${game.fen()}`);
                       sendCommand(`go depth ${activeBot.depth || 10}`);
