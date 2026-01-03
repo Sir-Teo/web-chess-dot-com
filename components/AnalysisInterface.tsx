@@ -14,7 +14,7 @@ interface AnalysisInterfaceProps {
 }
 
 const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initialFen }) => {
-  const [activeTab, setActiveTab] = useState<'analysis' | 'review'>('review');
+  const [activeTab, setActiveTab] = useState<'analysis' | 'review'>('analysis');
 
   // Master game record
   const [game, setGame] = useState(new Chess());

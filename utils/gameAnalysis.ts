@@ -8,6 +8,7 @@ export interface MoveAnalysis {
     to: string;
     fen: string;
     eval?: number; // centipawns
+    mate?: number; // Mate in moves
     bestMove?: string;
     classification: 'brilliant' | 'great' | 'best' | 'excellent' | 'good' | 'inaccuracy' | 'mistake' | 'blunder' | 'book';
 }
@@ -17,13 +18,18 @@ export interface GameReviewData {
     moves: MoveAnalysis[];
 }
 
+export interface EngineScore {
+    unit: 'cp' | 'mate';
+    value: number;
+}
+
 // A simple promise-based wrapper for Stockfish commands
 export class StockfishClient {
     private worker: Worker;
-    private resolveCurrent: ((value: any) => void) | null = null;
+    private resolveCurrent: ((value: { bestMove: string, score: EngineScore | null }) => void) | null = null;
     private currentCommand: 'uci' | 'go' | null = null;
     private bestMove: string | null = null;
-    private score: number | null = null; // cp
+    private score: EngineScore | null = null;
 
     // Make constructor private to force usage of async create
     private constructor(worker: Worker) {
@@ -42,10 +48,6 @@ export class StockfishClient {
 
         const client = new StockfishClient(worker);
         await client.init();
-
-        // Clean up object URL after init (worker has loaded)
-        // Note: Some browsers might need it longer if they lazy load, but usually fine.
-        // Actually safer to keep it or let browser handle gc? We'll leave it for now.
 
         return client;
     }
@@ -69,18 +71,14 @@ export class StockfishClient {
             if (line.startsWith('info') && line.includes('score cp')) {
                 const match = line.match(/score cp (-?\d+)/);
                 if (match) {
-                     this.score = parseInt(match[1]);
+                     this.score = { unit: 'cp', value: parseInt(match[1]) };
                 }
             }
             // Handle Mate score
             else if (line.startsWith('info') && line.includes('score mate')) {
                 const match = line.match(/score mate (-?\d+)/);
                 if (match) {
-                    const mateIn = parseInt(match[1]);
-                    // Convert mate to a high CP value for comparison
-                    // If mate is positive (we win), big positive number.
-                    // If mate is negative (we lose), big negative number.
-                    this.score = mateIn > 0 ? (10000 - mateIn) : (-10000 - mateIn);
+                    this.score = { unit: 'mate', value: parseInt(match[1]) };
                 }
             }
 
@@ -99,7 +97,7 @@ export class StockfishClient {
         this.worker.postMessage(`position fen ${fen}`);
     }
 
-    public async go(depth: number): Promise<{ bestMove: string, score: number | null }> {
+    public async go(depth: number): Promise<{ bestMove: string, score: EngineScore | null }> {
         // If a command is already running, we might want to wait or throw, but here we assume sequential usage
         // or that the previous one will be overwritten by 'stop' if we implement it.
         return new Promise((resolve) => {
@@ -123,6 +121,26 @@ export class StockfishClient {
     }
 }
 
+// Convert score to CP for comparison logic
+const getComparisonScore = (score: EngineScore, turn: 'w' | 'b'): number => {
+    let cp = 0;
+    if (score.unit === 'cp') {
+        cp = score.value;
+    } else {
+        // Mate
+        if (score.value > 0) cp = 10000 - score.value; // Positive Mate (e.g. M1 = 9999)
+        else cp = -10000 - score.value; // Negative Mate (e.g. -M1 = -9999)
+    }
+
+    // Engine returns score relative to side to move.
+    // If it's Black's turn, a positive score means Black is winning.
+    // We normalize to White perspective for consistent loss calculation.
+    if (turn === 'b') {
+        cp = -cp;
+    }
+    return cp;
+};
+
 export const analyzeGame = async (pgn: string): Promise<GameReviewData> => {
     // 1. Setup Engine
     const client = await StockfishClient.create('https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.0/stockfish.js');
@@ -136,9 +154,6 @@ export const analyzeGame = async (pgn: string): Promise<GameReviewData> => {
     const tempGame = new Chess();
     const movesToAnalyze: { fenBefore: string, fenAfter: string, move: any }[] = [];
 
-    // Start FEN
-    // let currentFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
-
     for (const move of history) {
         const fenBefore = tempGame.fen();
         tempGame.move(move);
@@ -147,11 +162,13 @@ export const analyzeGame = async (pgn: string): Promise<GameReviewData> => {
     }
 
     const results: MoveAnalysis[] = [];
-    let lastEvalCp = 0; // Evaluation of previous position (from White's perspective)
+    let lastEvalCp = 0; // Evaluation of previous position (White's perspective)
 
     // 3. Analyze Loop
     for (let i = 0; i < movesToAnalyze.length; i++) {
         const { fenBefore, fenAfter, move } = movesToAnalyze[i];
+        const turnBefore = fenBefore.split(' ')[1] as 'w' | 'b';
+        const turnAfter = fenAfter.split(' ')[1] as 'w' | 'b';
 
         // A. Evaluate the position BEFORE the move to find the Best Move and its score.
         client.setPosition(fenBefore);
@@ -160,13 +177,32 @@ export const analyzeGame = async (pgn: string): Promise<GameReviewData> => {
         const bestMove = bestMoveResult.bestMove;
 
         // Normalized Score for "Before" position (White's perspective)
-        let scoreBefore = bestMoveResult.score || 0;
-        const turnBefore = fenBefore.split(' ')[1];
-        if (turnBefore === 'b') scoreBefore = -scoreBefore;
+        let scoreBefore = 0;
+        let scoreBeforeObj = bestMoveResult.score;
+
+        if (scoreBeforeObj) {
+            scoreBefore = getComparisonScore(scoreBeforeObj, turnBefore);
+        }
 
         // B. Check if played move matches best move
         const playedMoveUci = move.from + move.to + (move.promotion || '');
         let classification: MoveAnalysis['classification'] = 'good';
+        let evalCp = scoreBefore; // Default to before score unless recalculated
+        let evalMate: number | undefined = undefined;
+
+        if (scoreBeforeObj && scoreBeforeObj.unit === 'mate') {
+            // Adjust mate for display: if it's White's turn and score is positive, it's M(value).
+            // If it's Black's turn and score is positive, it's M(value) FOR BLACK (which is negative for white).
+            // Wait, engine score is always relative to side to move.
+            // If side to move is White, +M1 means White mates in 1.
+            // If side to move is Black, +M1 means Black mates in 1.
+            // In our `eval` field (CP), we normalized to White perspective.
+            // For `mate` field, we should probably store "moves to mate".
+            // Convention: Positive = White mates, Negative = Black mates.
+
+            const mateVal = scoreBeforeObj.value;
+            evalMate = turnBefore === 'w' ? mateVal : -mateVal;
+        }
 
         if (bestMove === playedMoveUci) {
             classification = 'best';
@@ -179,18 +215,32 @@ export const analyzeGame = async (pgn: string): Promise<GameReviewData> => {
             const afterResult = await client.go(10);
 
             // Score for `fenAfter` (White's perspective)
-            let scoreAfter = afterResult.score || 0;
-            const turnAfter = fenAfter.split(' ')[1];
-            if (turnAfter === 'b') scoreAfter = -scoreAfter;
+            let scoreAfter = 0;
+            const scoreAfterObj = afterResult.score;
+            if (scoreAfterObj) {
+                scoreAfter = getComparisonScore(scoreAfterObj, turnAfter);
+
+                // Update eval for display (Use AFTER score if we played sub-optimally)
+                evalCp = scoreAfter;
+
+                if (scoreAfterObj.unit === 'mate') {
+                    const mateVal = scoreAfterObj.value;
+                    evalMate = turnAfter === 'w' ? mateVal : -mateVal;
+                } else {
+                    evalMate = undefined;
+                }
+            }
 
             // Calculate Centipawn Loss
             // If White moved: We want to Maximize score. Loss = scoreBefore - scoreAfter.
             // If Black moved: We want to Minimize score. Loss = scoreAfter - scoreBefore.
+            // (Note: scoreBefore/After are already White-relative)
 
             const isWhite = move.color === 'w';
             const loss = isWhite ? (scoreBefore - scoreAfter) : (scoreAfter - scoreBefore);
 
             // Thresholds calibrated for typical engine evaluations (CP)
+            // Mate changes (huge jumps) will trigger Blunder/Mistake correctly due to 10000 scaling.
             if (loss <= 20) classification = 'excellent';
             else if (loss <= 50) classification = 'good';
             else if (loss <= 100) classification = 'inaccuracy';
@@ -206,8 +256,9 @@ export const analyzeGame = async (pgn: string): Promise<GameReviewData> => {
             san: move.san,
             from: move.from,
             to: move.to,
-            fen: fenAfter, // The FEN resulting from the move
-            eval: lastEvalCp,
+            fen: fenAfter,
+            eval: evalCp,
+            mate: evalMate,
             bestMove: bestMove,
             classification: classification
         });

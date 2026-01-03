@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { StockfishClient } from '../utils/gameAnalysis';
-import { Chess } from 'chess.js';
+import { StockfishClient, EngineScore } from '../utils/gameAnalysis';
 
 interface CoachFeedback {
     message: string;
@@ -24,13 +23,10 @@ export const useCoach = (isEnabled: boolean) => {
     const [currentEval, setCurrentEval] = useState<{ score: number, mate?: number }>({ score: 0 });
 
     // Cache the best move for the CURRENT position (before player moves)
-    const currentPositionAnalysis = useRef<{ fen: string, bestMove: string, score: number, mate?: number } | null>(null);
+    const currentPositionAnalysis = useRef<{ fen: string, bestMove: string, score: EngineScore | null } | null>(null);
 
     // Initialize Coach Engine
     useEffect(() => {
-        // We always initialize the engine if we are in a mode that needs evaluation (which we assume is always true for now, or controlled by isEnabled which might mean "Coach Mode" specifically?)
-        // Actually, we want evaluation even if Coach Mode is OFF (for the bar).
-        // Let's assume we always want the engine available if the hook is mounted.
         if (!clientRef.current) {
             StockfishClient.create(STOCKFISH_URL).then(client => {
                 clientRef.current = client;
@@ -48,47 +44,54 @@ export const useCoach = (isEnabled: boolean) => {
     const onTurnStart = useCallback(async (fen: string) => {
         if (!clientRef.current) return;
 
-        // Update local ref immediately to prevent race conditions
-        const turn = fen.split(' ')[1];
-
-        // Debounce? If called rapidly?
-        // StockfishClient.go handles stopping previous commands.
+        const turn = fen.split(' ')[1] as 'w' | 'b';
 
         // Stop any pending
         clientRef.current.stop();
-
         clientRef.current.setPosition(fen);
 
-        // Use a deeper depth if we can, but keep it snappy
         try {
             const result = await clientRef.current.go(15);
+            const scoreObj = result.score;
 
-            // Normalize Score to White Perspective
-            // Engine returns score relative to side to move.
-            let whiteScore = result.score || 0;
-            if (turn === 'b') {
-                whiteScore = -whiteScore;
+            // Normalize Score to White Perspective for Eval Bar
+            let whiteScore = 0;
+            let whiteMate: number | undefined = undefined;
+
+            if (scoreObj) {
+                if (scoreObj.unit === 'cp') {
+                    whiteScore = turn === 'w' ? scoreObj.value : -scoreObj.value;
+                } else {
+                    // Mate
+                    // Score is relative to side to move
+                    // If turn is White and value is +1, White mates in 1.
+                    // If turn is Black and value is +1, Black mates in 1 (Bad for White).
+                    const mateVal = scoreObj.value;
+                    whiteMate = turn === 'w' ? mateVal : -mateVal;
+
+                    // For bar fill calculation, we also need a high CP value
+                    whiteScore = whiteMate > 0 ? 10000 : -10000;
+                }
             }
 
-            // Mate score handling
-            let mate = undefined;
-            // If the underlying engine/client supports mate detection (it should return score >= 10000 or mate field)
-            // StockfishClient wrapper might need to be checked if it parses 'mate'.
-            // Looking at `utils/gameAnalysis.ts` (implied from context), we assumed score is CP.
-            // If Stockfish returns "score mate 3", the wrapper should handle it.
-            // Let's assume for now score is CP.
-
-            setCurrentEval({ score: whiteScore });
+            setCurrentEval({ score: whiteScore, mate: whiteMate });
 
             currentPositionAnalysis.current = {
                 fen,
                 bestMove: result.bestMove,
-                score: result.score || 0 // Raw score (side to move)
+                score: scoreObj
             };
         } catch (e) {
             console.error("Coach analysis failed", e);
         }
     }, []);
+
+    // Helper to get CP for comparison
+    const getCp = (score: EngineScore | null): number => {
+        if (!score) return 0;
+        if (score.unit === 'cp') return score.value;
+        return score.value > 0 ? 10000 - score.value : -10000 - score.value;
+    };
 
     // Evaluate the move the player JUST made
     const evaluateMove = useCallback(async (fenBefore: string, move: { from: string, to: string, promotion?: string }, fenAfter: string) => {
@@ -102,13 +105,13 @@ export const useCoach = (isEnabled: boolean) => {
         let beforeAnalysis = currentPositionAnalysis.current;
 
         if (!beforeAnalysis || beforeAnalysis.fen !== fenBefore) {
-            // We missed the pre-analysis (maybe user moved too fast), so do it now.
+            // We missed the pre-analysis, do it now.
             clientRef.current.setPosition(fenBefore);
             const result = await clientRef.current.go(10);
             beforeAnalysis = {
                 fen: fenBefore,
                 bestMove: result.bestMove,
-                score: result.score || 0
+                score: result.score
             };
         }
 
@@ -125,7 +128,6 @@ export const useCoach = (isEnabled: boolean) => {
                  type: 'best',
                  bestMove: beforeAnalysis.bestMove
              });
-             // Draw green arrow for best move
              setArrows([[move.from, move.to, '#81b64c']]); // Chess.com Green
              setIsThinking(false);
              return;
@@ -136,18 +138,15 @@ export const useCoach = (isEnabled: boolean) => {
         const afterResult = await clientRef.current.go(10);
 
         // Score Calculation (Side to Move Perspective)
-        const turnBefore = fenBefore.split(' ')[1];
-        let scoreBefore = beforeAnalysis.score;
+        // Before score (Player's turn)
+        const scoreBeforeVal = getCp(beforeAnalysis.score);
 
-        // Player Perspective Score Before (e.g. if White moved, scoreBefore is White advantage)
-        const playerValBefore = scoreBefore;
+        // After score (Opponent's turn)
+        // If we want Player's advantage after move, it is -(Opponent Advantage)
+        const scoreAfterValOpponent = getCp(afterResult.score);
+        const scoreAfterValPlayer = -scoreAfterValOpponent;
 
-        // Player Perspective Score After.
-        // It's opponent's turn now. afterResult.score is Opponent Advantage.
-        // So Player Advantage is -afterResult.score.
-        const playerValAfter = -(afterResult.score || 0);
-
-        const loss = playerValBefore - playerValAfter;
+        const loss = scoreBeforeVal - scoreAfterValPlayer;
 
         let type: CoachFeedback['type'] = 'good';
         let message = "Good move.";
@@ -182,9 +181,6 @@ export const useCoach = (isEnabled: boolean) => {
             bestMove: beforeAnalysis.bestMove
         });
 
-        // Draw Arrows:
-        // 1. Played move (Color based on quality)
-        // 2. Best move (Green)
         setArrows([
             [move.from, move.to, arrowColor],       // Played
             [bestFrom, bestTo, '#81b64c']  // Best
