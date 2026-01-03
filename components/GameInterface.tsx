@@ -6,6 +6,7 @@ import PlayBotsPanel, { BotProfile } from './PlayBotsPanel';
 import MoveList from './MoveList';
 import CapturedPieces from './CapturedPieces';
 import CoachFeedback from './CoachFeedback';
+import EvaluationBar from './EvaluationBar';
 import { Chess } from 'chess.js';
 import { useStockfish } from '../hooks/useStockfish';
 import { useCoach } from '../hooks/useCoach';
@@ -24,6 +25,8 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', onA
   // Game State
   const [game, setGame] = useState(new Chess());
   const [fen, setFen] = useState(game.fen());
+  const [viewFen, setViewFen] = useState<string | null>(null); // For history navigation
+  const [viewMoveIndex, setViewMoveIndex] = useState<number>(-1); // -1 = live
   const [lastMove, setLastMove] = useState<{from: string, to: string} | null>(null);
   const [isGameOver, setIsGameOver] = useState(false);
   const [gameResult, setGameResult] = useState<string>('');
@@ -50,8 +53,16 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', onA
   // Engine for Bot
   const { bestMove, sendCommand, resetBestMove, isReady } = useStockfish();
 
-  // Coach Hook
-  const { onTurnStart, evaluateMove, feedback, arrows: coachArrows, isThinking: isCoachThinking, resetFeedback } = useCoach(isCoachMode);
+  // Coach Hook (also provides analysis/evaluation)
+  const {
+      onTurnStart,
+      evaluateMove,
+      feedback,
+      arrows: coachArrows,
+      isThinking: isCoachThinking,
+      resetFeedback,
+      currentEval
+  } = useCoach(true); // Always enable for evaluation bar
 
   // Sync state if prop changes
   useEffect(() => {
@@ -77,16 +88,16 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', onA
      }
   }, [game, fen, stopTimer, startTimer, isGameOver, playSound]);
 
-  // Coach: On turn start
+  // Coach: On turn start (Continuous Analysis)
   useEffect(() => {
-      if (isCoachMode && !isGameOver && game.turn() === 'w') {
+      if (!isGameOver) {
            onTurnStart(game.fen());
       }
-  }, [game.turn(), isCoachMode, isGameOver, onTurnStart]);
+  }, [game.fen(), isGameOver, onTurnStart]);
 
   // Handle User Move
   const onMove = useCallback(async (from: string, to: string, promotion: string = 'q') => {
-      if (game.isGameOver()) return;
+      if (game.isGameOver() || viewFen) return; // Disable moves if game over or viewing history
 
       try {
           const tempGame = new Chess(game.fen());
@@ -195,6 +206,8 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', onA
       const newGame = new Chess();
       setGame(newGame);
       setFen(newGame.fen());
+      setViewFen(null);
+      setViewMoveIndex(-1);
       setLastMove(null);
       setIsGameOver(false);
       setGameResult('');
@@ -232,11 +245,9 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', onA
         />
 
         {/* Evaluation Bar Desktop */}
-        {isReviewMode && (
-             <div className="hidden lg:block absolute left-4 top-1/2 -translate-y-1/2 h-[80vh] w-6 bg-[#262421] rounded overflow-hidden border border-black/20 shadow-lg">
-                <div className="h-[45%] bg-white w-full transition-all duration-500"></div>
-                <div className="h-[55%] bg-[#312e2b] w-full transition-all duration-500"></div>
-                <div className="absolute top-1/2 left-0 w-full text-[10px] text-center text-gray-500 font-mono -mt-2 bg-black/20 backdrop-blur-sm">-0.3</div>
+        {(isReviewMode || isBotMode || isCoachMode) && !isGameOver && (
+             <div className="hidden lg:block absolute left-4 top-1/2 -translate-y-1/2 h-[80vh] w-6 z-0">
+                <EvaluationBar score={currentEval.score} mate={currentEval.mate} />
             </div>
         )}
 
@@ -285,12 +296,12 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', onA
 
             <div className="rounded-sm overflow-hidden shadow-2xl ring-4 ring-black/10 relative aspect-square">
                  <Chessboard 
-                    interactable={!isGameOver && (activePanel === 'play' || isBotMode) && game.turn() === 'w'}
-                    fen={fen}
+                    interactable={!isGameOver && !viewFen && (activePanel === 'play' || isBotMode) && game.turn() === 'w'}
+                    fen={viewFen || fen}
                     onMove={onMove}
                     lastMove={lastMove}
                     boardOrientation="white"
-                    customArrows={isCoachMode ? coachArrows : undefined}
+                    customArrows={isCoachMode && !viewFen ? coachArrows : undefined}
                  />
 
                  {/* Game Over Overlay */}
@@ -400,9 +411,38 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', onA
                              </button>
                         </div>
                    </div>
-                   <MoveList game={game} />
+                   <MoveList
+                        game={game}
+                        currentMoveIndex={viewMoveIndex}
+                        onMoveClick={(fen, index) => {
+                            setViewFen(fen);
+                            setViewMoveIndex(index);
+                            // Also update board last move indicator?
+                            // This would require parsing the move to get from/to.
+                            // For now, we just show the board position.
+                            setLastMove(null);
+                        }}
+                   />
 
                    <div className="mt-auto bg-[#211f1c] p-2 flex gap-1 border-t border-white/5">
+                        {/* Live Button when viewing history */}
+                        {viewFen && (
+                             <button
+                                className="w-full mb-2 bg-[#383531] hover:bg-[#45423e] text-chess-green font-bold py-1 rounded"
+                                onClick={() => {
+                                    setViewFen(null);
+                                    setViewMoveIndex(-1);
+                                    // Restore last move indicator
+                                    const history = game.history({ verbose: true });
+                                    if (history.length > 0) {
+                                        const last = history[history.length - 1];
+                                        setLastMove({ from: last.from, to: last.to });
+                                    }
+                                }}
+                             >
+                                 Back to Live Game
+                             </button>
+                        )}
                         <button className="flex-1 bg-[#383531] hover:bg-[#45423e] rounded flex items-center justify-center py-3 text-gray-400 hover:text-white transition-colors font-bold text-sm" onClick={() => { setIsGameOver(true); setGameResult('Resigned'); }}>
                             Resign
                         </button>
