@@ -262,6 +262,7 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
                          // setActiveTab('analysis');
                          // Authentic: Review panel might stay open but board updates.
                      }}
+                     currentMoveIndex={currentMoveIndex}
                   />
               ) : (
                   <AnalysisPanel
