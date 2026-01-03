@@ -53,10 +53,15 @@ export class StockfishClient {
     }
 
     private init(): Promise<void> {
-        return new Promise((resolve) => {
+        return new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => {
+                reject(new Error("Stockfish init timed out"));
+            }, 10000);
+
             this.worker.onmessage = (e) => {
                 const line = e.data;
                 if (line === 'uciok') {
+                    clearTimeout(timeout);
                     resolve();
                 }
                 this.handleMessage(line);
@@ -143,11 +148,23 @@ const getComparisonScore = (score: EngineScore, turn: 'w' | 'b'): number => {
 
 export const analyzeGame = async (pgn: string, onProgress?: (progress: number) => void): Promise<GameReviewData> => {
     // 1. Setup Engine
-    const client = await StockfishClient.create('https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.0/stockfish.js');
+    let client: StockfishClient | null = null;
+    try {
+        client = await StockfishClient.create('https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.0/stockfish.js');
+    } catch (e) {
+        console.warn("Analysis engine failed to load, proceeding with move parsing only.", e);
+    }
 
     // 2. Parse Game
     const game = new Chess();
-    game.loadPgn(pgn);
+    try {
+        game.loadPgn(pgn);
+    } catch (e) {
+        console.error("Invalid PGN for analysis", e);
+        // Return empty result
+        return { accuracy: { w: 0, b: 0 }, moves: [] };
+    }
+
     const history = game.history({ verbose: true });
 
     // Reconstruct game states
@@ -172,84 +189,74 @@ export const analyzeGame = async (pgn: string, onProgress?: (progress: number) =
         const turnBefore = fenBefore.split(' ')[1] as 'w' | 'b';
         const turnAfter = fenAfter.split(' ')[1] as 'w' | 'b';
 
-        // A. Evaluate the position BEFORE the move to find the Best Move and its score.
-        client.setPosition(fenBefore);
-        const bestMoveResult = await client.go(10); // Depth 10
-
-        const bestMove = bestMoveResult.bestMove;
-
-        // Normalized Score for "Before" position (White's perspective)
-        let scoreBefore = 0;
-        let scoreBeforeObj = bestMoveResult.score;
-
-        if (scoreBeforeObj) {
-            scoreBefore = getComparisonScore(scoreBeforeObj, turnBefore);
-        }
-
-        // B. Check if played move matches best move
-        const playedMoveUci = move.from + move.to + (move.promotion || '');
-        let classification: MoveAnalysis['classification'] = 'good';
-        let evalCp = scoreBefore; // Default to before score unless recalculated
+        let classification: MoveAnalysis['classification'] = 'book';
+        let evalCp = 0;
         let evalMate: number | undefined = undefined;
+        let bestMove = '';
 
-        if (scoreBeforeObj && scoreBeforeObj.unit === 'mate') {
-            // Adjust mate for display: if it's White's turn and score is positive, it's M(value).
-            // If it's Black's turn and score is positive, it's M(value) FOR BLACK (which is negative for white).
-            // Wait, engine score is always relative to side to move.
-            // If side to move is White, +M1 means White mates in 1.
-            // If side to move is Black, +M1 means Black mates in 1.
-            // In our `eval` field (CP), we normalized to White perspective.
-            // For `mate` field, we should probably store "moves to mate".
-            // Convention: Positive = White mates, Negative = Black mates.
+        if (client) {
+            try {
+                // A. Evaluate the position BEFORE the move to find the Best Move and its score.
+                client.setPosition(fenBefore);
+                const bestMoveResult = await client.go(10); // Depth 10
 
-            const mateVal = scoreBeforeObj.value;
-            evalMate = turnBefore === 'w' ? mateVal : -mateVal;
-        }
+                bestMove = bestMoveResult.bestMove;
 
-        if (bestMove === playedMoveUci) {
-            classification = 'best';
-            lastEvalCp = scoreBefore;
-        } else {
-            // C. If not best move, we need to evaluate the RESULTING position (`fenAfter`)
-            // to see how much we lost.
+                // Normalized Score for "Before" position (White's perspective)
+                let scoreBefore = 0;
+                let scoreBeforeObj = bestMoveResult.score;
 
-            client.setPosition(fenAfter);
-            const afterResult = await client.go(10);
-
-            // Score for `fenAfter` (White's perspective)
-            let scoreAfter = 0;
-            const scoreAfterObj = afterResult.score;
-            if (scoreAfterObj) {
-                scoreAfter = getComparisonScore(scoreAfterObj, turnAfter);
-
-                // Update eval for display (Use AFTER score if we played sub-optimally)
-                evalCp = scoreAfter;
-
-                if (scoreAfterObj.unit === 'mate') {
-                    const mateVal = scoreAfterObj.value;
-                    evalMate = turnAfter === 'w' ? mateVal : -mateVal;
-                } else {
-                    evalMate = undefined;
+                if (scoreBeforeObj) {
+                    scoreBefore = getComparisonScore(scoreBeforeObj, turnBefore);
                 }
+
+                // B. Check if played move matches best move
+                const playedMoveUci = move.from + move.to + (move.promotion || '');
+                classification = 'good';
+                evalCp = scoreBefore; // Default to before score unless recalculated
+
+                if (scoreBeforeObj && scoreBeforeObj.unit === 'mate') {
+                    const mateVal = scoreBeforeObj.value;
+                    evalMate = turnBefore === 'w' ? mateVal : -mateVal;
+                }
+
+                if (bestMove === playedMoveUci) {
+                    classification = 'best';
+                    lastEvalCp = scoreBefore;
+                } else {
+                    // C. If not best move, we need to evaluate the RESULTING position (`fenAfter`)
+                    client.setPosition(fenAfter);
+                    const afterResult = await client.go(10);
+
+                    // Score for `fenAfter` (White's perspective)
+                    let scoreAfter = 0;
+                    const scoreAfterObj = afterResult.score;
+                    if (scoreAfterObj) {
+                        scoreAfter = getComparisonScore(scoreAfterObj, turnAfter);
+                        evalCp = scoreAfter;
+
+                        if (scoreAfterObj.unit === 'mate') {
+                            const mateVal = scoreAfterObj.value;
+                            evalMate = turnAfter === 'w' ? mateVal : -mateVal;
+                        } else {
+                            evalMate = undefined;
+                        }
+                    }
+
+                    const isWhite = move.color === 'w';
+                    const loss = isWhite ? (scoreBefore - scoreAfter) : (scoreAfter - scoreBefore);
+
+                    if (loss <= 20) classification = 'excellent';
+                    else if (loss <= 50) classification = 'good';
+                    else if (loss <= 100) classification = 'inaccuracy';
+                    else if (loss <= 200) classification = 'mistake';
+                    else classification = 'blunder';
+
+                    lastEvalCp = scoreAfter;
+                }
+            } catch (err) {
+                console.error("Error analyzing move", i, err);
             }
-
-            // Calculate Centipawn Loss
-            // If White moved: We want to Maximize score. Loss = scoreBefore - scoreAfter.
-            // If Black moved: We want to Minimize score. Loss = scoreAfter - scoreBefore.
-            // (Note: scoreBefore/After are already White-relative)
-
-            const isWhite = move.color === 'w';
-            const loss = isWhite ? (scoreBefore - scoreAfter) : (scoreAfter - scoreBefore);
-
-            // Thresholds calibrated for typical engine evaluations (CP)
-            // Mate changes (huge jumps) will trigger Blunder/Mistake correctly due to 10000 scaling.
-            if (loss <= 20) classification = 'excellent';
-            else if (loss <= 50) classification = 'good';
-            else if (loss <= 100) classification = 'inaccuracy';
-            else if (loss <= 200) classification = 'mistake';
-            else classification = 'blunder';
-
-            lastEvalCp = scoreAfter;
         }
 
         results.push({
@@ -266,7 +273,9 @@ export const analyzeGame = async (pgn: string, onProgress?: (progress: number) =
         });
     }
 
-    client.terminate();
+    if (client) {
+        client.terminate();
+    }
     return calculateAccuracy(results);
 };
 

@@ -111,8 +111,12 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
       if (game.isGameOver() || viewFen) return;
 
       const newGame = new Chess();
-      // @ts-ignore - chess.js type definitions might be incomplete
-      newGame.load_pgn(game.pgn());
+      try {
+        newGame.loadPgn(game.pgn());
+      } catch (e) {
+        // Fallback for empty game or parsing error
+        newGame.load(game.fen());
+      }
 
       // Save fen before move for coach evaluation
       const fenBefore = newGame.fen();
@@ -168,8 +172,11 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
           
           if (game.turn() === 'b') {
               const newGame = new Chess();
-              // @ts-ignore
-              newGame.load_pgn(game.pgn());
+              try {
+                newGame.loadPgn(game.pgn());
+              } catch (e) {
+                newGame.load(game.fen());
+              }
               const move = newGame.move({ from, to, promotion });
 
               if (move) {
