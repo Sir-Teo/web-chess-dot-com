@@ -12,6 +12,7 @@ import { useStockfish } from '../hooks/useStockfish';
 import { useCoach } from '../hooks/useCoach';
 import { useGameTimer } from '../hooks/useGameTimer';
 import { useGameSound } from '../hooks/useGameSound';
+import { useSettings } from '../context/SettingsContext';
 
 interface GameInterfaceProps {
   initialMode?: 'play' | 'bots' | 'review';
@@ -21,6 +22,8 @@ interface GameInterfaceProps {
 const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', onAnalyze }) => {
   const [activePanel, setActivePanel] = useState<'play' | 'review' | 'bots'>(initialMode);
   const [activeBot, setActiveBot] = useState<BotProfile | null>(null);
+
+  const { openSettings } = useSettings();
 
   // Game State
   const [game, setGame] = useState(new Chess());
@@ -509,7 +512,10 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', onA
                     <div className="mt-4 md:mt-8 w-full">
                         <div className="flex justify-between items-center mb-2 px-1">
                             <span className="text-xs font-bold text-gray-500 uppercase">Time Controls</span>
-                            <Settings className="w-4 h-4 text-gray-500 cursor-pointer hover:text-white" />
+                            <Settings
+                                className="w-4 h-4 text-gray-500 cursor-pointer hover:text-white"
+                                onClick={openSettings}
+                            />
                         </div>
                         <div className="grid grid-cols-3 gap-2">
                             {[600, 60, 900].map(t => (

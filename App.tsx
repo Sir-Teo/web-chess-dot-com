@@ -5,8 +5,10 @@ import GameInterface from './components/GameInterface';
 import PuzzlesInterface from './components/PuzzlesInterface';
 import AnalysisInterface from './components/AnalysisInterface';
 import OpeningsInterface from './components/OpeningsInterface';
+import SettingsModal from './components/SettingsModal';
+import { SettingsProvider } from './context/SettingsContext';
 
-const App: React.FC = () => {
+const AppContent: React.FC = () => {
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [analysisPgn, setAnalysisPgn] = useState<string>('');
   const [analysisTab, setAnalysisTab] = useState<'analysis' | 'review'>('analysis');
@@ -42,8 +44,18 @@ const App: React.FC = () => {
       <main className="flex-1 flex flex-col overflow-hidden relative pb-[60px] md:pb-0">
         {renderContent()}
       </main>
+
+      <SettingsModal />
     </div>
   );
+};
+
+const App: React.FC = () => {
+    return (
+        <SettingsProvider>
+            <AppContent />
+        </SettingsProvider>
+    );
 };
 
 export default App;

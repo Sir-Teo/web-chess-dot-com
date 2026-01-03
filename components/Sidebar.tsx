@@ -24,6 +24,7 @@ import {
   User,
   Menu
 } from 'lucide-react';
+import { useSettings } from '../context/SettingsContext';
 
 interface SidebarProps {
   activeTab: string;
@@ -33,6 +34,7 @@ interface SidebarProps {
 const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => {
   const [hoveredTab, setHoveredTab] = useState<string | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { openSettings } = useSettings();
 
   const handleMouseEnter = (id: string) => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
@@ -156,7 +158,10 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => {
             <ChevronLeft className="w-5 h-5 text-[#8b8987]" />
             <span className="text-sm font-semibold">Collapse</span>
         </button>
-        <button className="flex items-center gap-3 px-3 py-2 text-chess-text hover:bg-[#383531] hover:text-white rounded-md">
+        <button
+            onClick={openSettings}
+            className="flex items-center gap-3 px-3 py-2 text-chess-text hover:bg-[#383531] hover:text-white rounded-md"
+        >
             <Settings className="w-5 h-5 text-[#8b8987]" />
             <span className="text-sm font-semibold">Settings</span>
         </button>
