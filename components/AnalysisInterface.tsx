@@ -247,6 +247,7 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
                   />
               ) : (
                   <AnalysisPanel
+                    game={game}
                     evalScore={displayEval}
                     bestLine={bestLine}
                     onNext={handleNext}
@@ -254,7 +255,7 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
                     onFirst={handleFirst}
                     onLast={handleLast}
                     currentMove={currentMoveIndex}
-                    totalMoves={game.history().length}
+                    onMoveClick={(index) => setCurrentMoveIndex(index + 1)}
                   />
               )}
           </div>
