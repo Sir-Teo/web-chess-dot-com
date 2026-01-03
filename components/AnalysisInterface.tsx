@@ -2,9 +2,11 @@ import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import Chessboard from './Chessboard';
 import AnalysisPanel from './AnalysisPanel';
 import GameReviewPanel from './GameReviewPanel';
+import EvaluationBar from './EvaluationBar';
 import { User, ChevronRight } from 'lucide-react';
 import { Chess } from 'chess.js';
 import { useStockfish } from '../hooks/useStockfish';
+import { Arrow } from '../hooks/useCoach';
 
 interface AnalysisInterfaceProps {
   initialPgn?: string;
@@ -24,15 +26,18 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
       const newGame = new Chess();
       if (initialPgn) {
           try {
+              // Heuristic: If it looks like a FEN (no brackets, has slashes), treat as FEN
+              // Otherwise assume PGN.
               if (initialPgn.split('/').length > 7 && !initialPgn.includes('[')) {
                  newGame.load(initialPgn);
                  setGame(newGame);
                  setCurrentMoveIndex(0);
-                 // If loaded from FEN, probably analysis, but here we assume PGN usually for review
+                 setActiveTab('analysis');
               } else {
                  newGame.loadPgn(initialPgn);
                  setGame(newGame);
                  setCurrentMoveIndex(newGame.history().length);
+                 setActiveTab('review');
               }
           } catch (e) {
               console.error("Failed to load PGN/FEN", e);
@@ -41,21 +46,23 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
           newGame.load(initialFen);
           setGame(newGame);
           setCurrentMoveIndex(0);
+          setActiveTab('analysis');
       }
-
-      // Default to review tab if we have a game history
-      if (initialPgn) setActiveTab('review');
   }, [initialPgn, initialFen]);
 
   // Derived state for current display
   const currentFen = useMemo(() => {
       const history = game.history({ verbose: true });
       if (currentMoveIndex === 0) {
+        // If history is empty, return current game fen (start pos)
         if (history.length === 0) return game.fen();
+
+        // Standard start position
         return 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
       }
       
       const tempGame = new Chess();
+      // TODO: Handle if game started from custom position
       for (let i = 0; i < currentMoveIndex; i++) {
           if (history[i]) tempGame.move(history[i]);
       }
@@ -81,6 +88,21 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
     sendCommand('go depth 20');
   }, [currentFen, sendCommand, resetBestMove]);
 
+  // Calculate Arrows from Best Line
+  const analysisArrows = useMemo(() => {
+      if (!bestLine) return undefined;
+      const parts = bestLine.split(' ');
+      if (parts.length > 0) {
+          const move = parts[0];
+          if (move.length >= 4) {
+              const from = move.substring(0, 2);
+              const to = move.substring(2, 4);
+              return [[from, to, '#81b64c']] as Arrow[]; // Green arrow for best move
+          }
+      }
+      return undefined;
+  }, [bestLine]);
+
   // Navigation handlers
   const handleNext = () => {
       if (currentMoveIndex < game.history().length) {
@@ -103,6 +125,7 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
         if (move) {
             const history = game.history();
             const newMasterGame = new Chess();
+            // Replay up to current
             for(let i=0; i<currentMoveIndex; i++) {
                 newMasterGame.move(history[i]);
             }
@@ -117,23 +140,7 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
     } catch (e) {}
   };
 
-  // Calculate bar height based on eval
-  const getBarHeight = () => {
-     if (!evalScore) return 50;
-     if (evalScore.type === 'mate') return evalScore.value > 0 ? 100 : 0;
-     
-     // White's perspective score
-     let score = evalScore.value / 100;
-     const turn = currentFen.split(' ')[1];
-     if (turn === 'b') score = -score;
-
-     const clamped = Math.max(-5, Math.min(5, score));
-     return 50 + (clamped * 10);
-  };
-
-  const whiteBarHeight = getBarHeight();
-  
-  // Format eval
+  // Format eval for text display
   let displayEval = "0.0";
   if (evalScore) {
       if (evalScore.type === 'mate') {
@@ -169,13 +176,18 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
                     fen={currentFen} 
                     onMove={handleMove}
                     lastMove={lastMove}
+                    customArrows={analysisArrows}
                  />
                  
                  {/* Eval Bar Overlay (Mobile) */}
-                 <div className="lg:hidden absolute left-0 top-0 bottom-0 w-2 z-20 opacity-80 pointer-events-none">
-                     <div className="absolute top-0 left-0 w-full bg-[#312e2b] transition-all duration-500" style={{ height: `${100 - whiteBarHeight}%` }}></div>
-                     <div className="absolute bottom-0 left-0 w-full bg-white transition-all duration-500" style={{ height: `${whiteBarHeight}%` }}></div>
-                 </div>
+                 {evalScore && (
+                     <div className="lg:hidden absolute left-0 top-0 bottom-0 w-2 z-20 opacity-80 pointer-events-none">
+                         <EvaluationBar
+                            score={evalScore.type === 'cp' ? evalScore.value : 0}
+                            mate={evalScore.type === 'mate' ? evalScore.value : undefined}
+                         />
+                     </div>
+                 )}
             </div>
             
             {/* Bottom Player Info (White) */}
@@ -189,12 +201,11 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
             </div>
             
             {/* Eval Bar (Desktop) */}
-             <div className="hidden lg:block absolute left-[-24px] top-1/2 -translate-y-1/2 h-[85vh] w-6 bg-[#262421] rounded overflow-hidden border border-black/20 shadow-lg">
-                <div className="absolute top-0 left-0 w-full bg-[#312e2b] transition-all duration-500" style={{ height: `${100 - whiteBarHeight}%` }}></div>
-                <div className="absolute bottom-0 left-0 w-full bg-white transition-all duration-500" style={{ height: `${whiteBarHeight}%` }}></div>
-                <div className={`absolute left-0 w-full text-[10px] text-center font-mono font-bold ${whiteBarHeight > 50 ? 'text-[#312e2b] bottom-1' : 'text-white top-1'}`}>
-                    {displayEval}
-                </div>
+            <div className="hidden lg:block absolute left-[-32px] top-0 bottom-0 w-6 my-auto h-[85vh]">
+                 <EvaluationBar
+                    score={evalScore?.type === 'cp' ? evalScore.value : 0}
+                    mate={evalScore?.type === 'mate' ? evalScore.value : undefined}
+                 />
             </div>
 
         </div>
@@ -225,7 +236,13 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
                      pgn={game.pgn()}
                      onStartReview={() => {
                          setActiveTab('analysis');
-                         handleFirst(); // Start at beginning
+                         handleFirst();
+                     }}
+                     onMoveSelect={(index) => {
+                         setCurrentMoveIndex(index);
+                         // Optional: auto switch to analysis?
+                         // setActiveTab('analysis');
+                         // Authentic: Review panel might stay open but board updates.
                      }}
                   />
               ) : (
