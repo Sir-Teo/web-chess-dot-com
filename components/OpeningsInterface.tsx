@@ -42,6 +42,13 @@ interface OpeningsInterfaceProps {
 }
 
 const OpeningsInterface: React.FC<OpeningsInterfaceProps> = ({ onAnalyze }) => {
+  const handleStartLearning = () => {
+      // Just pick the first opening for the banner button
+      if (onAnalyze && OPENINGS.length > 0) {
+          onAnalyze(OPENINGS[0].fen);
+      }
+  };
+
   return (
     <div className="flex flex-col h-full bg-[#312e2b] text-[#c3c3c3] overflow-y-auto">
       <div className="max-w-4xl mx-auto w-full p-6 md:p-8">
@@ -79,7 +86,10 @@ const OpeningsInterface: React.FC<OpeningsInterfaceProps> = ({ onAnalyze }) => {
                 </ul>
             </div>
             
-            <button className="bg-chess-green hover:bg-chess-greenHover text-white font-bold py-3 px-6 rounded-lg shadow-[0_4px_0_0_#457524] active:shadow-none active:translate-y-[4px] transition-all whitespace-nowrap z-10 self-start md:self-center">
+            <button
+                onClick={handleStartLearning}
+                className="bg-chess-green hover:bg-chess-greenHover text-white font-bold py-3 px-6 rounded-lg shadow-[0_4px_0_0_#457524] active:shadow-none active:translate-y-[4px] transition-all whitespace-nowrap z-10 self-start md:self-center"
+            >
                 Start Learning
             </button>
             
