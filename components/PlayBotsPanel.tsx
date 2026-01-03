@@ -12,7 +12,7 @@ export interface BotProfile {
     depth: number;
 }
 
-const BOTS: BotProfile[] = [
+const BEGINNER_BOTS: BotProfile[] = [
     {
         id: 'martin',
         name: 'Martin',
@@ -43,6 +43,9 @@ const BOTS: BotProfile[] = [
         skillLevel: 5,
         depth: 5
     },
+];
+
+const INTERMEDIATE_BOTS: BotProfile[] = [
     {
         id: 'emir',
         name: 'Emir',
@@ -73,6 +76,9 @@ const BOTS: BotProfile[] = [
         skillLevel: 11,
         depth: 11
     },
+];
+
+const ADVANCED_BOTS: BotProfile[] = [
     {
         id: 'antonio',
         name: 'Antonio',
@@ -94,6 +100,19 @@ const BOTS: BotProfile[] = [
         depth: 14
     },
     {
+        id: 'wemerson',
+        name: 'Wemerson',
+        rating: 1800,
+        avatar: 'https://images.chesscomfiles.com/uploads/v1/user/36423408.2cbbe592.200x200o.8582103f5686.jpeg',
+        flag: 'https://upload.wikimedia.org/wikipedia/commons/thumb/f/fb/Flag_of_Angola.svg/200px-Flag_of_Angola.svg.png',
+        description: "Endgames are my specialty. Try to keep up.",
+        skillLevel: 16,
+        depth: 16
+    }
+];
+
+const MASTER_BOTS: BotProfile[] = [
+    {
         id: 'li',
         name: 'Li',
         rating: 2000,
@@ -102,6 +121,16 @@ const BOTS: BotProfile[] = [
         description: "I play at a master level. Prepare yourself.",
         skillLevel: 18,
         depth: 18
+    },
+    {
+        id: 'komodo',
+        name: 'Komodo',
+        rating: 2400,
+        avatar: 'https://images.chesscomfiles.com/uploads/v1/user/29034334.a3130380.200x200o.83f885ba7130.png',
+        flag: 'https://upload.wikimedia.org/wikipedia/commons/thumb/9/9f/Flag_of_Indonesia.svg/200px-Flag_of_Indonesia.svg.png',
+        description: "My play is dynamic and relentless. Can you withstand the pressure?",
+        skillLevel: 19,
+        depth: 20
     },
     {
         id: 'stockfish',
@@ -114,6 +143,8 @@ const BOTS: BotProfile[] = [
         depth: 22
     }
 ];
+
+const ALL_BOTS = [...BEGINNER_BOTS, ...INTERMEDIATE_BOTS, ...ADVANCED_BOTS, ...MASTER_BOTS];
 
 const BotCategory: React.FC<{ label: string; count: number; isOpen?: boolean; onClick?: () => void }> = ({ label, count, isOpen, onClick }) => (
   <div onClick={onClick} className={`flex items-center justify-between p-4 border-b border-white/5 cursor-pointer hover:bg-white/5 transition-colors ${isOpen ? 'bg-white/5' : ''}`}>
@@ -142,14 +173,14 @@ interface PlayBotsPanelProps {
 }
 
 const PlayBotsPanel: React.FC<PlayBotsPanelProps> = ({ onStartGame }) => {
-  const [selectedBot, setSelectedBot] = useState<BotProfile>(BOTS[0]);
+  const [selectedBot, setSelectedBot] = useState<BotProfile>(ALL_BOTS[0]);
   const [expandedCategory, setExpandedCategory] = useState<string>('Beginner');
 
   const categories = [
-      { label: 'Beginner', bots: BOTS.slice(0, 3) },
-      { label: 'Intermediate', bots: BOTS.slice(3, 6) },
-      { label: 'Advanced', bots: BOTS.slice(6, 8) },
-      { label: 'Master', bots: BOTS.slice(8, 10) }
+      { label: 'Beginner', bots: BEGINNER_BOTS },
+      { label: 'Intermediate', bots: INTERMEDIATE_BOTS },
+      { label: 'Advanced', bots: ADVANCED_BOTS },
+      { label: 'Master', bots: MASTER_BOTS }
   ];
 
   return (

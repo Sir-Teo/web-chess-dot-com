@@ -103,58 +103,54 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', onA
 
   // Handle User Move
   const onMove = useCallback(async (from: string, to: string, promotion: string = 'q') => {
-      if (game.isGameOver() || viewFen) return; // Disable moves if game over or viewing history
+      if (game.isGameOver() || viewFen) return;
 
-      try {
-          const tempGame = new Chess(game.fen());
-          // Save fen before move for coach evaluation
-          const fenBefore = tempGame.fen();
+      const newGame = new Chess();
+      // @ts-ignore - chess.js type definitions might be incomplete
+      newGame.load_pgn(game.pgn());
 
-          const move = tempGame.move({ from, to, promotion });
+      // Save fen before move for coach evaluation
+      const fenBefore = newGame.fen();
+      const move = newGame.move({ from, to, promotion });
 
-          if (move) {
-              // Sound effects
-              if (tempGame.isCheckmate() || tempGame.isCheck()) {
-                  playSound('check');
-              } else if (move.captured) {
-                  playSound('capture');
-              } else if (move.flags.includes('k') || move.flags.includes('q')) { // Castle
-                  playSound('castle');
-              } else if (move.flags.includes('p')) { // Promotion
-                  playSound('promote');
-              } else {
-                  playSound('move');
-              }
-
-              game.move({ from, to, promotion }); // Apply to real game instance
-              const fenAfter = game.fen();
-              setFen(fenAfter);
-              setLastMove({ from, to });
-              setGame(new Chess(fenAfter)); // Immutable update for re-render
-
-              // Trigger Coach Evaluation
-              if (isCoachMode) {
-                  evaluateMove(fenBefore, { from, to, promotion }, fenAfter);
-              } else {
-                  resetFeedback();
-              }
-              
-              // Trigger Bot Response if in Bot Mode and game not over
-              // Only if it's black's turn (user plays white usually)
-              if (isBotMode && activeBot && !game.isGameOver()) {
-                  resetBestMove();
-                  // Small delay for realism
-                  setTimeout(() => {
-                      if (activeBot.skillLevel !== undefined) {
-                           sendCommand(`setoption name Skill Level value ${activeBot.skillLevel}`);
-                      }
-                      sendCommand(`position fen ${game.fen()}`);
-                      sendCommand(`go depth ${activeBot.depth || 10}`);
-                  }, 500);
-              }
+      if (move) {
+          // Sound effects
+          if (newGame.isCheckmate() || newGame.isCheck()) {
+              playSound('check');
+          } else if (move.captured) {
+              playSound('capture');
+          } else if (move.flags.includes('k') || move.flags.includes('q')) { // Castle
+              playSound('castle');
+          } else if (move.flags.includes('p')) { // Promotion
+              playSound('promote');
+          } else {
+              playSound('move');
           }
-      } catch (e) {
-          // Illegal move
+
+          const fenAfter = newGame.fen();
+          setGame(newGame);
+          setFen(fenAfter);
+          setLastMove({ from, to });
+
+          // Trigger Coach Evaluation
+          if (isCoachMode) {
+              evaluateMove(fenBefore, { from, to, promotion }, fenAfter);
+          } else {
+              resetFeedback();
+          }
+
+          // Trigger Bot Response if in Bot Mode and game not over
+          if (isBotMode && activeBot && !newGame.isGameOver()) {
+              resetBestMove();
+              // Small delay for realism
+              setTimeout(() => {
+                  if (activeBot.skillLevel !== undefined) {
+                       sendCommand(`setoption name Skill Level value ${activeBot.skillLevel}`);
+                  }
+                  sendCommand(`position fen ${newGame.fen()}`);
+                  sendCommand(`go depth ${activeBot.depth || 10}`);
+              }, 500);
+          }
       }
   }, [game, isBotMode, activeBot, sendCommand, resetBestMove, playSound, isCoachMode, evaluateMove, resetFeedback]);
 
@@ -165,33 +161,29 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', onA
           const to = bestMove.substring(2, 4);
           const promotion = bestMove.length > 4 ? bestMove.substring(4, 5) : undefined;
           
-          try {
-             // Check if it's actually the bot's turn (Black)
-             if (game.turn() === 'b') {
-                 const tempGame = new Chess(game.fen());
-                 const move = tempGame.move({ from, to, promotion });
+          if (game.turn() === 'b') {
+              const newGame = new Chess();
+              // @ts-ignore
+              newGame.load_pgn(game.pgn());
+              const move = newGame.move({ from, to, promotion });
 
-                 if (move) {
-                     if (tempGame.isCheckmate() || tempGame.isCheck()) {
-                        playSound('check');
-                     } else if (move.captured) {
-                        playSound('capture');
-                     } else if (move.flags.includes('k') || move.flags.includes('q')) {
-                        playSound('castle');
-                     } else if (move.flags.includes('p')) {
-                        playSound('promote');
-                     } else {
-                        playSound('move');
-                     }
+              if (move) {
+                  if (newGame.isCheckmate() || newGame.isCheck()) {
+                     playSound('check');
+                  } else if (move.captured) {
+                     playSound('capture');
+                  } else if (move.flags.includes('k') || move.flags.includes('q')) {
+                     playSound('castle');
+                  } else if (move.flags.includes('p')) {
+                     playSound('promote');
+                  } else {
+                     playSound('move');
+                  }
 
-                     game.move({ from, to, promotion });
-                     setFen(game.fen());
-                     setLastMove({ from, to });
-                     setGame(new Chess(game.fen()));
-                 }
-             }
-          } catch (e) {
-              console.error("Bot tried illegal move", bestMove);
+                  setGame(newGame);
+                  setFen(newGame.fen());
+                  setLastMove({ from, to });
+              }
           }
           resetBestMove();
       }

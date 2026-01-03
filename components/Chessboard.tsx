@@ -64,7 +64,7 @@ const Chessboard: React.FC<ChessboardProps> = ({
   // sourceSquare: string (e.g. "e2")
   // targetSquare: string (e.g. "e4")
   // piece: string (e.g. "wP")
-  const onPieceDrop = (sourceSquare: string, targetSquare: string, piece: string) => {
+  const onDrop = (sourceSquare: string, targetSquare: string, piece: string) => {
     if (!interactable || !onMove) return false;
 
     // Check for promotion:
@@ -91,7 +91,7 @@ const Chessboard: React.FC<ChessboardProps> = ({
       <ReactChessboard
         id="GameBoard"
         position={fen}
-        onPieceDrop={onPieceDrop}
+        onDrop={onDrop}
         boardOrientation={boardOrientation}
         arePiecesDraggable={interactable}
         customDarkSquareStyle={{ backgroundColor: themeColors.dark }}
