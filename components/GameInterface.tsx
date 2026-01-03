@@ -31,6 +31,9 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', onA
   const [isGameOver, setIsGameOver] = useState(false);
   const [gameResult, setGameResult] = useState<string>('');
   
+  // New: Start Game Flag to show board in Play Friend mode
+  const [hasGameStarted, setHasGameStarted] = useState(false);
+
   // Coach Mode State
   const [isCoachMode, setIsCoachMode] = useState(false);
 
@@ -211,6 +214,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', onA
       setLastMove(null);
       setIsGameOver(false);
       setGameResult('');
+      setHasGameStarted(true); // Ensure board is shown
       resetTimer();
       resetFeedback();
       playSound('notify');
@@ -219,6 +223,12 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', onA
   const handleStartBotGame = (bot: BotProfile) => {
       setActiveBot(bot);
       handleNewGame();
+  };
+
+  const handleStartHumanGame = () => {
+    setActiveBot(null);
+    handleNewGame();
+    setActivePanel('play');
   };
 
   // Update timer on new game or time control change
@@ -230,6 +240,13 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', onA
       const mins = Math.floor(seconds / 60);
       return `${mins} min`;
   };
+
+  // Determine if board should be interactable
+  // If bot mode: only white turn.
+  // If human mode: any turn.
+  const isInteractable = !isGameOver && !viewFen && (
+      isBotMode ? game.turn() === 'w' : true // In human mode (Play Friend), both can move
+  );
 
   return (
     <div className="flex flex-col lg:flex-row h-full md:h-screen w-full overflow-hidden bg-chess-dark">
@@ -257,7 +274,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', onA
             <div className="flex justify-between items-end mb-1 px-1">
                 <div className="flex items-center gap-2 md:gap-3">
                     <div className="w-8 h-8 md:w-10 md:h-10 rounded bg-gray-500 overflow-hidden border border-white/20 relative group">
-                        {isBotMode && activeBot ? (
+                        {activeBot ? (
                            <img src={activeBot.avatar} alt={activeBot.name} className="w-full h-full object-cover" />
                         ) : (
                            <img src="https://picsum.photos/id/64/100" alt="Opponent" className="w-full h-full object-cover" />
@@ -267,15 +284,15 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', onA
                     <div className="flex flex-col justify-center">
                         <div className="flex items-center gap-1.5">
                            <span className="text-white font-bold text-sm leading-none">
-                              {isBotMode && activeBot ? activeBot.name : "Opponent"}
+                              {activeBot ? activeBot.name : "Opponent"}
                            </span>
-                           {isBotMode && activeBot && <img src={activeBot.flag} className="w-3 h-2 shadow-sm" alt="Flag" />}
-                           {(!isBotMode || isReviewMode) && (
+                           {activeBot && <img src={activeBot.flag} className="w-3 h-2 shadow-sm" alt="Flag" />}
+                           {activeBot && (
                                <span className="bg-yellow-600 text-[9px] px-1 rounded text-white font-bold leading-tight border border-white/10 hidden md:inline-block" title="Bot">BOT</span>
                            )}
                         </div>
                         <div className="flex items-center gap-2 mt-1 h-4">
-                             {isBotMode && activeBot ? (
+                             {activeBot ? (
                                 <span className="text-xs text-gray-400 font-semibold">({activeBot.rating})</span>
                              ) : (
                                 <span className="text-xs text-gray-500">1200</span>
@@ -296,7 +313,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', onA
 
             <div className="rounded-sm shadow-2xl ring-4 ring-black/10 relative aspect-square">
                  <Chessboard 
-                    interactable={!isGameOver && !viewFen && (activePanel === 'play' || isBotMode) && game.turn() === 'w'}
+                    interactable={isInteractable}
                     fen={viewFen || fen}
                     onMove={onMove}
                     lastMove={lastMove}
@@ -384,7 +401,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', onA
               />
           ) : activePanel === 'bots' && !activeBot ? (
               <PlayBotsPanel onStartGame={handleStartBotGame} />
-          ) : (activePanel === 'bots' && activeBot) || (game.history().length > 0 && !isGameOver) ? (
+          ) : (activePanel === 'bots' && activeBot) || hasGameStarted ? (
                // Active Game View (Move List)
                <div className="flex flex-col h-full bg-[#262522]">
                    <div className="flex items-center justify-between px-4 py-2 bg-[#211f1c] border-b border-white/5">
@@ -474,7 +491,10 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', onA
                             <span>Play</span>
                         </button>
                         <div className="grid grid-cols-2 gap-2">
-                            <button className="bg-[#383531] hover:bg-[#45423e] text-gray-300 py-3 rounded font-semibold text-sm transition-colors border-b-4 border-[#252422] active:border-b-0 active:translate-y-1">
+                            <button
+                                onClick={handleStartHumanGame}
+                                className="bg-[#383531] hover:bg-[#45423e] text-gray-300 py-3 rounded font-semibold text-sm transition-colors border-b-4 border-[#252422] active:border-b-0 active:translate-y-1"
+                            >
                                 Play Friend
                             </button>
                             <button 
