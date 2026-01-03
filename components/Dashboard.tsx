@@ -140,7 +140,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
                </div>
            </button>
 
-            <button className="w-full bg-[#383531] hover:bg-[#45423e] p-3 rounded-lg flex items-center gap-3 group transition-all">
+            <button
+                onClick={() => onNavigate('play')}
+                className="w-full bg-[#383531] hover:bg-[#45423e] p-3 rounded-lg flex items-center gap-3 group transition-all"
+            >
                <div className="w-10 h-10 flex items-center justify-center">
                  <Users className="text-blue-400 w-7 h-7" />
                </div>

@@ -19,6 +19,10 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
 
   // Master game record
   const [game, setGame] = useState(new Chess());
+  // Store the starting FEN separately if we loaded from FEN, so we can replay history correctly.
+  // chess.js history() returns moves, but replay needs to know where to start if it wasn't the standard position.
+  const [startFen, setStartFen] = useState<string | null>(null);
+
   // Current position index (0 = start)
   const [currentMoveIndex, setCurrentMoveIndex] = useState(0);
   
@@ -27,18 +31,24 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
       const newGame = new Chess();
       if (initialPgn) {
           try {
-              // Always assume PGN for this prop. The FEN-like check was faulty for PGNs without headers.
+              // Always assume PGN for this prop.
               newGame.loadPgn(initialPgn);
               setGame(newGame);
+              setStartFen(null); // PGN usually contains setup, or assumes standard
               // Set the index to the last move to show the final position.
               setCurrentMoveIndex(newGame.history().length);
           } catch (e) {
-              console.error("Failed to load PGN/FEN", e);
+              console.error("Failed to load PGN", e);
           }
       } else if (initialFen) {
-          newGame.load(initialFen);
-          setGame(newGame);
-          setCurrentMoveIndex(0);
+          try {
+              newGame.load(initialFen);
+              setGame(newGame);
+              setStartFen(initialFen);
+              setCurrentMoveIndex(0);
+          } catch (e) {
+              console.error("Failed to load FEN", e);
+          }
       }
   }, [initialPgn, initialFen]);
 
@@ -58,20 +68,21 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
   const currentFen = useMemo(() => {
       const history = game.history({ verbose: true });
       if (currentMoveIndex === 0) {
-        // If history is empty, return current game fen (start pos)
-        if (history.length === 0) return game.fen();
+        // If at start of history, return start FEN if exists, otherwise standard start.
+        // However, if game has moves, currentMoveIndex 0 means "before first move".
+
+        if (startFen) return startFen;
 
         // Standard start position
         return 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
       }
       
-      const tempGame = new Chess();
-      // TODO: Handle if game started from custom position
+      const tempGame = new Chess(startFen || undefined);
       for (let i = 0; i < currentMoveIndex; i++) {
           if (history[i]) tempGame.move(history[i]);
       }
       return tempGame.fen();
-  }, [game, currentMoveIndex]);
+  }, [game, currentMoveIndex, startFen]);
 
   const lastMove = useMemo(() => {
        const history = game.history({ verbose: true });
@@ -128,11 +139,14 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
         const move = tempGame.move({ from, to, promotion: 'q' });
         if (move) {
             const history = game.history();
-            const newMasterGame = new Chess();
+            // Reconstruct master game
+            const newMasterGame = new Chess(startFen || undefined);
+
             // Replay up to current
             for(let i=0; i<currentMoveIndex; i++) {
                 newMasterGame.move(history[i]);
             }
+            // Add new move
             newMasterGame.move({ from, to, promotion: 'q' });
             
             setGame(newMasterGame);
