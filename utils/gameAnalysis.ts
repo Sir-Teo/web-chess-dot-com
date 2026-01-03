@@ -17,128 +17,194 @@ export interface GameReviewData {
     moves: MoveAnalysis[];
 }
 
+// A simple promise-based wrapper for Stockfish commands
+class StockfishClient {
+    private worker: Worker;
+    private resolveCurrent: ((value: any) => void) | null = null;
+    private currentCommand: 'uci' | 'go' | null = null;
+    private searchOutput: string[] = [];
+    private bestMove: string | null = null;
+    private score: number | null = null; // cp
+
+    constructor(workerUrl: string) {
+        // We need to fetch blob locally or use the URL directly if allowed
+        // Since we are in a browser environment in the app, this logic mirrors the hook.
+        // But for this utility, we'll initialize it asynchronously.
+        this.worker = new Worker(workerUrl); // Placeholder, real initialization in init()
+    }
+
+    static async create(url: string): Promise<StockfishClient> {
+        const response = await fetch(url);
+        const blob = await response.blob();
+        const objectURL = URL.createObjectURL(blob);
+        const client = new StockfishClient(objectURL);
+
+        await client.init();
+        return client;
+    }
+
+    private init(): Promise<void> {
+        return new Promise((resolve) => {
+            this.worker.onmessage = (e) => {
+                const line = e.data;
+                if (line === 'uciok') {
+                    resolve();
+                }
+                this.handleMessage(line);
+            };
+            this.worker.postMessage('uci');
+        });
+    }
+
+    private handleMessage(line: string) {
+        if (this.currentCommand === 'go') {
+            // Handle CP score
+            if (line.startsWith('info') && line.includes('score cp')) {
+                const match = line.match(/score cp (-?\d+)/);
+                if (match) {
+                     this.score = parseInt(match[1]);
+                }
+            }
+            // Handle Mate score
+            else if (line.startsWith('info') && line.includes('score mate')) {
+                const match = line.match(/score mate (-?\d+)/);
+                if (match) {
+                    const mateIn = parseInt(match[1]);
+                    // Convert mate to a high CP value for comparison
+                    // If mate is positive (we win), big positive number.
+                    // If mate is negative (we lose), big negative number.
+                    this.score = mateIn > 0 ? (10000 - mateIn) : (-10000 - mateIn);
+                }
+            }
+
+            if (line.startsWith('bestmove')) {
+                this.bestMove = line.split(' ')[1];
+                if (this.resolveCurrent) {
+                    this.resolveCurrent({ bestMove: this.bestMove, score: this.score });
+                    this.resolveCurrent = null;
+                    this.currentCommand = null;
+                }
+            }
+        }
+    }
+
+    public setPosition(fen: string): void {
+        this.worker.postMessage(`position fen ${fen}`);
+    }
+
+    public async go(depth: number): Promise<{ bestMove: string, score: number | null }> {
+        return new Promise((resolve) => {
+            this.currentCommand = 'go';
+            this.score = null;
+            this.bestMove = null;
+            this.resolveCurrent = resolve;
+            this.worker.postMessage(`go depth ${depth}`);
+        });
+    }
+
+    public terminate() {
+        this.worker.terminate();
+    }
+}
+
 export const analyzeGame = async (pgn: string): Promise<GameReviewData> => {
-    // We create a new worker strictly for analysis to avoid conflict with the hook
-    const response = await fetch('https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.0/stockfish.js');
-    const blob = await response.blob();
-    const objectURL = URL.createObjectURL(blob);
-    const worker = new Worker(objectURL);
+    // 1. Setup Engine
+    const client = await StockfishClient.create('https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.0/stockfish.js');
 
-    worker.postMessage('uci');
+    // 2. Parse Game
+    const game = new Chess();
+    game.loadPgn(pgn);
+    const history = game.history({ verbose: true });
 
-    return new Promise((resolve) => {
-        const game = new Chess();
-        game.loadPgn(pgn);
-        const history = game.history({ verbose: true });
+    // Reconstruct game states
+    const tempGame = new Chess();
+    const movesToAnalyze: { fenBefore: string, fenAfter: string, move: any }[] = [];
 
-        // Replay game to get FENs
-        const tempGame = new Chess();
-        const movesToAnalyze: { fen: string, move: any }[] = [];
+    // Start FEN
+    let currentFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 
-        for (const move of history) {
-            tempGame.move(move);
-            movesToAnalyze.push({ fen: tempGame.fen(), move });
+    for (const move of history) {
+        const fenBefore = tempGame.fen();
+        tempGame.move(move);
+        const fenAfter = tempGame.fen();
+        movesToAnalyze.push({ fenBefore, fenAfter, move });
+    }
+
+    const results: MoveAnalysis[] = [];
+    let lastEvalCp = 0; // Evaluation of previous position (from White's perspective)
+
+    // 3. Analyze Loop
+    for (let i = 0; i < movesToAnalyze.length; i++) {
+        const { fenBefore, fenAfter, move } = movesToAnalyze[i];
+
+        // A. Evaluate the position BEFORE the move to find the Best Move and its score.
+        client.setPosition(fenBefore);
+        const bestMoveResult = await client.go(10); // Depth 10
+
+        const bestMove = bestMoveResult.bestMove;
+
+        // Normalized Score for "Before" position (White's perspective)
+        let scoreBefore = bestMoveResult.score || 0;
+        const turnBefore = fenBefore.split(' ')[1];
+        if (turnBefore === 'b') scoreBefore = -scoreBefore;
+
+        // B. Check if played move matches best move
+        const playedMoveUci = move.from + move.to + (move.promotion || '');
+        let classification: MoveAnalysis['classification'] = 'good';
+
+        if (bestMove === playedMoveUci) {
+            classification = 'best';
+            // If best move played, the new evaluation is simply the evaluation we just found.
+            // Why? Because `scoreBefore` is the evaluation of `fenBefore` ASSUMING best play.
+            // So after playing best move, the evaluation remains roughly `scoreBefore`.
+            lastEvalCp = scoreBefore;
+        } else {
+            // C. If not best move, we need to evaluate the RESULTING position (`fenAfter`)
+            // to see how much we lost.
+
+            client.setPosition(fenAfter);
+            const afterResult = await client.go(10);
+
+            // Score for `fenAfter` (White's perspective)
+            let scoreAfter = afterResult.score || 0;
+            const turnAfter = fenAfter.split(' ')[1];
+            if (turnAfter === 'b') scoreAfter = -scoreAfter;
+
+            // Calculate Centipawn Loss
+            // If White moved: We want to Maximize score. Loss = scoreBefore - scoreAfter.
+            // If Black moved: We want to Minimize score. Loss = scoreAfter - scoreBefore.
+
+            const isWhite = move.color === 'w';
+            const loss = isWhite ? (scoreBefore - scoreAfter) : (scoreAfter - scoreBefore);
+
+            if (loss <= 20) classification = 'excellent';
+            else if (loss <= 50) classification = 'good';
+            else if (loss <= 100) classification = 'inaccuracy';
+            else if (loss <= 200) classification = 'mistake';
+            else classification = 'blunder';
+
+            lastEvalCp = scoreAfter;
         }
 
-        const results: MoveAnalysis[] = [];
-        let currentIdx = 0;
-        let lastScoreCp = 0; // Evaluate from white's perspective
+        results.push({
+            moveNumber: Math.floor(i / 2) + 1,
+            color: move.color,
+            san: move.san,
+            from: move.from,
+            to: move.to,
+            fen: fenAfter, // The FEN resulting from the move
+            eval: lastEvalCp,
+            bestMove: bestMove,
+            classification: classification
+        });
+    }
 
-        // Helper to process next move
-        const processNext = () => {
-            if (currentIdx >= movesToAnalyze.length) {
-                worker.terminate();
-                calculateAccuracy(results).then(resolve);
-                return;
-            }
-
-            const { fen, move } = movesToAnalyze[currentIdx];
-
-            // Position BEFORE the move
-            let prevFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
-            if (currentIdx > 0) {
-                prevFen = movesToAnalyze[currentIdx - 1].fen;
-            }
-
-            worker.postMessage(`position fen ${prevFen}`);
-            worker.postMessage(`go depth 10`); // Fast depth
-
-            let currentBestMove = '';
-            let currentScore = 0;
-
-            const handler = (e: MessageEvent) => {
-                const line = e.data;
-
-                if (line.startsWith('info') && line.includes('score cp')) {
-                    const match = line.match(/score cp (-?\d+)/);
-                    if (match) {
-                        // Score is usually relative to side to move
-                        let sc = parseInt(match[1]);
-                        const turn = prevFen.split(' ')[1];
-                        if (turn === 'b') sc = -sc; // convert to white perspective
-                        currentScore = sc;
-                    }
-                }
-
-                if (line.startsWith('bestmove')) {
-                    currentBestMove = line.split(' ')[1];
-                    worker.removeEventListener('message', handler);
-
-                    const playedMoveUci = move.from + move.to + (move.promotion || '');
-
-                    let classification: MoveAnalysis['classification'] = 'good';
-
-                    // Simple Classification Logic
-                    const delta = currentScore - lastScoreCp;
-                    // White move: if score drops significantly, it's bad.
-                    // Black move: if score increases significantly, it's bad (for black).
-
-                    const isWhite = move.color === 'w';
-                    const diff = isWhite ? (currentScore - lastScoreCp) : (lastScoreCp - currentScore);
-                    // Wait, currentScore is the evaluation of the position *before* the move, assuming best play?
-                    // No, Stockfish evaluates the position given.
-                    // We need eval of position AFTER the move to see the drop.
-
-                    // This is getting complex for a simple clone.
-                    // Let's stick to "Best Move" matching.
-
-                    if (currentBestMove === playedMoveUci) {
-                        classification = 'best';
-                    } else {
-                         // Random heuristic for demo since full eval is slow
-                         const rnd = Math.random();
-                         if (rnd > 0.8) classification = 'excellent';
-                         else if (rnd > 0.5) classification = 'good';
-                         else if (rnd > 0.2) classification = 'inaccuracy';
-                         else classification = 'mistake';
-                    }
-
-                    results.push({
-                        moveNumber: Math.floor(currentIdx / 2) + 1,
-                        color: move.color,
-                        san: move.san,
-                        from: move.from,
-                        to: move.to,
-                        fen: fen,
-                        bestMove: currentBestMove,
-                        classification: classification
-                    });
-
-                    // Update score for next iteration (approximate)
-                    lastScoreCp = currentScore; // This is actually eval of prev position.
-
-                    currentIdx++;
-                    processNext();
-                }
-            };
-            worker.addEventListener('message', handler);
-        };
-
-        processNext();
-    });
+    client.terminate();
+    return calculateAccuracy(results);
 };
 
-const calculateAccuracy = async (moves: MoveAnalysis[]): Promise<GameReviewData> => {
+
+const calculateAccuracy = (moves: MoveAnalysis[]): GameReviewData => {
     let wScore = 0, bScore = 0;
     let wMoves = 0, bMoves = 0;
 
