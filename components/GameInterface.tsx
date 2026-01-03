@@ -240,7 +240,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', onA
             </div>
         )}
 
-        <div className="w-full max-w-[400px] lg:max-w-[85vh] aspect-square relative flex flex-col justify-center">
+        <div className="w-full max-w-[400px] lg:max-w-[calc(100vh_-_10rem)] relative flex flex-col justify-center">
             
             {/* Opponent Info (Black) */}
             <div className="flex justify-between items-end mb-1 px-1">
@@ -283,7 +283,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', onA
                 )}
             </div>
 
-            <div className="rounded-sm overflow-hidden shadow-2xl ring-4 ring-black/10 relative">
+            <div className="rounded-sm overflow-hidden shadow-2xl ring-4 ring-black/10 relative aspect-square">
                  <Chessboard 
                     interactable={!isGameOver && (activePanel === 'play' || isBotMode) && game.turn() === 'w'}
                     fen={fen}
