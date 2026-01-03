@@ -5,6 +5,7 @@ import GameInterface from './components/GameInterface';
 import PuzzlesInterface from './components/PuzzlesInterface';
 import AnalysisInterface from './components/AnalysisInterface';
 import OpeningsInterface from './components/OpeningsInterface';
+import LessonsInterface from './components/LessonsInterface';
 import SettingsModal from './components/SettingsModal';
 import { SettingsProvider } from './context/SettingsContext';
 
@@ -45,6 +46,8 @@ const AppContent: React.FC = () => {
         return <AnalysisInterface initialPgn={analysisPgn} defaultTab={analysisTab} />;
       case 'learn-openings':
         return <OpeningsInterface onAnalyze={handleAnalyze} />;
+      case 'learn-lessons':
+        return <LessonsInterface onNavigate={handleNavigate} />;
       case 'dashboard':
       default:
         return <Dashboard onNavigate={handleNavigate} />;

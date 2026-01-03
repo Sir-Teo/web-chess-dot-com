@@ -224,7 +224,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
       setHasGameStarted(true); // Ensure board is shown
       resetTimer();
       resetFeedback();
-      playSound('notify');
+      playSound('gameStart');
   }, [resetTimer, playSound, resetFeedback]);
 
   const handleStartBotGame = (bot: BotProfile) => {
