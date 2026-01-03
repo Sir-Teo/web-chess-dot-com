@@ -49,6 +49,9 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
   const [playMode, setPlayMode] = useState<'online' | 'pass-and-play'>('online');
   const [onlineOpponent, setOnlineOpponent] = useState<{name: string, rating: number, avatar: string, flag: string} | null>(null);
 
+  // User Color (default 'w')
+  const [userColor, setUserColor] = useState<'w' | 'b'>('w');
+
   // Coach Mode State
   const [isCoachMode, setIsCoachMode] = useState(false);
 
@@ -122,6 +125,9 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
   const onMove = useCallback(async (from: string, to: string, promotion: string = 'q') => {
       if (game.isGameOver() || viewFen) return;
 
+      // Ensure it's user's turn if playing against engine/bot
+      if (isEngineOpponent && game.turn() !== userColor) return;
+
       const newGame = new Chess();
       try {
         newGame.loadPgn(game.pgn());
@@ -173,7 +179,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
               }, 500);
           }
       }
-  }, [game, isEngineOpponent, activeBot, sendCommand, resetBestMove, playSound, isCoachMode, evaluateMove, resetFeedback]);
+  }, [game, isEngineOpponent, activeBot, sendCommand, resetBestMove, playSound, isCoachMode, evaluateMove, resetFeedback, userColor]);
 
   // Handle Engine Move (Bot)
   useEffect(() => {
@@ -182,7 +188,8 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
           const to = bestMove.substring(2, 4);
           const promotion = bestMove.length > 4 ? bestMove.substring(4, 5) : undefined;
           
-          if (game.turn() === 'b') {
+          // Ensure engine moves only on its turn
+          if (game.turn() !== userColor) {
               const newGame = new Chess();
               try {
                 newGame.loadPgn(game.pgn());
@@ -238,10 +245,34 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
       playSound('gameStart');
   }, [resetTimer, playSound, resetFeedback]);
 
-  const handleStartBotGame = (bot: BotProfile) => {
+  // Automatic Engine Move Start
+  useEffect(() => {
+     if (isEngineOpponent && activeBot && game.history().length === 0 && game.turn() !== userColor && !isGameOver) {
+         // It's engine's turn at start of game
+         const timeout = setTimeout(() => {
+             if (activeBot.skillLevel !== undefined) {
+                 sendCommand(`setoption name Skill Level value ${activeBot.skillLevel}`);
+             }
+             sendCommand(`position fen ${game.fen()}`);
+             sendCommand(`go depth ${activeBot.depth || 10}`);
+         }, 1000);
+         return () => clearTimeout(timeout);
+     }
+  }, [game, isEngineOpponent, activeBot, userColor, isGameOver, sendCommand]);
+
+  const handleStartBotGame = (bot: BotProfile, color: 'w' | 'b' | 'random') => {
       setActiveBot(bot);
       setOnlineOpponent(null);
       setPlayMode('online'); // Treat bot games as 'online' in terms of engine interaction
+
+      let finalColor: 'w' | 'b' = 'w';
+      if (color === 'random') {
+          finalColor = Math.random() > 0.5 ? 'w' : 'b';
+      } else {
+          finalColor = color;
+      }
+      setUserColor(finalColor);
+
       handleNewGame();
   };
 
@@ -305,10 +336,10 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
   };
 
   // Determine if board should be interactable
-  // If engine/online mode: only white turn.
+  // If engine/online mode: only user's turn.
   // If human/pass-and-play mode: any turn.
   const isInteractable = !isGameOver && !viewFen && (
-      isEngineOpponent ? game.turn() === 'w' : true
+      isEngineOpponent ? game.turn() === userColor : true
   );
 
   return (
@@ -333,7 +364,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
 
         <div className="w-full max-w-[400px] lg:max-w-[calc(100vh_-_10rem)] relative flex flex-col justify-center">
             
-            {/* Opponent Info (Black) */}
+            {/* Opponent Info (Top) */}
             <div className="flex justify-between items-end mb-1 px-1">
                 <div className="flex items-center gap-2 md:gap-3">
                     <div className="w-8 h-8 md:w-10 md:h-10 rounded bg-gray-500 overflow-hidden border border-white/20 relative group">
@@ -362,16 +393,16 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
                              ) : (
                                 <span className="text-xs text-gray-500">1200</span>
                              )}
-                             <CapturedPieces game={game} color="b" />
+                             <CapturedPieces game={game} color={userColor === 'w' ? 'b' : 'w'} />
                         </div>
                     </div>
                 </div>
                 {(activePanel === 'play' || isBotMode) && (
                     <div className={`
                         px-2 py-1 md:px-3 md:py-1.5 rounded font-mono font-bold text-lg md:text-xl shadow-inner border
-                        ${game.turn() === 'b' && !isGameOver ? 'bg-white text-black' : 'bg-[#262421] text-white border-white/5'}
+                        ${game.turn() === (userColor === 'w' ? 'b' : 'w') && !isGameOver ? 'bg-white text-black' : 'bg-[#262421] text-white border-white/5'}
                     `}>
-                        {formatTime(blackTime)}
+                        {formatTime(userColor === 'w' ? blackTime : whiteTime)}
                     </div>
                 )}
             </div>
@@ -382,7 +413,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
                     fen={viewFen || fen}
                     onMove={onMove}
                     lastMove={lastMove}
-                    boardOrientation="white"
+                    boardOrientation={userColor === 'w' ? 'white' : 'black'}
                     customArrows={isCoachMode && !viewFen ? coachArrows : undefined}
                  />
 
@@ -412,7 +443,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
                  )}
             </div>
 
-            {/* Player Info (White) */}
+            {/* Player Info (Bottom) */}
             <div className="flex justify-between items-start mt-1 px-1">
                 <div className="flex items-center gap-2 md:gap-3">
                     <div className="w-8 h-8 md:w-10 md:h-10 rounded bg-gray-500 overflow-hidden border border-white/20 relative group">
@@ -425,16 +456,16 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
                         </div>
                          <div className="flex items-center gap-2 mt-1 h-4">
                              <span className="text-xs text-gray-500">850</span>
-                             <CapturedPieces game={game} color="w" />
+                             <CapturedPieces game={game} color={userColor} />
                         </div>
                     </div>
                 </div>
                 {(activePanel === 'play' || isBotMode) && (
                     <div className={`
                         px-2 py-1 md:px-3 md:py-1.5 rounded font-mono font-bold text-lg md:text-xl shadow-[0_4px_0_0_rgba(160,160,160,1)] cursor-default
-                        ${game.turn() === 'w' && !isGameOver ? 'bg-white text-black' : 'bg-[#c3c3c3] text-black'}
+                        ${game.turn() === userColor && !isGameOver ? 'bg-white text-black' : 'bg-[#c3c3c3] text-black'}
                     `}>
-                        {formatTime(whiteTime)}
+                        {formatTime(userColor === 'w' ? whiteTime : blackTime)}
                     </div>
                 )}
             </div>

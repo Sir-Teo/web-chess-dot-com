@@ -26,12 +26,13 @@ const BotCategory: React.FC<{ label: string; count: number; isOpen?: boolean; on
 );
 
 interface PlayBotsPanelProps {
-    onStartGame?: (bot: BotProfile) => void;
+    onStartGame?: (bot: BotProfile, userColor: 'w' | 'b' | 'random') => void;
 }
 
 const PlayBotsPanel: React.FC<PlayBotsPanelProps> = ({ onStartGame }) => {
   const [selectedBot, setSelectedBot] = useState<BotProfile>(ALL_BOTS[0]);
   const [expandedCategory, setExpandedCategory] = useState<string>('Beginner');
+  const [selectedColor, setSelectedColor] = useState<'w' | 'b' | 'random'>('w');
 
   const categories = [
       { label: 'Beginner', bots: BEGINNER_BOTS },
@@ -124,8 +125,35 @@ const PlayBotsPanel: React.FC<PlayBotsPanelProps> = ({ onStartGame }) => {
                  <HelpCircle className="w-6 h-6 hover:text-white cursor-pointer" />
              </div>
          </div>
+
+         {/* Color Selection */}
+         <div className="flex justify-center gap-4 py-2">
+            <button
+                onClick={() => setSelectedColor('w')}
+                className={`w-12 h-12 rounded-full border-2 flex items-center justify-center transition-all ${selectedColor === 'w' ? 'bg-white border-chess-green ring-2 ring-chess-green/50' : 'bg-[#f0f0f0] border-transparent opacity-50 hover:opacity-100'}`}
+                title="Play as White"
+            >
+                <div className="w-6 h-6 bg-[#f0f0f0] rounded-full border border-gray-300 shadow-inner" />
+            </button>
+            <button
+                onClick={() => setSelectedColor('random')}
+                className={`w-12 h-12 rounded-full border-2 flex items-center justify-center transition-all bg-gradient-to-r from-white to-black ${selectedColor === 'random' ? 'border-chess-green ring-2 ring-chess-green/50' : 'border-transparent opacity-50 hover:opacity-100'}`}
+                title="Random Side"
+            >
+                <HelpCircle className="w-6 h-6 text-gray-400 mix-blend-difference" />
+            </button>
+            <button
+                onClick={() => setSelectedColor('b')}
+                className={`w-12 h-12 rounded-full border-2 flex items-center justify-center transition-all ${selectedColor === 'b' ? 'bg-black border-chess-green ring-2 ring-chess-green/50' : 'bg-[#303030] border-transparent opacity-50 hover:opacity-100'}`}
+                title="Play as Black"
+            >
+                <div className="w-6 h-6 bg-[#303030] rounded-full border border-gray-600 shadow-inner" />
+            </button>
+         </div>
+
         <button
-            onClick={() => onStartGame && onStartGame(selectedBot)}
+            data-testid="play-bot-start"
+            onClick={() => onStartGame && onStartGame(selectedBot, selectedColor)}
             className="w-full bg-[#81b64c] hover:bg-[#a3d160] text-white font-bold text-2xl py-4 rounded-lg shadow-[0_4px_0_0_#457524] active:shadow-none active:translate-y-[4px] transition-all flex items-center justify-center relative top-[-2px]"
         >
             Play
