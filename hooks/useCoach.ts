@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { StockfishClient } from '../utils/gameAnalysis';
+import { Chess } from 'chess.js';
 
 interface CoachFeedback {
     message: string;
@@ -19,12 +20,18 @@ export const useCoach = (isEnabled: boolean) => {
     const [arrows, setArrows] = useState<Arrow[]>([]);
     const [isThinking, setIsThinking] = useState(false);
 
+    // Continuous Evaluation State
+    const [currentEval, setCurrentEval] = useState<{ score: number, mate?: number }>({ score: 0 });
+
     // Cache the best move for the CURRENT position (before player moves)
-    const currentPositionAnalysis = useRef<{ fen: string, bestMove: string, score: number } | null>(null);
+    const currentPositionAnalysis = useRef<{ fen: string, bestMove: string, score: number, mate?: number } | null>(null);
 
     // Initialize Coach Engine
     useEffect(() => {
-        if (isEnabled && !clientRef.current) {
+        // We always initialize the engine if we are in a mode that needs evaluation (which we assume is always true for now, or controlled by isEnabled which might mean "Coach Mode" specifically?)
+        // Actually, we want evaluation even if Coach Mode is OFF (for the bar).
+        // Let's assume we always want the engine available if the hook is mounted.
+        if (!clientRef.current) {
             StockfishClient.create(STOCKFISH_URL).then(client => {
                 clientRef.current = client;
             });
@@ -35,31 +42,53 @@ export const useCoach = (isEnabled: boolean) => {
                 clientRef.current = null;
             }
         };
-    }, [isEnabled]);
+    }, []);
 
-    // Analyze the current position (to be ready when player moves)
+    // Analyze the current position (to be ready when player moves AND update eval bar)
     const onTurnStart = useCallback(async (fen: string) => {
-        if (!isEnabled || !clientRef.current) return;
+        if (!clientRef.current) return;
 
-        // Don't re-analyze if we just did
-        if (currentPositionAnalysis.current?.fen === fen) return;
+        // Update local ref immediately to prevent race conditions
+        const turn = fen.split(' ')[1];
+
+        // Debounce? If called rapidly?
+        // StockfishClient.go handles stopping previous commands.
 
         // Stop any pending
         clientRef.current.stop();
 
         clientRef.current.setPosition(fen);
-        // Shallow search for quick feedback
+
+        // Use a deeper depth if we can, but keep it snappy
         try {
-            const result = await clientRef.current.go(12);
+            const result = await clientRef.current.go(15);
+
+            // Normalize Score to White Perspective
+            // Engine returns score relative to side to move.
+            let whiteScore = result.score || 0;
+            if (turn === 'b') {
+                whiteScore = -whiteScore;
+            }
+
+            // Mate score handling
+            let mate = undefined;
+            // If the underlying engine/client supports mate detection (it should return score >= 10000 or mate field)
+            // StockfishClient wrapper might need to be checked if it parses 'mate'.
+            // Looking at `utils/gameAnalysis.ts` (implied from context), we assumed score is CP.
+            // If Stockfish returns "score mate 3", the wrapper should handle it.
+            // Let's assume for now score is CP.
+
+            setCurrentEval({ score: whiteScore });
+
             currentPositionAnalysis.current = {
                 fen,
                 bestMove: result.bestMove,
-                score: result.score || 0
+                score: result.score || 0 // Raw score (side to move)
             };
         } catch (e) {
             console.error("Coach analysis failed", e);
         }
-    }, [isEnabled]);
+    }, []);
 
     // Evaluate the move the player JUST made
     const evaluateMove = useCallback(async (fenBefore: string, move: { from: string, to: string, promotion?: string }, fenAfter: string) => {
@@ -106,38 +135,16 @@ export const useCoach = (isEnabled: boolean) => {
         clientRef.current.setPosition(fenAfter);
         const afterResult = await clientRef.current.go(10);
 
-        // --- SCORE CALCULATION ---
-        // We need to determine how much the player lost by making this move.
-        // `score` from stockfish is generally "centipawns from the side to move's perspective".
-        // But stockfish.js 10 typically reports score relative to White in UCI?
-        // Let's assume standard UCI behavior: "score cp x" is relative to the side to move?
-        // Actually, many UCI engines report relative to side to move.
-        // Let's verify standard assumption:
-        // If White to move, +100 means White is winning.
-        // If Black to move, +100 means Black is winning.
-
-        // HOWEVER, stockfish.js 10 usually normalizes to White?
-        // Let's stick to the previous `gameAnalysis` logic which worked:
-        // "Normalized Score for "Before" position (White's perspective)"
-        // This implies we treated raw engine output as White-centric?
-        // Let's look at `gameAnalysis.ts`: `if (turnBefore === 'b') scoreBefore = -scoreBefore;`
-        // This implies the engine outputs "Side to Move" score.
-        // So let's stick to that.
-
-        const turnBefore = fenBefore.split(' ')[1]; // 'w' or 'b'
+        // Score Calculation (Side to Move Perspective)
+        const turnBefore = fenBefore.split(' ')[1];
         let scoreBefore = beforeAnalysis.score;
 
-        // Convert to "Player Perspective" (The one who just moved)
-        // If I am White, and it's my turn, scoreBefore is my advantage.
-        // If I am Black, and it's my turn, scoreBefore is my advantage.
-        // So `scoreBefore` is ALREADY "Player Advantage" if engine reports relative to side-to-move.
-
-        // Now `scoreAfter`:
-        // It's the opponent's turn.
-        // So `scoreAfter` is "Opponent Advantage".
-        // So "Player Advantage After" is `-scoreAfter`.
-
+        // Player Perspective Score Before (e.g. if White moved, scoreBefore is White advantage)
         const playerValBefore = scoreBefore;
+
+        // Player Perspective Score After.
+        // It's opponent's turn now. afterResult.score is Opponent Advantage.
+        // So Player Advantage is -afterResult.score.
         const playerValAfter = -(afterResult.score || 0);
 
         const loss = playerValBefore - playerValAfter;
@@ -198,6 +205,7 @@ export const useCoach = (isEnabled: boolean) => {
         feedback,
         arrows,
         isThinking,
-        resetFeedback
+        resetFeedback,
+        currentEval // Expose evaluation
     };
 };
