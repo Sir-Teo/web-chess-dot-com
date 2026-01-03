@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Chessboard from './Chessboard';
-import { Settings, Flag, XCircle, Search, ChevronRight, RotateCcw } from 'lucide-react';
+import { Settings, Flag, XCircle, Search, ChevronRight, RotateCcw, MessageCircle, AlertCircle } from 'lucide-react';
 import GameReviewPanel from './GameReviewPanel';
 import PlayBotsPanel, { BotProfile } from './PlayBotsPanel';
 import MoveList from './MoveList';
 import CapturedPieces from './CapturedPieces';
+import CoachFeedback from './CoachFeedback';
 import { Chess } from 'chess.js';
 import { useStockfish } from '../hooks/useStockfish';
+import { useCoach } from '../hooks/useCoach';
 import { useGameTimer } from '../hooks/useGameTimer';
 import { useGameSound } from '../hooks/useGameSound';
 
@@ -26,6 +28,9 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', onA
   const [isGameOver, setIsGameOver] = useState(false);
   const [gameResult, setGameResult] = useState<string>('');
   
+  // Coach Mode State
+  const [isCoachMode, setIsCoachMode] = useState(false);
+
   // Sounds
   const { playSound } = useGameSound();
 
@@ -42,8 +47,11 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', onA
     }
   );
 
-  // Engine
+  // Engine for Bot
   const { bestMove, sendCommand, resetBestMove, isReady } = useStockfish();
+
+  // Coach Hook
+  const { onTurnStart, evaluateMove, feedback, isThinking: isCoachThinking, resetFeedback } = useCoach(isCoachMode);
 
   // Sync state if prop changes
   useEffect(() => {
@@ -69,12 +77,22 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', onA
      }
   }, [game, fen, stopTimer, startTimer, isGameOver, playSound]);
 
+  // Coach: On turn start
+  useEffect(() => {
+      if (isCoachMode && !isGameOver && game.turn() === 'w') {
+           onTurnStart(game.fen());
+      }
+  }, [game.turn(), isCoachMode, isGameOver, onTurnStart]);
+
   // Handle User Move
-  const onMove = useCallback((from: string, to: string, promotion: string = 'q') => {
+  const onMove = useCallback(async (from: string, to: string, promotion: string = 'q') => {
       if (game.isGameOver()) return;
 
       try {
           const tempGame = new Chess(game.fen());
+          // Save fen before move for coach evaluation
+          const fenBefore = tempGame.fen();
+
           const move = tempGame.move({ from, to, promotion });
 
           if (move) {
@@ -92,9 +110,17 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', onA
               }
 
               game.move({ from, to, promotion }); // Apply to real game instance
-              setFen(game.fen());
+              const fenAfter = game.fen();
+              setFen(fenAfter);
               setLastMove({ from, to });
-              setGame(new Chess(game.fen())); // Immutable update for re-render
+              setGame(new Chess(fenAfter)); // Immutable update for re-render
+
+              // Trigger Coach Evaluation
+              if (isCoachMode) {
+                  evaluateMove(fenBefore, { from, to, promotion }, fenAfter);
+              } else {
+                  resetFeedback();
+              }
               
               // Trigger Bot Response if in Bot Mode and game not over
               // Only if it's black's turn (user plays white usually)
@@ -113,7 +139,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', onA
       } catch (e) {
           // Illegal move
       }
-  }, [game, isBotMode, activeBot, sendCommand, resetBestMove, playSound]);
+  }, [game, isBotMode, activeBot, sendCommand, resetBestMove, playSound, isCoachMode, evaluateMove, resetFeedback]);
 
   // Handle Engine Move (Bot)
   useEffect(() => {
@@ -173,8 +199,9 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', onA
       setIsGameOver(false);
       setGameResult('');
       resetTimer();
+      resetFeedback();
       playSound('notify');
-  }, [resetTimer, playSound]);
+  }, [resetTimer, playSound, resetFeedback]);
 
   const handleStartBotGame = (bot: BotProfile) => {
       setActiveBot(bot);
@@ -197,6 +224,13 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', onA
       {/* Left Area (Board) */}
       <div className="flex-none lg:flex-1 flex flex-col items-center justify-center p-2 lg:p-4 bg-[#312e2b] relative">
         
+        {/* Coach Feedback Overlay */}
+        <CoachFeedback
+            feedback={feedback}
+            isThinking={isCoachThinking}
+            onClose={resetFeedback}
+        />
+
         {/* Evaluation Bar Desktop */}
         {isReviewMode && (
              <div className="hidden lg:block absolute left-4 top-1/2 -translate-y-1/2 h-[80vh] w-6 bg-[#262421] rounded overflow-hidden border border-black/20 shadow-lg">
@@ -344,6 +378,19 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', onA
                    <div className="flex items-center justify-between px-4 py-2 bg-[#211f1c] border-b border-white/5">
                         <span className="font-bold text-white text-sm">Game vs {isBotMode ? activeBot?.name : 'Opponent'}</span>
                         <div className="flex gap-2">
+
+                             {/* Coach Toggle */}
+                             <button
+                                onClick={() => setIsCoachMode(!isCoachMode)}
+                                className={`flex items-center gap-1 px-2 py-1 rounded transition-colors ${isCoachMode ? 'bg-chess-green text-white' : 'text-gray-400 hover:text-white'}`}
+                                title="Toggle Coach Mode"
+                             >
+                                 <MessageCircle className="w-4 h-4" />
+                                 <span className="text-xs font-bold">Coach</span>
+                             </button>
+
+                             <div className="w-px bg-white/10 mx-1"></div>
+
                              <button className="text-gray-400 hover:text-white" title="Resign" onClick={() => { setIsGameOver(true); setGameResult('Aborted'); }}>
                                  <Flag className="w-4 h-4" />
                              </button>
