@@ -113,7 +113,7 @@ const OpeningsInterface: React.FC<OpeningsInterfaceProps> = ({ onAnalyze }) => {
                     className="bg-[#262421] rounded-lg p-4 flex flex-col md:flex-row gap-6 hover:bg-[#2f2d2a] transition-colors cursor-pointer group border border-transparent hover:border-white/10"
                 >
                     {/* Thumbnail Board */}
-                    <div className="w-full md:w-48 aspect-square flex-shrink-0 relative rounded-md overflow-hidden bg-[#312e2b] shadow-inner">
+                    <div className="w-full md:w-48 aspect-square flex-shrink-0 relative rounded-md bg-[#312e2b] shadow-inner">
                         <div className="absolute inset-0 z-0 pointer-events-none opacity-90">
                              <Chessboard interactable={false} fen={opening.fen} />
                         </div>
