@@ -294,7 +294,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', onA
                 )}
             </div>
 
-            <div className="rounded-sm overflow-hidden shadow-2xl ring-4 ring-black/10 relative aspect-square">
+            <div className="rounded-sm shadow-2xl ring-4 ring-black/10 relative aspect-square">
                  <Chessboard 
                     interactable={!isGameOver && !viewFen && (activePanel === 'play' || isBotMode) && game.turn() === 'w'}
                     fen={viewFen || fen}
