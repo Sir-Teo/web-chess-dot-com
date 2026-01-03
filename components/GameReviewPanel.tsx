@@ -6,6 +6,7 @@ interface GameReviewPanelProps {
     pgn?: string;
     onStartReview?: () => void;
     onMoveSelect?: (moveIndex: number) => void;
+    currentMoveIndex?: number;
 }
 
 const MoveStatRow: React.FC<{
@@ -67,7 +68,7 @@ const getEvalDisplay = (move: MoveAnalysis) => {
     return "";
 }
 
-const GameReviewPanel: React.FC<GameReviewPanelProps> = ({ pgn, onStartReview, onMoveSelect }) => {
+const GameReviewPanel: React.FC<GameReviewPanelProps> = ({ pgn, onStartReview, onMoveSelect, currentMoveIndex = -1 }) => {
   const [data, setData] = useState<GameReviewData | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -129,7 +130,7 @@ const GameReviewPanel: React.FC<GameReviewPanelProps> = ({ pgn, onStartReview, o
           <div className="w-6 h-6 rounded-full bg-gray-700 flex items-center justify-center text-white">
             <Star className="w-3.5 h-3.5 fill-current" />
           </div>
-          <span className="font-bold text-white text-lg">Game Review</span>
+          <h2 className="font-bold text-white text-lg">Game Review</h2>
         </div>
         <button className="text-gray-500 hover:text-white transition-colors">
             <Search className="w-5 h-5" />
@@ -241,7 +242,9 @@ const GameReviewPanel: React.FC<GameReviewPanelProps> = ({ pgn, onStartReview, o
                         {row.w && (
                             <button
                                 onClick={() => onMoveSelect && onMoveSelect(i * 2 + 1)}
-                                className={`flex-1 flex items-center justify-between gap-2 px-2 py-1 cursor-pointer rounded transition-colors ${getClassificationColor(row.w.classification)}`}
+                                className={`flex-1 flex items-center justify-between gap-2 px-2 py-1 cursor-pointer rounded transition-colors
+                                    ${currentMoveIndex === i * 2 + 1 ? 'ring-2 ring-white/50 bg-white/10' : ''}
+                                    ${getClassificationColor(row.w.classification)}`}
                             >
                                 <div className="flex items-center gap-2">
                                     <span className="font-bold text-white">{row.w.san}</span>
@@ -255,7 +258,9 @@ const GameReviewPanel: React.FC<GameReviewPanelProps> = ({ pgn, onStartReview, o
                         {row.b ? (
                             <button
                                 onClick={() => onMoveSelect && onMoveSelect(i * 2 + 2)}
-                                className={`flex-1 flex items-center justify-between gap-2 px-2 py-1 cursor-pointer rounded transition-colors ${getClassificationColor(row.b.classification)}`}
+                                className={`flex-1 flex items-center justify-between gap-2 px-2 py-1 cursor-pointer rounded transition-colors
+                                    ${currentMoveIndex === i * 2 + 2 ? 'ring-2 ring-white/50 bg-white/10' : ''}
+                                    ${getClassificationColor(row.b.classification)}`}
                             >
                                 <div className="flex items-center gap-2">
                                     <span className="font-bold text-white">{row.b.san}</span>
