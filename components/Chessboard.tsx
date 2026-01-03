@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { Chessboard as ReactChessboard } from 'react-chessboard';
 import { Arrow } from '../hooks/useCoach';
+import { useSettings, BOARD_THEMES } from '../context/SettingsContext';
 
 interface ChessboardProps {
   interactable?: boolean;
@@ -19,6 +20,11 @@ const Chessboard: React.FC<ChessboardProps> = ({
   boardOrientation = 'white',
   customArrows
 }) => {
+  const { boardTheme, pieceTheme, showCoordinates, animationSpeed } = useSettings();
+
+  const themeColors = useMemo(() => {
+    return BOARD_THEMES.find(t => t.id === boardTheme) || BOARD_THEMES[0];
+  }, [boardTheme]);
   
   // Custom styles for squares
   const customSquareStyles = useMemo(() => {
@@ -32,6 +38,27 @@ const Chessboard: React.FC<ChessboardProps> = ({
 
     return styles;
   }, [lastMove]);
+
+  const customPieces = useMemo(() => {
+      const pieces = ['wP', 'wN', 'wB', 'wR', 'wQ', 'wK', 'bP', 'bN', 'bB', 'bR', 'bQ', 'bK'];
+      const pieceComponents: Record<string, (args: any) => JSX.Element> = {};
+
+      pieces.forEach(p => {
+          pieceComponents[p] = ({ squareWidth }) => (
+            <div
+                style={{
+                    width: squareWidth,
+                    height: squareWidth,
+                    backgroundImage: `url(https://images.chesscomfiles.com/chess-themes/pieces/${pieceTheme}/150/${p}.png)`,
+                    backgroundSize: '100%',
+                    backgroundRepeat: 'no-repeat',
+                    backgroundPosition: 'center',
+                }}
+            />
+          );
+      });
+      return pieceComponents;
+  }, [pieceTheme]);
 
   // Types for callback arguments based on react-chessboard documentation
   // sourceSquare: string (e.g. "e2")
@@ -67,11 +94,13 @@ const Chessboard: React.FC<ChessboardProps> = ({
         onPieceDrop={onPieceDrop}
         boardOrientation={boardOrientation}
         arePiecesDraggable={interactable}
-        customDarkSquareStyle={{ backgroundColor: '#769656' }}
-        customLightSquareStyle={{ backgroundColor: '#eeeed2' }}
+        customDarkSquareStyle={{ backgroundColor: themeColors.dark }}
+        customLightSquareStyle={{ backgroundColor: themeColors.light }}
         customSquareStyles={customSquareStyles}
         customArrows={customArrows}
-        animationDuration={200}
+        animationDuration={animationSpeed === 'slow' ? 500 : animationSpeed === 'fast' ? 100 : 200}
+        showBoardNotation={showCoordinates}
+        customPieces={customPieces}
       />
     </div>
   );
