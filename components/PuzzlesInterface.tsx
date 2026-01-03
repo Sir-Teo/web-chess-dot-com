@@ -24,55 +24,47 @@ const PuzzlesInterface: React.FC = () => {
     setShowNextButton(false);
   }, [currentPuzzleIndex, currentPuzzle]);
 
-  const handlePieceDrop = (sourceSquare: string, targetSquare: string) => {
-    if (feedback === 'correct') return false; // Already solved
+  const handleMove = useCallback((from: string, to: string, promotion: string = 'q') => {
+    if (feedback === 'correct') return; // Already solved
 
     try {
       const move = chess.move({
-        from: sourceSquare,
-        to: targetSquare,
-        promotion: 'q',
+        from,
+        to,
+        promotion,
       });
 
-      if (!move) return false;
+      if (!move) return;
 
-      const userMoveUci = `${sourceSquare}${targetSquare}`;
-      // Basic check for the first move in the sequence (simplified for now)
-      // In a real app we'd track the move index if the puzzle is multi-step
-      const expectedMove = currentPuzzle.moves[0]; // Assuming 1-move puzzles or just checking first move for now
-
-      // Check if move matches expected (handle promotion syntax if needed, but simple for now)
-      // My puzzle data uses "e1e8" format. move.lan might be "Re8#" or similar.
-      // Let's reconstruct UCI from move object
+      const expectedMove = currentPuzzle.moves[0];
       const actualMoveUci = move.from + move.to;
-      // Note: promotion handling might need suffix like 'q'
 
+      // Check success
       if (actualMoveUci === expectedMove || (move.promotion && actualMoveUci + move.promotion === expectedMove)) {
          setFen(chess.fen());
          setFeedback('correct');
          setRating(r => r + 10 + streak);
          setStreak(s => s + 1);
          setShowNextButton(true);
-         // Play sound?
-         return true;
       } else {
-        // Wrong move
+        // Wrong move - feedback
         setFeedback('incorrect');
         setStreak(0);
         setRating(r => Math.max(100, r - 10));
-        // Undo move on board after a delay or immediately?
-        // Usually immediately snap back
+
+        // Show the wrong move briefly then undo
+        setFen(chess.fen());
         setTimeout(() => {
             chess.undo();
             setFen(chess.fen());
-        }, 500);
-        return true; // We allow the move visually then snap back
+            setFeedback('none'); // Reset feedback to allow trying again
+        }, 800);
       }
 
     } catch (e) {
-      return false;
+      console.error(e);
     }
-  };
+  }, [chess, feedback, currentPuzzle, streak]);
 
   const handleNextPuzzle = () => {
     setCurrentPuzzleIndex(prev => prev + 1);
@@ -96,8 +88,8 @@ const PuzzlesInterface: React.FC = () => {
 
             <div className="rounded-sm shadow-2xl ring-4 ring-black/10">
                  <Chessboard
-                    position={fen}
-                    onPieceDrop={handlePieceDrop}
+                    fen={fen}
+                    onMove={handleMove}
                     boardOrientation={currentPuzzle.color === 'w' ? 'white' : 'black'}
                     interactable={feedback !== 'correct'}
                  />

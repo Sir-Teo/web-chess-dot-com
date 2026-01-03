@@ -12,6 +12,7 @@ const AppContent: React.FC = () => {
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [analysisPgn, setAnalysisPgn] = useState<string>('');
   const [analysisTab, setAnalysisTab] = useState<'analysis' | 'review'>('analysis');
+  const [gameParams, setGameParams] = useState<any>({});
 
   const handleAnalyze = (pgn: string, tab: 'analysis' | 'review' = 'analysis') => {
     setAnalysisPgn(pgn);
@@ -19,10 +20,23 @@ const AppContent: React.FC = () => {
     setActiveTab('analysis');
   };
 
+  const handleNavigate = (view: string, params?: any) => {
+    setActiveTab(view);
+    if (params) {
+      setGameParams(params);
+    }
+  };
+
   const renderContent = () => {
     switch (activeTab) {
       case 'play':
-        return <GameInterface initialMode="play" onAnalyze={handleAnalyze} />;
+        return (
+          <GameInterface
+            initialMode="play"
+            initialTimeControl={gameParams.timeControl}
+            onAnalyze={handleAnalyze}
+          />
+        );
       case 'play-bots':
         return <GameInterface initialMode="bots" onAnalyze={handleAnalyze} />;
       case 'puzzles':
@@ -33,13 +47,13 @@ const AppContent: React.FC = () => {
         return <OpeningsInterface onAnalyze={handleAnalyze} />;
       case 'dashboard':
       default:
-        return <Dashboard onNavigate={setActiveTab} />;
+        return <Dashboard onNavigate={handleNavigate} />;
     }
   };
 
   return (
     <div className="flex min-h-screen bg-chess-dark font-sans antialiased text-chess-text selection:bg-chess-green selection:text-white">
-      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+      <Sidebar activeTab={activeTab} setActiveTab={handleNavigate} />
       
       <main className="flex-1 flex flex-col overflow-hidden relative pb-[60px] md:pb-0">
         {renderContent()}
