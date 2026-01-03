@@ -12,7 +12,7 @@ import {
 import Chessboard from './Chessboard';
 
 interface DashboardProps {
-  onNavigate: (view: string) => void;
+  onNavigate: (view: string, params?: any) => void;
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
@@ -99,7 +99,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
         {/* Center Col: Actions */}
         <div className="space-y-2">
            <button 
-             onClick={() => onNavigate('play')}
+             onClick={() => onNavigate('play', { timeControl: 900 })}
              className="w-full bg-[#383531] hover:bg-[#45423e] p-3 rounded-lg flex items-center justify-between group transition-all"
            >
              <div className="flex items-center gap-3">
@@ -115,7 +115,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
            </button>
 
            <button 
-              onClick={() => onNavigate('play')}
+              onClick={() => onNavigate('play', { timeControl: 600 })}
               className="w-full bg-[#383531] hover:bg-[#45423e] p-3 rounded-lg flex items-center gap-3 group transition-all"
             >
                <div className="w-10 h-10 flex items-center justify-center">
@@ -141,7 +141,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
            </button>
 
             <button
-                onClick={() => onNavigate('play')}
+                onClick={() => onNavigate('play', { timeControl: 600 })}
                 className="w-full bg-[#383531] hover:bg-[#45423e] p-3 rounded-lg flex items-center gap-3 group transition-all"
             >
                <div className="w-10 h-10 flex items-center justify-center">

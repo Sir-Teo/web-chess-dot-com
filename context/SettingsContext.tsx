@@ -55,14 +55,55 @@ interface SettingsContextType {
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
 
 export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-    // Default settings
-    const [boardTheme, setBoardTheme] = useState<BoardThemeId>('green');
-    const [pieceTheme, setPieceTheme] = useState<PieceThemeId>('neo');
-    const [showCoordinates, setShowCoordinates] = useState(true);
+    // Load initial settings from localStorage
+    const getInitialSetting = <T,>(key: string, defaultValue: T): T => {
+        try {
+            const saved = localStorage.getItem(key);
+            return saved ? JSON.parse(saved) : defaultValue;
+        } catch (e) {
+            return defaultValue;
+        }
+    };
+
+    const [boardTheme, setBoardThemeState] = useState<BoardThemeId>(() => getInitialSetting('boardTheme', 'green'));
+    const [pieceTheme, setPieceThemeState] = useState<PieceThemeId>(() => getInitialSetting('pieceTheme', 'neo'));
+    const [showCoordinates, setShowCoordinatesState] = useState<boolean>(() => getInitialSetting('showCoordinates', true));
+    const [animationSpeed, setAnimationSpeedState] = useState<'slow' | 'normal' | 'fast'>(() => getInitialSetting('animationSpeed', 'normal'));
+    const [soundEnabled, setSoundEnabledState] = useState<boolean>(() => getInitialSetting('soundEnabled', true));
+    const [moveMethod, setMoveMethodState] = useState<'drag' | 'click'>(() => getInitialSetting('moveMethod', 'drag'));
+
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-    const [animationSpeed, setAnimationSpeed] = useState<'slow' | 'normal' | 'fast'>('normal');
-    const [soundEnabled, setSoundEnabled] = useState(true);
-    const [moveMethod, setMoveMethod] = useState<'drag' | 'click'>('drag');
+
+    // Wrappers to save to localStorage
+    const setBoardTheme = (theme: BoardThemeId) => {
+        setBoardThemeState(theme);
+        localStorage.setItem('boardTheme', JSON.stringify(theme));
+    };
+
+    const setPieceTheme = (theme: PieceThemeId) => {
+        setPieceThemeState(theme);
+        localStorage.setItem('pieceTheme', JSON.stringify(theme));
+    };
+
+    const setShowCoordinates = (show: boolean) => {
+        setShowCoordinatesState(show);
+        localStorage.setItem('showCoordinates', JSON.stringify(show));
+    };
+
+    const setAnimationSpeed = (speed: 'slow' | 'normal' | 'fast') => {
+        setAnimationSpeedState(speed);
+        localStorage.setItem('animationSpeed', JSON.stringify(speed));
+    };
+
+    const setSoundEnabled = (enabled: boolean) => {
+        setSoundEnabledState(enabled);
+        localStorage.setItem('soundEnabled', JSON.stringify(enabled));
+    };
+
+    const setMoveMethod = (method: 'drag' | 'click') => {
+        setMoveMethodState(method);
+        localStorage.setItem('moveMethod', JSON.stringify(method));
+    };
 
     const openSettings = () => setIsSettingsOpen(true);
     const closeSettings = () => setIsSettingsOpen(false);

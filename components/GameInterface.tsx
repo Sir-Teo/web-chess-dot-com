@@ -16,10 +16,11 @@ import { useSettings } from '../context/SettingsContext';
 
 interface GameInterfaceProps {
   initialMode?: 'play' | 'bots' | 'review';
+  initialTimeControl?: number;
   onAnalyze?: (pgn: string, tab?: 'analysis' | 'review') => void;
 }
 
-const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', onAnalyze }) => {
+const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', initialTimeControl = 600, onAnalyze }) => {
   const [activePanel, setActivePanel] = useState<'play' | 'review' | 'bots'>(initialMode);
   const [activeBot, setActiveBot] = useState<BotProfile | null>(null);
 
@@ -44,7 +45,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', onA
   const { playSound } = useGameSound();
 
   // Timer State
-  const [timeControl, setTimeControl] = useState(600); // 10 minutes default
+  const [timeControl, setTimeControl] = useState(initialTimeControl);
   const { whiteTime, blackTime, formatTime, startTimer, stopTimer, resetTimer } = useGameTimer(
     timeControl,
     game.turn(),
@@ -74,6 +75,10 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', onA
   useEffect(() => {
     if (initialMode) setActivePanel(initialMode);
   }, [initialMode]);
+
+  useEffect(() => {
+    if (initialTimeControl) setTimeControl(initialTimeControl);
+  }, [initialTimeControl]);
 
   const isBotMode = activePanel === 'bots';
   const isReviewMode = activePanel === 'review';
