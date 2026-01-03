@@ -56,7 +56,10 @@ const Chessboard: React.FC<ChessboardProps> = ({
   };
 
   return (
-    <div className="w-full h-full flex justify-center items-center" style={{ userSelect: 'none' }}>
+    <div
+      className="w-full h-full flex justify-center items-center"
+      style={{ userSelect: 'none' }}
+    >
       <ReactChessboard
         id="GameBoard"
         position={fen}

@@ -94,7 +94,7 @@ const PuzzlesInterface: React.FC = () => {
                 </div>
             </div>
 
-            <div className="rounded-sm overflow-hidden shadow-2xl ring-4 ring-black/10">
+            <div className="rounded-sm shadow-2xl ring-4 ring-black/10">
                  <Chessboard
                     position={fen}
                     onPieceDrop={handlePieceDrop}
