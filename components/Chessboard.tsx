@@ -1,6 +1,5 @@
 import React, { useMemo } from 'react';
 import { Chessboard as ReactChessboard } from 'react-chessboard';
-import { PieceType } from '../types';
 
 interface ChessboardProps {
   interactable?: boolean;
@@ -31,16 +30,17 @@ const Chessboard: React.FC<ChessboardProps> = ({
     return styles;
   }, [lastMove]);
 
-  const onPieceDrop = ({ sourceSquare, targetSquare, piece }: { sourceSquare: string; targetSquare: string | null; piece: { pieceType: string } }) => {
-    if (!interactable || !onMove || !targetSquare) return false;
-
-    // piece.pieceType is like "wP", "bK" etc.
-    const pieceType = piece.pieceType;
+  // Types for callback arguments based on react-chessboard documentation
+  // sourceSquare: string (e.g. "e2")
+  // targetSquare: string (e.g. "e4")
+  // piece: string (e.g. "wP")
+  const onPieceDrop = (sourceSquare: string, targetSquare: string, piece: string) => {
+    if (!interactable || !onMove) return false;
 
     // Check for promotion:
-    const isPromotion = (pieceType[1] === 'P' && (
-      (pieceType[0] === 'w' && targetSquare[1] === '8') ||
-      (pieceType[0] === 'b' && targetSquare[1] === '1')
+    const isPromotion = (piece[1] === 'P' && (
+      (piece[0] === 'w' && targetSquare[1] === '8') ||
+      (piece[0] === 'b' && targetSquare[1] === '1')
     ));
 
     if (isPromotion) {
@@ -55,16 +55,14 @@ const Chessboard: React.FC<ChessboardProps> = ({
   return (
     <div className="w-full h-full" style={{ userSelect: 'none' }}>
       <ReactChessboard
-        options={{
-            position: fen,
-            onPieceDrop: onPieceDrop,
-            boardOrientation: boardOrientation,
-            allowDragging: interactable,
-            darkSquareStyle: { backgroundColor: '#769656' },
-            lightSquareStyle: { backgroundColor: '#eeeed2' },
-            squareStyles: customSquareStyles,
-            animationDurationInMs: 200,
-        }}
+        position={fen}
+        onPieceDrop={onPieceDrop}
+        boardOrientation={boardOrientation}
+        arePiecesDraggable={interactable}
+        customDarkSquareStyle={{ backgroundColor: '#769656' }}
+        customLightSquareStyle={{ backgroundColor: '#eeeed2' }}
+        customSquareStyles={customSquareStyles}
+        animationDuration={200}
       />
     </div>
   );
