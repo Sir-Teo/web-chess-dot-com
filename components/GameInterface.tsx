@@ -3,9 +3,12 @@ import Chessboard from './Chessboard';
 import { Settings, Flag, XCircle, Search, ChevronRight, RotateCcw } from 'lucide-react';
 import GameReviewPanel from './GameReviewPanel';
 import PlayBotsPanel, { BotProfile } from './PlayBotsPanel';
+import MoveList from './MoveList';
+import CapturedPieces from './CapturedPieces';
 import { Chess } from 'chess.js';
 import { useStockfish } from '../hooks/useStockfish';
 import { useGameTimer } from '../hooks/useGameTimer';
+import { useGameSound } from '../hooks/useGameSound';
 
 interface GameInterfaceProps {
   initialMode?: 'play' | 'bots' | 'review';
@@ -23,6 +26,9 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', onA
   const [isGameOver, setIsGameOver] = useState(false);
   const [gameResult, setGameResult] = useState<string>('');
   
+  // Sounds
+  const { playSound } = useGameSound();
+
   // Timer State
   const [timeControl, setTimeControl] = useState(600); // 10 minutes default
   const { whiteTime, blackTime, formatTime, startTimer, stopTimer, resetTimer } = useGameTimer(
@@ -32,6 +38,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', onA
     (loser) => {
       setIsGameOver(true);
       setGameResult(loser === 'w' ? 'Black Won (Time)' : 'White Won (Time)');
+      playSound('gameEnd');
     }
   );
 
@@ -51,6 +58,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', onA
      if (game.isGameOver()) {
          setIsGameOver(true);
          stopTimer();
+         playSound('gameEnd');
          if (game.isCheckmate()) setGameResult(game.turn() === 'w' ? 'Black Won' : 'White Won');
          else if (game.isDraw()) setGameResult('Draw');
          else setGameResult('Game Over');
@@ -59,15 +67,31 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', onA
              startTimer();
          }
      }
-  }, [game, fen, stopTimer, startTimer, isGameOver]);
+  }, [game, fen, stopTimer, startTimer, isGameOver, playSound]);
 
   // Handle User Move
   const onMove = useCallback((from: string, to: string, promotion: string = 'q') => {
       if (game.isGameOver()) return;
 
       try {
-          const move = game.move({ from, to, promotion });
+          const tempGame = new Chess(game.fen());
+          const move = tempGame.move({ from, to, promotion });
+
           if (move) {
+              // Sound effects
+              if (tempGame.isCheckmate() || tempGame.isCheck()) {
+                  playSound('check');
+              } else if (move.captured) {
+                  playSound('capture');
+              } else if (move.flags.includes('k') || move.flags.includes('q')) { // Castle
+                  playSound('castle');
+              } else if (move.flags.includes('p')) { // Promotion
+                  playSound('promote');
+              } else {
+                  playSound('move');
+              }
+
+              game.move({ from, to, promotion }); // Apply to real game instance
               setFen(game.fen());
               setLastMove({ from, to });
               setGame(new Chess(game.fen())); // Immutable update for re-render
@@ -92,7 +116,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', onA
       } catch (e) {
           // Illegal move
       }
-  }, [game, isBotMode, activeBot, sendCommand, resetBestMove]);
+  }, [game, isBotMode, activeBot, sendCommand, resetBestMove, playSound]);
 
   // Handle Engine Move (Bot)
   useEffect(() => {
@@ -104,8 +128,23 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', onA
           try {
              // Check if it's actually the bot's turn (Black)
              if (game.turn() === 'b') {
-                 const move = game.move({ from, to, promotion });
+                 const tempGame = new Chess(game.fen());
+                 const move = tempGame.move({ from, to, promotion });
+
                  if (move) {
+                     if (tempGame.isCheckmate() || tempGame.isCheck()) {
+                        playSound('check');
+                     } else if (move.captured) {
+                        playSound('capture');
+                     } else if (move.flags.includes('k') || move.flags.includes('q')) {
+                        playSound('castle');
+                     } else if (move.flags.includes('p')) {
+                        playSound('promote');
+                     } else {
+                        playSound('move');
+                     }
+
+                     game.move({ from, to, promotion });
                      setFen(game.fen());
                      setLastMove({ from, to });
                      setGame(new Chess(game.fen()));
@@ -116,7 +155,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', onA
           }
           resetBestMove();
       }
-  }, [bestMove, isBotMode, game, resetBestMove]);
+  }, [bestMove, isBotMode, game, resetBestMove, playSound]);
 
   // Reset game when switching modes
   useEffect(() => {
@@ -137,7 +176,8 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', onA
       setIsGameOver(false);
       setGameResult('');
       resetTimer();
-  }, [resetTimer]);
+      playSound('notify');
+  }, [resetTimer, playSound]);
 
   const handleStartBotGame = (bot: BotProfile) => {
       setActiveBot(bot);
@@ -192,12 +232,13 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', onA
                                <span className="bg-yellow-600 text-[9px] px-1 rounded text-white font-bold leading-tight border border-white/10 hidden md:inline-block" title="Bot">BOT</span>
                            )}
                         </div>
-                        <div className="flex items-center gap-2 mt-1">
+                        <div className="flex items-center gap-2 mt-1 h-4">
                              {isBotMode && activeBot ? (
                                 <span className="text-xs text-gray-400 font-semibold">({activeBot.rating})</span>
                              ) : (
                                 <span className="text-xs text-gray-500">1200</span>
                              )}
+                             <CapturedPieces game={game} color="b" />
                         </div>
                     </div>
                 </div>
@@ -257,8 +298,9 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', onA
                             <span className="text-white font-bold text-sm leading-none">MasterTeo1205</span>
                             <span className="text-lg md:text-xl leading-none">🇺🇸</span>
                         </div>
-                         <div className="flex items-center gap-2 mt-1">
+                         <div className="flex items-center gap-2 mt-1 h-4">
                              <span className="text-xs text-gray-500">850</span>
+                             <CapturedPieces game={game} color="w" />
                         </div>
                     </div>
                 </div>
@@ -297,8 +339,33 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', onA
                       if (onAnalyze) onAnalyze(game.pgn());
                   }}
               />
-          ) : activePanel === 'bots' ? (
+          ) : activePanel === 'bots' && !activeBot ? (
               <PlayBotsPanel onStartGame={handleStartBotGame} />
+          ) : (activePanel === 'bots' && activeBot) || (game.history().length > 0 && !isGameOver) ? (
+               // Active Game View (Move List)
+               <div className="flex flex-col h-full bg-[#262522]">
+                   <div className="flex items-center justify-between px-4 py-2 bg-[#211f1c] border-b border-white/5">
+                        <span className="font-bold text-white text-sm">Game vs {isBotMode ? activeBot?.name : 'Opponent'}</span>
+                        <div className="flex gap-2">
+                             <button className="text-gray-400 hover:text-white" title="Resign" onClick={() => { setIsGameOver(true); setGameResult('Aborted'); }}>
+                                 <Flag className="w-4 h-4" />
+                             </button>
+                             <button className="text-gray-400 hover:text-white" title="Abort" onClick={handleNewGame}>
+                                 <XCircle className="w-4 h-4" />
+                             </button>
+                        </div>
+                   </div>
+                   <MoveList game={game} />
+
+                   <div className="mt-auto bg-[#211f1c] p-2 flex gap-1 border-t border-white/5">
+                        <button className="flex-1 bg-[#383531] hover:bg-[#45423e] rounded flex items-center justify-center py-3 text-gray-400 hover:text-white transition-colors font-bold text-sm" onClick={() => { setIsGameOver(true); setGameResult('Resigned'); }}>
+                            Resign
+                        </button>
+                        <button className="flex-1 bg-[#383531] hover:bg-[#45423e] rounded flex items-center justify-center py-3 text-gray-400 hover:text-white transition-colors font-bold text-sm">
+                            Draw
+                        </button>
+                   </div>
+               </div>
           ) : (
             <>
                 {/* Play Panel Content */}
