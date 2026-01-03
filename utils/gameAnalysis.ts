@@ -141,7 +141,7 @@ const getComparisonScore = (score: EngineScore, turn: 'w' | 'b'): number => {
     return cp;
 };
 
-export const analyzeGame = async (pgn: string): Promise<GameReviewData> => {
+export const analyzeGame = async (pgn: string, onProgress?: (progress: number) => void): Promise<GameReviewData> => {
     // 1. Setup Engine
     const client = await StockfishClient.create('https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.0/stockfish.js');
 
@@ -166,6 +166,8 @@ export const analyzeGame = async (pgn: string): Promise<GameReviewData> => {
 
     // 3. Analyze Loop
     for (let i = 0; i < movesToAnalyze.length; i++) {
+        if (onProgress) onProgress((i / movesToAnalyze.length) * 100);
+
         const { fenBefore, fenAfter, move } = movesToAnalyze[i];
         const turnBefore = fenBefore.split(' ')[1] as 'w' | 'b';
         const turnAfter = fenAfter.split(' ')[1] as 'w' | 'b';

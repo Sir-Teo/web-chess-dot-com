@@ -57,6 +57,7 @@ const Chessboard: React.FC<ChessboardProps> = ({
 
   return (
     <div
+      id="chessboard-wrapper"
       className="w-full h-full flex justify-center items-center"
       style={{ userSelect: 'none' }}
     >
