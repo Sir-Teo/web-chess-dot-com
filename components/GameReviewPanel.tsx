@@ -239,7 +239,7 @@ const GameReviewPanel: React.FC<GameReviewPanelProps> = ({ pgn, onStartReview, o
 
                         {/* White Move */}
                         {row.w && (
-                            <div
+                            <button
                                 onClick={() => onMoveSelect && onMoveSelect(i * 2 + 1)}
                                 className={`flex-1 flex items-center justify-between gap-2 px-2 py-1 cursor-pointer rounded transition-colors ${getClassificationColor(row.w.classification)}`}
                             >
@@ -248,12 +248,12 @@ const GameReviewPanel: React.FC<GameReviewPanelProps> = ({ pgn, onStartReview, o
                                     <ClassificationIcon classification={row.w.classification} />
                                 </div>
                                 <span className="text-[10px] font-mono opacity-70">{getEvalDisplay(row.w)}</span>
-                            </div>
+                            </button>
                         )}
 
                         {/* Black Move */}
                         {row.b ? (
-                            <div
+                            <button
                                 onClick={() => onMoveSelect && onMoveSelect(i * 2 + 2)}
                                 className={`flex-1 flex items-center justify-between gap-2 px-2 py-1 cursor-pointer rounded transition-colors ${getClassificationColor(row.b.classification)}`}
                             >
@@ -262,7 +262,7 @@ const GameReviewPanel: React.FC<GameReviewPanelProps> = ({ pgn, onStartReview, o
                                     <ClassificationIcon classification={row.b.classification} />
                                 </div>
                                 <span className="text-[10px] font-mono opacity-70">{getEvalDisplay(row.b)}</span>
-                            </div>
+                            </button>
                         ) : (
                             <div className="flex-1"></div>
                         )}
