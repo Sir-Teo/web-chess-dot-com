@@ -15,7 +15,7 @@ import { useGameSound } from '../hooks/useGameSound';
 
 interface GameInterfaceProps {
   initialMode?: 'play' | 'bots' | 'review';
-  onAnalyze?: (pgn: string) => void;
+  onAnalyze?: (pgn: string, tab?: 'analysis' | 'review') => void;
 }
 
 const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', onAnalyze }) => {
@@ -328,7 +328,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', onA
                          <div className="flex flex-col w-full gap-3 mt-4 max-w-[200px]">
                             <button 
                                 onClick={() => {
-                                    if (onAnalyze) onAnalyze(game.pgn());
+                                    if (onAnalyze) onAnalyze(game.pgn(), 'review');
                                 }}
                                 className="w-full bg-chess-green hover:bg-chess-greenHover text-white font-bold py-3 rounded-lg shadow-lg flex items-center justify-center gap-2 transition-transform active:scale-95"
                             >
@@ -396,7 +396,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', onA
               <GameReviewPanel
                   pgn={game.pgn()}
                   onStartReview={() => {
-                      if (onAnalyze) onAnalyze(game.pgn());
+                      if (onAnalyze) onAnalyze(game.pgn(), 'review');
                   }}
               />
           ) : activePanel === 'bots' && !activeBot ? (

@@ -1,26 +1,22 @@
 import React from 'react';
 import { 
   Search, 
-  Plus, 
-  Files, 
-  FolderOpen, 
-  BookOpen, 
-  FileText, 
   ChevronRight, 
   ChevronDown, 
-  UploadCloud, 
-  SkipBack, 
   ChevronLeft, 
   SkipForward, 
+  SkipBack,
   PlusCircle, 
   Save, 
   Star, 
   MoreHorizontal,
-  History,
   Activity
 } from 'lucide-react';
+import MoveList from './MoveList';
+import { Chess } from 'chess.js';
 
 interface AnalysisPanelProps {
+  game: Chess; // Added game prop
   evalScore?: string | number;
   bestLine?: string;
   onNext?: () => void;
@@ -28,7 +24,7 @@ interface AnalysisPanelProps {
   onFirst?: () => void;
   onLast?: () => void;
   currentMove?: number;
-  totalMoves?: number;
+  onMoveClick?: (index: number) => void; // Added onMoveClick
 }
 
 const AnalysisMenuItem: React.FC<{ 
@@ -52,6 +48,7 @@ const AnalysisMenuItem: React.FC<{
 );
 
 const AnalysisPanel: React.FC<AnalysisPanelProps> = ({ 
+    game,
     evalScore = "+0.33", 
     bestLine = "...", 
     onNext, 
@@ -59,7 +56,7 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
     onFirst, 
     onLast,
     currentMove = 0,
-    totalMoves = 0
+    onMoveClick
 }) => {
   return (
     <div className="flex flex-col h-full bg-[#262522] text-[#c3c3c3]">
@@ -89,15 +86,13 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
           </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto custom-scrollbar">
-        {/* Menu Items */}
-        <AnalysisMenuItem 
-            icon={<div className="w-5 h-5 rounded-full border-2 border-gray-400"></div>} 
-            label="Make Moves" 
+      <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col">
+        {/* Move List */}
+        <MoveList
+            game={game}
+            currentMoveIndex={currentMove === 0 ? -2 : currentMove - 1} // MoveList expects index of move in history (0-based). currentMove is 1-based (0 is start).
+            onMoveClick={(_fen, index) => onMoveClick?.(index)}
         />
-        <div className="p-4 text-center text-sm text-gray-500">
-             Move {Math.floor((currentMove + 1)/2)} / {Math.ceil(totalMoves/2)}
-        </div>
       </div>
 
       {/* Footer Controls */}
