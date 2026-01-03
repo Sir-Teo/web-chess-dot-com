@@ -10,45 +10,39 @@ def verify_full_flow():
         page.goto("http://localhost:3000/web-chess-dot-com/")
 
         # 1. Start Bot Game
-        print("Waiting for Play Bots button...")
+        print("Waiting for 'Play Bots' button on dashboard...")
+        # The dashboard has a main button to navigate to the bot selection screen
         page.wait_for_selector("text=Play Bots")
         page.click("text=Play Bots")
 
         print("Selecting Martin...")
+        page.wait_for_selector("text=Martin")
         page.click("text=Martin")
 
         print("Clicking Play...")
-        page.click("button:has-text('Play')")
+        # Use a more specific selector for the green play button in the bots panel
+        page.click("button.bg-\\[\\#81b64c\\]")
 
         print("Waiting for game start...")
         page.wait_for_selector("#chessboard-wrapper")
+        # Add a small delay to ensure UI transition completes
+        time.sleep(1)
 
         # 2. Make a move (e2 -> e4)
         print("Making a move e2 -> e4...")
-        page.wait_for_selector("[data-square='e2']")
-        page.drag_and_drop("[data-square='e2']", "[data-square='e4']")
+        page.locator("[data-square='e2']").drag_to(page.locator("[data-square='e4']"))
 
         time.sleep(2)
 
         # 3. Enable Coach Mode
         print("Enabling Coach Mode...")
-        # Check if button exists first to debug
-        if page.is_visible("text=Coach"):
-             page.click("text=Coach")
-        else:
-             print("Coach button not found! Dumping page content...")
-             # Maybe the layout shifted or button is hidden/different text
-             # The button is MessageCircle icon + "Coach" text.
-             # In GameInterface:
-             # <button ...> <MessageCircle /> <span ...>Coach</span> </button>
-             # Maybe "Coach" text is hidden on some responsive layout?
-             # But we are in headless, usually 1280x720 default.
-             pass
+        page.wait_for_selector("button[title='Toggle Coach Mode']")
+        page.click("button[title='Toggle Coach Mode']")
 
         # Make another move (d2 -> d4)
         print("Making move d2 -> d4...")
         if page.locator("[data-square='d2']").count() > 0:
-            page.drag_and_drop("[data-square='d2']", "[data-square='d4']")
+            page.locator("[data-square='d2']").drag_to(page.locator("[data-square='d4']"))
 
         time.sleep(2)
 
@@ -65,6 +59,9 @@ def verify_full_flow():
 
         # Switch to Analysis tab
         page.click("text=Analysis")
+
+        # Wait for the first move to appear in the move list
+        page.wait_for_selector('button:has-text("e4")')
 
         # Check if moves are listed
         if page.is_visible("text=e4"):

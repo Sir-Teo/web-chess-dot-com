@@ -27,17 +27,11 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
       const newGame = new Chess();
       if (initialPgn) {
           try {
-              // Heuristic: If it looks like a FEN (no brackets, has slashes), treat as FEN
-              // Otherwise assume PGN.
-              if (initialPgn.split('/').length > 7 && !initialPgn.includes('[')) {
-                 newGame.load(initialPgn);
-                 setGame(newGame);
-                 setCurrentMoveIndex(0);
-              } else {
-                 newGame.loadPgn(initialPgn);
-                 setGame(newGame);
-                 setCurrentMoveIndex(newGame.history().length);
-              }
+              // Always assume PGN for this prop. The FEN-like check was faulty for PGNs without headers.
+              newGame.loadPgn(initialPgn);
+              setGame(newGame);
+              // Set the index to the last move to show the final position.
+              setCurrentMoveIndex(newGame.history().length);
           } catch (e) {
               console.error("Failed to load PGN/FEN", e);
           }
