@@ -70,6 +70,7 @@ const getEvalDisplay = (move: MoveAnalysis) => {
 const GameReviewPanel: React.FC<GameReviewPanelProps> = ({ pgn, onStartReview, onMoveSelect }) => {
   const [data, setData] = useState<GameReviewData | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [progress, setProgress] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const analysisAbortController = useRef<AbortController | null>(null);
 
@@ -84,9 +85,10 @@ const GameReviewPanel: React.FC<GameReviewPanelProps> = ({ pgn, onStartReview, o
 
       const currentPgn = pgn;
       setIsAnalyzing(true);
+      setProgress(0);
       setData(null);
 
-      analyzeGame(pgn).then(result => {
+      analyzeGame(pgn, (p) => setProgress(Math.round(p))).then(result => {
           // Check if we should still apply this result
           if (currentPgn === pgn) {
              setData(result);
@@ -139,6 +141,14 @@ const GameReviewPanel: React.FC<GameReviewPanelProps> = ({ pgn, onStartReview, o
               <Loader2 className="w-12 h-12 text-chess-green animate-spin" />
               <div className="text-xl font-bold text-white">Analyzing Game...</div>
               <p className="text-gray-500">Stockfish is reviewing your moves</p>
+
+              <div className="w-full bg-[#1b1a19] rounded-full h-2.5 mt-2 overflow-hidden">
+                <div
+                    className="bg-chess-green h-2.5 rounded-full transition-all duration-300"
+                    style={{ width: `${progress}%` }}
+                ></div>
+              </div>
+              <span className="text-sm text-gray-400 font-mono">{progress}%</span>
           </div>
       )}
 
