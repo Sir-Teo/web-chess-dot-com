@@ -38,13 +38,6 @@ const Chessboard: React.FC<ChessboardProps> = ({
   const customSquareStyles = useMemo(() => {
     const styles: Record<string, React.CSSProperties> = { ...propCustomSquareStyles };
 
-    // Highlight last move (if not overridden by prop styles for those squares, or should it layer?)
-    // Layering is better. But CSSProperties in react-chessboard is simple object.
-    // We'll prioritize internal highlights (last move) or merge?
-    // Usually Analysis colors (prop) should take precedence or blend.
-    // For now, let's apply last move if no specific style exists, or mix?
-    // Let's just set them, overwriting if collision (last move usually less important than 'blunder' red).
-
     if (lastMove) {
        // Only apply yellow if not already styled (e.g. by analysis)
        if (!styles[lastMove.from]) styles[lastMove.from] = { backgroundColor: 'rgba(255, 255, 0, 0.4)' };
@@ -108,12 +101,6 @@ const Chessboard: React.FC<ChessboardProps> = ({
           setRightClickStart(square);
       } else {
           if (rightClickStart === square) {
-              // Same square -> Circle? or toggle clear?
-              // For now, let's just clear start.
-              // Authentic behavior: click same square = circle. click drag = arrow.
-              // Here we just get clicks.
-              // React-chessboard usually handles arrows internally if we use customArrowInput?
-              // But we are using customArrows prop which overrides default behavior.
               setRightClickStart(null);
           } else {
               // Draw arrow
@@ -136,13 +123,11 @@ const Chessboard: React.FC<ChessboardProps> = ({
     <div
       id="chessboard-wrapper"
       className="w-full h-full flex justify-center items-center"
-      style={{ userSelect: 'none' }}
       onContextMenu={(e) => {
           e.preventDefault(); // Prevent context menu globally on wrapper
       }}
     >
       <ReactChessboard
-        id="GameBoard"
         position={fen}
         onPieceDrop={onPieceDrop}
         onSquareRightClick={onSquareRightClick}
