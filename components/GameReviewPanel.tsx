@@ -5,6 +5,7 @@ import { identifyOpening } from '../utils/openings';
 
 interface GameReviewPanelProps {
     pgn?: string;
+    existingData?: GameReviewData | null;
     onStartReview?: () => void;
     onMoveSelect?: (moveIndex: number) => void;
     onRetry?: (moveIndex: number) => void;
@@ -41,46 +42,46 @@ const EvaluationGraph: React.FC<{ moves: MoveAnalysis[], currentMoveIndex: numbe
     // Highlight current move
     const currentX = currentMoveIndex > 0 ? ((currentMoveIndex - 1) / (moves.length - 1)) * 100 : 0;
 
-    const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
-        if (moves.length === 0) return;
-        const rect = e.currentTarget.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const width = rect.width;
-
-        const percentage = x / width;
-        const moveIndex = Math.round(percentage * (moves.length - 1));
-
-        // Dispatch event to parent or use context?
-        // The component is self-contained here, so we need a callback prop on EvaluationGraph or pass it down.
-        // For now, let's assume we can trigger the select.
-        // Since EvaluationGraph is internal, we need to modify its props.
-    };
-
     return (
-        <div className="w-full h-[60px] bg-[#302e2b] relative mb-2 border-b border-white/5 overflow-hidden cursor-pointer group"
+        <div className="w-full h-[80px] bg-[#302e2b] relative mb-2 border-b border-white/5 overflow-hidden cursor-pointer group"
              onClick={(e) => {
                  const rect = e.currentTarget.getBoundingClientRect();
                  const x = e.clientX - rect.left;
                  const percentage = Math.max(0, Math.min(1, x / rect.width));
                  const index = Math.round(percentage * (moves.length - 1));
-                 if (onMoveSelect) onMoveSelect(index + 1); // +1 because moves are 1-based or array is 0-based but UI might expect something else.
-                 // Actually currentMoveIndex logic elsewhere seems to use 1-based (0 is start).
-                 // Moves array is 0-based.
-                 // If I click start (left), index 0. That corresponds to move 1?
-                 // No, usually left is start of game.
-                 // Let's assume index + 1 matches currentMoveIndex logic.
+                 // currentMoveIndex is 1-based (moves[0] is index 1). Index 0 from click means first move.
+                 if (onMoveSelect) onMoveSelect(index + 1);
              }}
         >
              <svg viewBox={`0 0 100 ${height}`} preserveAspectRatio="none" className="w-full h-full pointer-events-none">
+                 {/* Background Gradient */}
+                 <defs>
+                     <linearGradient id="graphGradient" x1="0" x2="0" y1="0" y2="1">
+                         <stop offset="0%" stopColor="#ffffff" stopOpacity="0.05" />
+                         <stop offset="50%" stopColor="#ffffff" stopOpacity="0" />
+                         <stop offset="100%" stopColor="#000000" stopOpacity="0.05" />
+                     </linearGradient>
+                 </defs>
+                 <rect x="0" y="0" width="100" height={height} fill="url(#graphGradient)" />
+
                  {/* Center Line */}
                  <line x1="0" y1={height/2} x2="100" y2={height/2} stroke="#ffffff" strokeOpacity="0.1" strokeWidth="0.5" />
+
+                 {/* Area under curve (white advantage) */}
+                 <polygon
+                    points={`0,${height/2} ${points} 100,${height/2}`}
+                    fill="#ffffff"
+                    fillOpacity="0.05"
+                 />
 
                  {/* Graph Line */}
                  <polyline
                     points={points}
                     fill="none"
                     stroke="#81b64c"
-                    strokeWidth="1.5"
+                    strokeWidth="2"
+                    strokeLinejoin="round"
+                    strokeLinecap="round"
                     vectorEffect="non-scaling-stroke"
                  />
 
@@ -166,14 +167,19 @@ const getEvalDisplay = (move: MoveAnalysis) => {
     return "";
 }
 
-const GameReviewPanel: React.FC<GameReviewPanelProps> = ({ pgn, onStartReview, onMoveSelect, onRetry, onAnalysisComplete, currentMoveIndex = -1 }) => {
-  const [data, setData] = useState<GameReviewData | null>(null);
+const GameReviewPanel: React.FC<GameReviewPanelProps> = ({ pgn, existingData, onStartReview, onMoveSelect, onRetry, onAnalysisComplete, currentMoveIndex = -1 }) => {
+  const [data, setData] = useState<GameReviewData | null>(existingData || null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [progress, setProgress] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const analysisAbortController = useRef<AbortController | null>(null);
 
   useEffect(() => {
+      if (existingData) {
+          setData(existingData);
+          return;
+      }
+
       if (!pgn) return;
 
       if (analysisAbortController.current) {
@@ -200,7 +206,7 @@ const GameReviewPanel: React.FC<GameReviewPanelProps> = ({ pgn, onStartReview, o
       });
 
       return () => {};
-  }, [pgn]);
+  }, [pgn, existingData]);
 
   const countMoves = (classification: MoveAnalysis['classification'], color: 'w' | 'b') => {
       if (!data) return 0;

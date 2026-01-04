@@ -248,15 +248,26 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
 
                   // Bot Chatter Logic
                   if (activeBot) {
+                      let msg: string | null = null;
                       if (newGame.isCheckmate()) {
-                          setBotMessage(activeBot.name === 'Nelson' ? "I can't believe it!" : "Good game!");
+                          msg = activeBot.id === 'mittens' ? "Hehehehe..." :
+                                activeBot.id === 'nelson' ? "I can't believe it! You got lucky." : "Good game! Well played.";
                       } else if (newGame.isCheck()) {
-                          setBotMessage("Check!");
+                          msg = activeBot.id === 'mittens' ? "Meow?" : "Check!";
                       } else if (move.captured) {
-                         if (Math.random() > 0.8) setBotMessage("Yum!");
+                         if (Math.random() > 0.7) {
+                             msg = activeBot.id === 'mittens' ? "Oopsie!" :
+                                   activeBot.id === 'nelson' ? "That piece was mine." :
+                                   activeBot.id === 'martin' ? "Oh no!" : "Yum!";
+                         }
+                      } else if (move.flags.includes('k') || move.flags.includes('q')) {
+                          if (Math.random() > 0.8) msg = "Castling for safety.";
                       }
 
-                      setTimeout(() => setBotMessage(null), 3000);
+                      if (msg) {
+                          setBotMessage(msg);
+                          setTimeout(() => setBotMessage(null), 3000);
+                      }
                   }
               }
           }
@@ -702,6 +713,17 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
                    />
 
                    <div className="mt-auto bg-[#211f1c] p-2 flex flex-col gap-1 border-t border-white/5">
+                        {isGameOver && (
+                             <button
+                                onClick={() => {
+                                    if (onAnalyze) onAnalyze(game.pgn(), 'review');
+                                }}
+                                className="w-full bg-chess-green hover:bg-chess-greenHover text-white font-bold py-3 rounded mb-2 shadow-lg flex items-center justify-center gap-2 transition-transform active:scale-95"
+                            >
+                                <Search className="w-5 h-5" />
+                                Game Review
+                            </button>
+                        )}
                         {/* Live Button when viewing history */}
                         {viewFen && (
                              <button
