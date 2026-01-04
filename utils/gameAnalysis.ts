@@ -196,7 +196,7 @@ export const analyzeGame = async (pgn: string, onProgress?: (progress: number) =
             try {
                 // A. Evaluate position BEFORE (to see what was expected)
                 client.setPosition(fenBefore);
-                const bestMoveResult = await client.go(10);
+                const bestMoveResult = await client.go(15);
                 bestMove = bestMoveResult.bestMove;
 
                 let scoreBefore = 0;
@@ -236,7 +236,7 @@ export const analyzeGame = async (pgn: string, onProgress?: (progress: number) =
                 } else {
                     // C. Evaluate RESULTING position
                     client.setPosition(fenAfter);
-                    const afterResult = await client.go(10);
+                    const afterResult = await client.go(15);
 
                     let scoreAfter = 0;
                     const scoreAfterObj = afterResult.score;

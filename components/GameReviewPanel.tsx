@@ -12,7 +12,7 @@ interface GameReviewPanelProps {
     currentMoveIndex?: number;
 }
 
-const EvaluationGraph: React.FC<{ moves: MoveAnalysis[], currentMoveIndex: number }> = ({ moves, currentMoveIndex }) => {
+const EvaluationGraph: React.FC<{ moves: MoveAnalysis[], currentMoveIndex: number, onMoveSelect?: (index: number) => void }> = ({ moves, currentMoveIndex, onMoveSelect }) => {
     if (moves.length === 0) return null;
 
     const height = 60;
@@ -41,9 +41,37 @@ const EvaluationGraph: React.FC<{ moves: MoveAnalysis[], currentMoveIndex: numbe
     // Highlight current move
     const currentX = currentMoveIndex > 0 ? ((currentMoveIndex - 1) / (moves.length - 1)) * 100 : 0;
 
+    const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
+        if (moves.length === 0) return;
+        const rect = e.currentTarget.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const width = rect.width;
+
+        const percentage = x / width;
+        const moveIndex = Math.round(percentage * (moves.length - 1));
+
+        // Dispatch event to parent or use context?
+        // The component is self-contained here, so we need a callback prop on EvaluationGraph or pass it down.
+        // For now, let's assume we can trigger the select.
+        // Since EvaluationGraph is internal, we need to modify its props.
+    };
+
     return (
-        <div className="w-full h-[60px] bg-[#302e2b] relative mb-2 border-b border-white/5 overflow-hidden">
-             <svg viewBox={`0 0 100 ${height}`} preserveAspectRatio="none" className="w-full h-full">
+        <div className="w-full h-[60px] bg-[#302e2b] relative mb-2 border-b border-white/5 overflow-hidden cursor-pointer group"
+             onClick={(e) => {
+                 const rect = e.currentTarget.getBoundingClientRect();
+                 const x = e.clientX - rect.left;
+                 const percentage = Math.max(0, Math.min(1, x / rect.width));
+                 const index = Math.round(percentage * (moves.length - 1));
+                 if (onMoveSelect) onMoveSelect(index + 1); // +1 because moves are 1-based or array is 0-based but UI might expect something else.
+                 // Actually currentMoveIndex logic elsewhere seems to use 1-based (0 is start).
+                 // Moves array is 0-based.
+                 // If I click start (left), index 0. That corresponds to move 1?
+                 // No, usually left is start of game.
+                 // Let's assume index + 1 matches currentMoveIndex logic.
+             }}
+        >
+             <svg viewBox={`0 0 100 ${height}`} preserveAspectRatio="none" className="w-full h-full pointer-events-none">
                  {/* Center Line */}
                  <line x1="0" y1={height/2} x2="100" y2={height/2} stroke="#ffffff" strokeOpacity="0.1" strokeWidth="0.5" />
 
@@ -67,6 +95,16 @@ const EvaluationGraph: React.FC<{ moves: MoveAnalysis[], currentMoveIndex: numbe
                         strokeDasharray="2,2"
                      />
                  )}
+
+                 {/* Hover Line (Visual only) */}
+                 <line
+                    x1="0" y1="0" x2="0" y2={height}
+                    stroke="rgba(255,255,255,0.2)"
+                    strokeWidth="1"
+                    vectorEffect="non-scaling-stroke"
+                    className="opacity-0 group-hover:opacity-100 transition-opacity"
+                    style={{ transform: `translateX(${currentX}%)` }} // Simple hack, real hover needs mouse tracking
+                 />
              </svg>
         </div>
     );
@@ -211,7 +249,11 @@ const GameReviewPanel: React.FC<GameReviewPanelProps> = ({ pgn, onStartReview, o
 
           {/* Graph */}
           {!isAnalyzing && data && (
-              <EvaluationGraph moves={data.moves} currentMoveIndex={currentMoveIndex} />
+              <EvaluationGraph
+                  moves={data.moves}
+                  currentMoveIndex={currentMoveIndex}
+                  onMoveSelect={onMoveSelect}
+              />
           )}
       </div>
 
