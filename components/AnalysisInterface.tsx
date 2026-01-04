@@ -25,6 +25,9 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
 
   // Current position index (0 = start)
   const [currentMoveIndex, setCurrentMoveIndex] = useState(0);
+
+  // Analysis Features
+  const [showThreats, setShowThreats] = useState(false);
   
   // Initialize game from PGN/FEN
   useEffect(() => {
@@ -97,22 +100,30 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
     // Enable MultiPV 3
     sendCommand('setoption name MultiPV value 3');
     sendCommand('go depth 20');
-  }, [currentFen, sendCommand, resetBestMove, isReady]);
+  }, [currentFen, sendCommand, resetBestMove, isReady, showThreats]);
 
   // Calculate Arrows from Best Line
   const analysisArrows = useMemo(() => {
+      const arrows: Arrow[] = [];
       if (!bestLine) return undefined;
+
+      // Best move arrow
       const parts = bestLine.split(' ');
       if (parts.length > 0) {
           const move = parts[0];
           if (move.length >= 4) {
               const from = move.substring(0, 2);
               const to = move.substring(2, 4);
-              return [[from, to, '#81b64c']] as Arrow[]; // Green arrow for best move
+              arrows.push([from, to, '#81b64c']);
           }
       }
-      return undefined;
-  }, [bestLine]);
+
+      // TODO: If showThreats is true, we would need a separate Stockfish query for threats
+      // Usually "go depth 20 searchmoves ..." or similar advanced usage, or just evaluating the null move.
+      // For simplicity, we stick to best move for now or maybe render the *opponent's* best response as red?
+
+      return arrows;
+  }, [bestLine, showThreats]);
 
   const openingName = React.useMemo(() => {
      return identifyOpening(game.pgn());
@@ -288,6 +299,8 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
                     onLast={handleLast}
                     currentMove={currentMoveIndex}
                     onMoveClick={(index) => setCurrentMoveIndex(index + 1)}
+                    showThreats={showThreats}
+                    onToggleThreats={() => setShowThreats(!showThreats)}
                   />
               )}
           </div>

@@ -12,6 +12,7 @@ const SOUNDS = {
   gameEnd: 'https://images.chesscomfiles.com/chess-themes/sounds/_Common/standard/game-end.mp3',
   illegal: 'https://images.chesscomfiles.com/chess-themes/sounds/_Common/standard/illegal.mp3',
   gameStart: 'https://images.chesscomfiles.com/chess-themes/sounds/_Common/standard/game-start.mp3',
+  tenSeconds: 'https://images.chesscomfiles.com/chess-themes/sounds/_Common/standard/ten_seconds.mp3', // Low time warning
 };
 
 export const useGameSound = () => {

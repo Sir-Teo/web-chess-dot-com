@@ -1,10 +1,10 @@
 import React from 'react';
-import { AlertCircle, CheckCircle, HelpCircle, XCircle } from 'lucide-react';
+import { AlertCircle, CheckCircle, HelpCircle, XCircle, Trophy } from 'lucide-react';
 
 interface CoachFeedbackProps {
     feedback: {
         message: string;
-        type: 'best' | 'good' | 'inaccuracy' | 'mistake' | 'blunder' | 'neutral' | 'excellent';
+        type: 'best' | 'good' | 'inaccuracy' | 'mistake' | 'blunder' | 'neutral' | 'excellent' | 'missed-win';
         bestMove?: string;
     } | null;
     isThinking: boolean;
@@ -27,12 +27,12 @@ const CoachFeedback: React.FC<CoachFeedbackProps> = ({ feedback, isThinking, onC
                     {feedback && (
                         <div className={`absolute -bottom-1 -right-1 w-7 h-7 rounded-full flex items-center justify-center border-2 border-white shadow-sm ${
                             feedback.type === 'best' || feedback.type === 'excellent' ? 'bg-chess-green' :
-                            feedback.type === 'blunder' ? 'bg-[#fa412d]' :
+                            feedback.type === 'blunder' || feedback.type === 'missed-win' ? 'bg-[#fa412d]' :
                             feedback.type === 'mistake' ? 'bg-[#ffa459]' :
                             feedback.type === 'inaccuracy' ? 'bg-[#f7c045]' : 'bg-[#96bc4b]'
                         }`}>
                             {(feedback.type === 'best' || feedback.type === 'excellent' || feedback.type === 'good') && <CheckCircle className="w-4 h-4 text-white" />}
-                            {feedback.type === 'blunder' && <XCircle className="w-4 h-4 text-white" />}
+                            {(feedback.type === 'blunder' || feedback.type === 'missed-win') && <XCircle className="w-4 h-4 text-white" />}
                             {feedback.type === 'mistake' && <AlertCircle className="w-4 h-4 text-white" />}
                             {feedback.type === 'inaccuracy' && <HelpCircle className="w-4 h-4 text-white" />}
                         </div>
@@ -49,7 +49,10 @@ const CoachFeedback: React.FC<CoachFeedbackProps> = ({ feedback, isThinking, onC
                              </div>
                          ) : feedback ? (
                              <>
-                                <p className="font-extrabold text-sm mb-1 uppercase tracking-wide text-gray-500">{getHeader(feedback.type)}</p>
+                                <p className="font-extrabold text-sm mb-1 uppercase tracking-wide text-gray-500 flex items-center gap-1">
+                                    {feedback.type === 'missed-win' && <Trophy className="w-3 h-3 text-[#fa412d]" />}
+                                    {getHeader(feedback.type)}
+                                </p>
                                 <p className="text-[15px] font-medium leading-snug">{feedback.message}</p>
                                 {feedback.bestMove && feedback.type !== 'best' && (
                                     <div className="mt-2 text-xs font-mono bg-gray-100 p-1.5 rounded text-gray-600 inline-block border border-gray-200">
@@ -80,14 +83,13 @@ const getHeader = (type: string) => {
         case 'inaccuracy': return 'Inaccuracy';
         case 'mistake': return 'Mistake';
         case 'blunder': return 'Blunder';
+        case 'missed-win': return 'Missed Win';
         default: return 'Coach';
     }
 };
 
 const formatMove = (uci: string) => {
     if (!uci || uci.length < 4) return uci;
-    // Simple formatting, ideally we use chess.js to get SAN but we don't have the game instance here easily without passing it.
-    // So we just show "e2 -> e4" style
     return `${uci.substring(0, 2)} ➝ ${uci.substring(2, 4)}`;
 };
 

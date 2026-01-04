@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Chessboard as ReactChessboard } from 'react-chessboard';
 import { Arrow } from '../hooks/useCoach';
 import { useSettings, BOARD_THEMES } from '../context/SettingsContext';
@@ -10,6 +10,7 @@ interface ChessboardProps {
   lastMove?: { from: string; to: string } | null;
   boardOrientation?: 'white' | 'black';
   customArrows?: Arrow[];
+  preMove?: { from: string, to: string } | null;
 }
 
 const Chessboard: React.FC<ChessboardProps> = ({
@@ -18,13 +19,18 @@ const Chessboard: React.FC<ChessboardProps> = ({
   onMove,
   lastMove,
   boardOrientation = 'white',
-  customArrows
+  customArrows,
+  preMove
 }) => {
   const { boardTheme, showCoordinates, animationSpeed } = useSettings();
 
   const themeColors = useMemo(() => {
     return BOARD_THEMES.find(t => t.id === boardTheme) || BOARD_THEMES[0];
   }, [boardTheme]);
+
+  // Local state for user-drawn arrows (Right-click)
+  const [userArrows, setUserArrows] = useState<Arrow[]>([]);
+  const [rightClickStart, setRightClickStart] = useState<string | null>(null);
   
   // Custom styles for squares
   const customSquareStyles = useMemo(() => {
@@ -36,36 +42,49 @@ const Chessboard: React.FC<ChessboardProps> = ({
       styles[lastMove.to] = { backgroundColor: 'rgba(255, 255, 0, 0.4)' };
     }
 
-    return styles;
-  }, [lastMove]);
+    // Highlight Pre-move (Red/Pink overlay)
+    if (preMove) {
+        styles[preMove.from] = { backgroundColor: 'rgba(244, 67, 54, 0.5)' }; // Red tint
+        styles[preMove.to] = { backgroundColor: 'rgba(244, 67, 54, 0.5)' };
+    }
 
-  // Convert tuple arrows to object arrows for react-chessboard
-  const formattedArrows = useMemo(() => {
-      if (!customArrows) return undefined;
-      // Check if it's already in correct format or tuple
-      return customArrows.map(arrow => {
+    // Right-click highlight (Circles) - simplified as background color for now as react-chessboard doesn't support circles easily via props
+    // We can use customArrows for this actually if we want circles?
+    // react-chessboard treats same start/end as circle? Let's check docs logic.
+    // Usually standard arrows are lines.
+
+    return styles;
+  }, [lastMove, preMove]);
+
+  // Combine prop arrows + user arrows
+  const allArrows = useMemo(() => {
+      let combined = [...(customArrows || [])];
+
+      // User arrows
+      combined = [...combined, ...userArrows];
+
+      if (!combined.length) return undefined;
+
+      return combined.map(arrow => {
           if (Array.isArray(arrow)) {
-              return { startSquare: arrow[0], endSquare: arrow[1], color: arrow[2] || 'green' };
+              return { startSquare: arrow[0], endSquare: arrow[1], color: arrow[2] || 'orange' };
           }
-          return arrow; // Assume it's already correct if not array
+          return arrow;
       });
-  }, [customArrows]);
+  }, [customArrows, userArrows]);
 
   // Types for callback arguments based on react-chessboard documentation
-  // sourceSquare: string (e.g. "e2")
-  // targetSquare: string (e.g. "e4")
-  // piece: string (e.g. "wP")
   const onPieceDrop = (sourceSquare: string, targetSquare: string, piece: string) => {
+    // Logic for pre-move handled in parent or here?
+    // Parent handles actual game logic.
     if (!interactable || !onMove || !targetSquare) return false;
 
-    // piece is object in newer version? or string? documentation says DraggingPieceDataType
-    // but based on typical usage it might be just string in older versions or different here.
-    // Let's assume pieceType or verify.
-    // In types.d.ts: piece is DraggingPieceDataType { isSparePiece, position, pieceType }
+    // Clear arrows on move
+    setUserArrows([]);
 
     const pieceType = piece;
 
-    // Check for promotion:
+    // Check for promotion (naive check, parent handles validation)
     const isPromotion = (pieceType[1] === 'P' && (
       (pieceType[0] === 'w' && targetSquare[1] === '8') ||
       (pieceType[0] === 'b' && targetSquare[1] === '1')
@@ -80,22 +99,55 @@ const Chessboard: React.FC<ChessboardProps> = ({
     return true;
   };
 
+  const onSquareRightClick = (square: string) => {
+      if (!rightClickStart) {
+          setRightClickStart(square);
+      } else {
+          if (rightClickStart === square) {
+              // Same square -> Circle? or toggle clear?
+              // For now, let's just clear start.
+              // Authentic behavior: click same square = circle. click drag = arrow.
+              // Here we just get clicks.
+              // React-chessboard usually handles arrows internally if we use customArrowInput?
+              // But we are using customArrows prop which overrides default behavior.
+              setRightClickStart(null);
+          } else {
+              // Draw arrow
+              const newArrow: Arrow = [rightClickStart, square, 'orange'];
+
+              // Toggle: if exists, remove. else add.
+              setUserArrows(prev => {
+                  const exists = prev.find(a => a[0] === rightClickStart && a[1] === square);
+                  if (exists) {
+                      return prev.filter(a => a !== exists);
+                  }
+                  return [...prev, newArrow];
+              });
+              setRightClickStart(null);
+          }
+      }
+  };
+
   return (
     <div
       id="chessboard-wrapper"
       className="w-full h-full flex justify-center items-center"
       style={{ userSelect: 'none' }}
+      onContextMenu={(e) => {
+          e.preventDefault(); // Prevent context menu globally on wrapper
+      }}
     >
       <ReactChessboard
         id="GameBoard"
         position={fen}
         onPieceDrop={onPieceDrop}
+        onSquareRightClick={onSquareRightClick}
         boardOrientation={boardOrientation as 'white' | 'black'}
         arePiecesDraggable={interactable}
         customDarkSquareStyle={{ backgroundColor: themeColors.dark }}
         customLightSquareStyle={{ backgroundColor: themeColors.light }}
         customSquareStyles={customSquareStyles}
-        customArrows={formattedArrows as any}
+        customArrows={allArrows as any}
         animationDuration={animationSpeed === 'slow' ? 500 : animationSpeed === 'fast' ? 100 : 200}
         showBoardNotation={showCoordinates}
       />

@@ -2,7 +2,6 @@ import React from 'react';
 import { 
   Search, 
   ChevronRight, 
-  ChevronDown, 
   ChevronLeft, 
   SkipForward, 
   SkipBack,
@@ -10,7 +9,9 @@ import {
   Save, 
   Star, 
   MoreHorizontal,
-  Activity
+  Activity,
+  FlipHorizontal,
+  Target
 } from 'lucide-react';
 import MoveList from './MoveList';
 import { Chess } from 'chess.js';
@@ -28,6 +29,10 @@ interface AnalysisPanelProps {
   onLast?: () => void;
   currentMove?: number;
   onMoveClick?: (index: number) => void;
+
+  // New props for improved Analysis UI
+  showThreats?: boolean;
+  onToggleThreats?: () => void;
 }
 
 // Helper to format eval
@@ -73,7 +78,9 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
     onFirst,
     onLast,
     currentMove = 0,
-    onMoveClick
+    onMoveClick,
+    showThreats,
+    onToggleThreats
 }) => {
 
   const turn = currentFen?.split(' ')[1] as 'w' | 'b' || 'w';
@@ -86,10 +93,21 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
   return (
     <div className="flex flex-col h-full bg-[#262522] text-[#c3c3c3]">
       {/* Header */}
-      <div className="flex items-center justify-center py-3 bg-[#211f1c] border-b border-black/20 shadow-sm relative">
+      <div className="flex items-center justify-between px-4 py-3 bg-[#211f1c] border-b border-black/20 shadow-sm relative">
         <div className="flex items-center gap-2 text-gray-400">
           <Search className="w-5 h-5" />
           <span className="font-bold text-lg text-white">Analysis</span>
+        </div>
+
+        {/* Toggle Controls */}
+        <div className="flex gap-2">
+            <button
+                onClick={onToggleThreats}
+                className={`p-1.5 rounded hover:bg-white/10 transition-colors ${showThreats ? 'text-red-500 bg-red-500/10' : 'text-gray-400'}`}
+                title="Show Threats"
+            >
+                <Target className="w-5 h-5" />
+            </button>
         </div>
       </div>
 
@@ -109,7 +127,7 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
           <div className="flex flex-col gap-1 mt-2">
               {lines.length > 0 ? (
                   lines.map((line) => (
-                      <div key={line.multipv} className="flex gap-2 bg-[#2a2926] p-1.5 rounded border border-white/5 text-xs">
+                      <div key={line.multipv} className="flex gap-2 bg-[#2a2926] p-1.5 rounded border border-white/5 text-xs hover:bg-[#32312e] cursor-pointer transition-colors">
                            <div className={`font-mono font-bold w-12 text-right ${
                                formatScore(line.score, turn).includes('-') ? 'text-white' : 'text-chess-green'
                            }`}>
