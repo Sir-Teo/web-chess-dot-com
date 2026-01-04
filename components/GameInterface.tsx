@@ -12,6 +12,7 @@ import { useStockfish } from '../hooks/useStockfish';
 import { useCoach } from '../hooks/useCoach';
 import { useGameTimer } from '../hooks/useGameTimer';
 import { useGameSound } from '../hooks/useGameSound';
+import { useBotChatter } from '../hooks/useBotChatter';
 import { useSettings } from '../context/SettingsContext';
 import { ALL_BOTS, BotProfile } from '../utils/bots';
 import { identifyOpening } from '../utils/openings';
@@ -57,11 +58,13 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
   const [isCoachMode, setIsCoachMode] = useState(false);
 
   // Chat/Bot Messages
-  const [botMessage, setBotMessage] = useState<string | null>(null);
   const [openingName, setOpeningName] = useState<string>("");
 
   // Sounds
   const { playSound } = useGameSound();
+
+  // Bot Chatter Hook
+  const botMessage = useBotChatter(game, activeBot, userColor, isGameOver);
 
   // Timer State
   const [timeControl, setTimeControl] = useState(initialTimeControl);
@@ -338,30 +341,6 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
                   setGame(newGame);
                   setFen(newGame.fen());
                   setLastMove({ from, to });
-
-                  // Bot Chatter Logic
-                  if (activeBot) {
-                      let msg: string | null = null;
-                      if (newGame.isCheckmate()) {
-                          msg = activeBot.id === 'mittens' ? "Hehehehe..." :
-                                activeBot.id === 'nelson' ? "I can't believe it! You got lucky." : "Good game! Well played.";
-                      } else if (newGame.isCheck()) {
-                          msg = activeBot.id === 'mittens' ? "Meow?" : "Check!";
-                      } else if (move.captured) {
-                         if (Math.random() > 0.7) {
-                             msg = activeBot.id === 'mittens' ? "Oopsie!" :
-                                   activeBot.id === 'nelson' ? "That piece was mine." :
-                                   activeBot.id === 'martin' ? "Oh no!" : "Yum!";
-                         }
-                      } else if (move.flags.includes('k') || move.flags.includes('q')) {
-                          if (Math.random() > 0.8) msg = "Castling for safety.";
-                      }
-
-                      if (msg) {
-                          setBotMessage(msg);
-                          setTimeout(() => setBotMessage(null), 3000);
-                      }
-                  }
               }
           }
           resetBestMove();
@@ -398,15 +377,10 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
       setIsSearching(false);
       setSearchState(null);
       setIsPlayFriendMode(false);
-      setBotMessage(null);
       setOpeningName("");
       setPreMove(null);
       playSound('gameStart');
 
-      if (activeBot) {
-          setTimeout(() => setBotMessage("Good luck! Have fun."), 1000);
-          setTimeout(() => setBotMessage(null), 5000);
-      }
   }, [resetTimer, playSound, resetFeedback, activeBot]);
 
   // Automatic Engine Move (Start or Resume)
@@ -414,7 +388,6 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
   // or if it's simply the engine's turn to start.
   useEffect(() => {
      if (isEngineOpponent && activeBot && game.turn() !== userColor && !isGameOver) {
-         setBotMessage(null); // Clear previous message
 
          const timeout = setTimeout(() => {
              resetBestMove();

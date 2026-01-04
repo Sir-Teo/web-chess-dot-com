@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Chessboard as ReactChessboard } from 'react-chessboard';
 import { Arrow } from '../hooks/useCoach';
 import { useSettings, BOARD_THEMES } from '../context/SettingsContext';
+import PromotionModal from './PromotionModal';
 
 interface ChessboardProps {
   interactable?: boolean;
@@ -33,6 +34,9 @@ const Chessboard: React.FC<ChessboardProps> = ({
   // Local state for user-drawn arrows (Right-click)
   const [userArrows, setUserArrows] = useState<Arrow[]>([]);
   const [rightClickStart, setRightClickStart] = useState<string | null>(null);
+
+  // Promotion State
+  const [promotionMove, setPromotionMove] = useState<{ from: string, to: string } | null>(null);
   
   // Custom styles for squares
   const customSquareStyles = useMemo(() => {
@@ -88,12 +92,19 @@ const Chessboard: React.FC<ChessboardProps> = ({
     ));
 
     if (isPromotion) {
-       onMove(sourceSquare, targetSquare, 'q');
+       setPromotionMove({ from: sourceSquare, to: targetSquare });
        return true;
     }
 
     onMove(sourceSquare, targetSquare);
     return true;
+  };
+
+  const handlePromotionSelect = (piece: 'q' | 'r' | 'b' | 'n') => {
+      if (promotionMove && onMove) {
+          onMove(promotionMove.from, promotionMove.to, piece);
+          setPromotionMove(null);
+      }
   };
 
   const onSquareRightClick = (square: string) => {
@@ -122,11 +133,17 @@ const Chessboard: React.FC<ChessboardProps> = ({
   return (
     <div
       id="chessboard-wrapper"
-      className="w-full h-full flex justify-center items-center"
+      className="w-full h-full flex justify-center items-center relative"
       onContextMenu={(e) => {
           e.preventDefault(); // Prevent context menu globally on wrapper
       }}
     >
+      <PromotionModal
+        isOpen={!!promotionMove}
+        color={boardOrientation === 'white' ? 'w' : 'b'} // Assuming player is playing bottom color usually
+        onSelect={handlePromotionSelect}
+        onClose={() => setPromotionMove(null)}
+      />
       <ReactChessboard
         position={fen}
         onPieceDrop={onPieceDrop}
