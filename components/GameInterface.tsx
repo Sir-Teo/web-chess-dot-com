@@ -409,6 +409,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
 
             <div className="rounded-sm shadow-2xl ring-4 ring-black/10 relative aspect-square">
                  <Chessboard 
+                    key={userColor} // Force re-mount on color change to ensure orientation updates
                     interactable={isInteractable}
                     fen={viewFen || fen}
                     onMove={onMove}

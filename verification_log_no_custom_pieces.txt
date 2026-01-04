@@ -1,0 +1,36 @@
+Navigating to app...
+BROWSER LOG: cdn.tailwindcss.com should not be used in production. To use Tailwind CSS in production, install it as a PostCSS plugin or use the Tailwind CLI: https://tailwindcss.com/docs/installation
+BROWSER LOG: [vite] connecting...
+BROWSER LOG: [vite] connected.
+BROWSER LOG: %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+Entering Bot Mode...
+BROWSER LOG: Chessboard Render - Orientation: white
+BROWSER LOG: Chessboard Render - Orientation: white
+BROWSER LOG: Chessboard Render - Orientation: white
+BROWSER LOG: Chessboard Render - Orientation: white
+BROWSER LOG: Chessboard Render - Orientation: white
+BROWSER LOG: Chessboard Render - Orientation: white
+Waiting for Bot Panel...
+Selecting Black...
+Starting Game...
+BROWSER LOG: Starting bot game: Martin Color requested: b
+BROWSER LOG: Final User Color: b
+BROWSER LOG: Chessboard Render - Orientation: black
+BROWSER LOG: Chessboard Render - Orientation: black
+Waiting for game start...
+BROWSER LOG: Audio play failed NotSupportedError: Failed to load because no supported source was found.
+Waiting for Bot (White) to move...
+BROWSER LOG: Chessboard Render - Orientation: black
+BROWSER LOG: Chessboard Render - Orientation: black
+BROWSER LOG: Chessboard Render - Orientation: black
+BROWSER LOG: Chessboard Render - Orientation: black
+BROWSER LOG: Chessboard Render - Orientation: black
+BROWSER LOG: Chessboard Render - Orientation: black
+BROWSER LOG: Chessboard Render - Orientation: black
+BROWSER LOG: Chessboard Render - Orientation: black
+BROWSER LOG: Chessboard Render - Orientation: black
+BROWSER LOG: Chessboard Render - Orientation: black
+BROWSER LOG: Audio play failed NotSupportedError: Failed to load because no supported source was found.
+BROWSER LOG: Chessboard Render - Orientation: black
+BROWSER LOG: Chessboard Render - Orientation: black
+Screenshot saved to verification/verification_black_bot.png
