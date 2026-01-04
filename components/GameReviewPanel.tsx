@@ -8,6 +8,7 @@ interface GameReviewPanelProps {
     onStartReview?: () => void;
     onMoveSelect?: (moveIndex: number) => void;
     onRetry?: (moveIndex: number) => void;
+    onAnalysisComplete?: (data: GameReviewData) => void;
     currentMoveIndex?: number;
 }
 
@@ -127,7 +128,7 @@ const getEvalDisplay = (move: MoveAnalysis) => {
     return "";
 }
 
-const GameReviewPanel: React.FC<GameReviewPanelProps> = ({ pgn, onStartReview, onMoveSelect, onRetry, currentMoveIndex = -1 }) => {
+const GameReviewPanel: React.FC<GameReviewPanelProps> = ({ pgn, onStartReview, onMoveSelect, onRetry, onAnalysisComplete, currentMoveIndex = -1 }) => {
   const [data, setData] = useState<GameReviewData | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -151,6 +152,9 @@ const GameReviewPanel: React.FC<GameReviewPanelProps> = ({ pgn, onStartReview, o
           if (currentPgn === pgn) {
              setData(result);
              setIsAnalyzing(false);
+             if (onAnalysisComplete) {
+                 onAnalysisComplete(result);
+             }
           }
       }).catch(e => {
           console.error("Analysis failed", e);
