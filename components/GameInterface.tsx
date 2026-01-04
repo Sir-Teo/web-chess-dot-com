@@ -104,7 +104,9 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
 
   const isBotMode = activePanel === 'bots';
   const isReviewMode = activePanel === 'review';
-  const isEngineOpponent = isBotMode || (activePanel === 'play' && playMode === 'online');
+  // Only consider it an engine opponent if there is an active bot or we are in bot mode
+  // This allows sandbox play (empty board) when no game is active
+  const isEngineOpponent = isBotMode || (activePanel === 'play' && playMode === 'online' && !!activeBot);
 
   // Check Game Over
   useEffect(() => {
@@ -182,21 +184,6 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
 
           // Clear hint on move
           setHintArrow(null);
-
-          // Trigger Bot Response if in Bot Mode/Online and game not over
-          if (isEngineOpponent && activeBot && !newGame.isGameOver()) {
-              resetBestMove();
-              setBotMessage(null); // Clear old message
-
-              // Small delay for realism
-              setTimeout(() => {
-                  if (activeBot.skillLevel !== undefined) {
-                       sendCommand(`setoption name Skill Level value ${activeBot.skillLevel}`);
-                  }
-                  sendCommand(`position fen ${newGame.fen()}`);
-                  sendCommand(`go depth ${activeBot.depth || 10}`);
-              }, 500);
-          }
       }
   }, [game, isEngineOpponent, activeBot, sendCommand, resetBestMove, playSound, isCoachMode, evaluateMove, resetFeedback, userColor]);
 
@@ -271,11 +258,15 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
       }
   }, [resetTimer, playSound, resetFeedback, activeBot]);
 
-  // Automatic Engine Move Start
+  // Automatic Engine Move (Start or Resume)
+  // This handles cases where the bot is activated after the user has already moved (Sandbox -> Game transition)
+  // or if it's simply the engine's turn to start.
   useEffect(() => {
-     if (isEngineOpponent && activeBot && game.history().length === 0 && game.turn() !== userColor && !isGameOver) {
-         // It's engine's turn at start of game
+     if (isEngineOpponent && activeBot && game.turn() !== userColor && !isGameOver) {
+         setBotMessage(null); // Clear previous message
+
          const timeout = setTimeout(() => {
+             resetBestMove();
              if (activeBot.skillLevel !== undefined) {
                  sendCommand(`setoption name Skill Level value ${activeBot.skillLevel}`);
              }
@@ -284,7 +275,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
          }, 1000);
          return () => clearTimeout(timeout);
      }
-  }, [game, isEngineOpponent, activeBot, userColor, isGameOver, sendCommand]);
+  }, [game, isEngineOpponent, activeBot, userColor, isGameOver, sendCommand, resetBestMove]);
 
   const handleHint = useCallback(() => {
       // Use best move from current coach evaluation
@@ -446,7 +437,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
         />
 
         {/* Evaluation Bar Desktop */}
-        {(isReviewMode || isBotMode || isCoachMode) && !isGameOver && (
+        {!isGameOver && (
              <div className="hidden lg:block absolute left-4 top-1/2 -translate-y-1/2 h-[80vh] w-6 z-0">
                 <EvaluationBar score={currentEval.score} mate={currentEval.mate} />
             </div>
