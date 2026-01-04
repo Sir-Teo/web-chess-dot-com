@@ -2,12 +2,18 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 
 // Using a slightly newer version or sticking to the one that works.
 // v10 is old but reliable for simple JS.
-// However, for "Coach mode" we might want something faster, but let's stick to this to ensure it works on GitHub pages without WASM headers issues.
 const STOCKFISH_URL = 'https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.0/stockfish.js';
 
 export interface EvalScore {
   type: 'cp' | 'mate';
   value: number;
+}
+
+export interface AnalysisLine {
+    multipv: number;
+    pv: string;
+    score: EvalScore;
+    depth: number;
 }
 
 export const useStockfish = () => {
@@ -16,6 +22,9 @@ export const useStockfish = () => {
   const [bestMove, setBestMove] = useState<string | null>(null);
   const [evalScore, setEvalScore] = useState<EvalScore | null>(null);
   const [bestLine, setBestLine] = useState<string>('');
+
+  // MultiPV Lines
+  const [lines, setLines] = useState<AnalysisLine[]>([]);
 
   useEffect(() => {
     const initWorker = async () => {
@@ -28,7 +37,6 @@ export const useStockfish = () => {
 
         worker.onmessage = (e) => {
           const line = e.data;
-          // console.log("SF:", line); // Debug
           
           if (line === 'uciok') {
             setIsReady(true);
@@ -42,16 +50,51 @@ export const useStockfish = () => {
           }
 
           if (line.startsWith('info') && line.includes('score')) {
+             // Parse Score
+             let score: EvalScore = { type: 'cp', value: 0 };
              const scoreMatch = line.match(/score (cp|mate) (-?\d+)/);
              if (scoreMatch) {
-                setEvalScore({
+                score = {
                     type: scoreMatch[1] as 'cp' | 'mate',
                     value: parseInt(scoreMatch[2])
-                });
+                };
+                // Only update main eval if it's multipv 1 or not specified
+                if (!line.includes('multipv') || line.includes('multipv 1 ')) {
+                    setEvalScore(score);
+                }
              }
+
+             // Parse PV
              const pvMatch = line.match(/ pv (.+)/);
              if (pvMatch) {
-               setBestLine(pvMatch[1]);
+                 const pv = pvMatch[1];
+                 if (!line.includes('multipv') || line.includes('multipv 1 ')) {
+                    setBestLine(pv);
+                 }
+
+                 // Handle MultiPV
+                 const multipvMatch = line.match(/multipv (\d+)/);
+                 const depthMatch = line.match(/depth (\d+)/);
+
+                 if (multipvMatch) {
+                     const idx = parseInt(multipvMatch[1]);
+                     const depth = depthMatch ? parseInt(depthMatch[1]) : 0;
+
+                     setLines(prev => {
+                         const newLines = [...prev];
+                         // Replace or add
+                         const existingIdx = newLines.findIndex(l => l.multipv === idx);
+                         const newLine: AnalysisLine = { multipv: idx, pv, score, depth };
+
+                         if (existingIdx >= 0) {
+                             newLines[existingIdx] = newLine;
+                         } else {
+                             newLines.push(newLine);
+                         }
+                         // Sort by multipv
+                         return newLines.sort((a, b) => a.multipv - b.multipv);
+                     });
+                 }
              }
           }
         };
@@ -73,6 +116,10 @@ export const useStockfish = () => {
 
   const sendCommand = useCallback((cmd: string) => {
     if (workerRef.current) {
+        // If sending a new position or new go command, clear old lines
+        if (cmd.startsWith('position') || cmd.startsWith('go')) {
+             setLines([]);
+        }
         workerRef.current.postMessage(cmd);
     }
   }, []);
@@ -86,6 +133,7 @@ export const useStockfish = () => {
       bestMove, 
       evalScore, 
       bestLine, 
+      lines,
       sendCommand, 
       resetBestMove 
   };

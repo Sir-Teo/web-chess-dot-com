@@ -20,7 +20,6 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
   // Master game record
   const [game, setGame] = useState(new Chess());
   // Store the starting FEN separately if we loaded from FEN, so we can replay history correctly.
-  // chess.js history() returns moves, but replay needs to know where to start if it wasn't the standard position.
   const [startFen, setStartFen] = useState<string | null>(null);
 
   // Current position index (0 = start)
@@ -31,11 +30,9 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
       const newGame = new Chess();
       if (initialPgn) {
           try {
-              // Always assume PGN for this prop.
               newGame.loadPgn(initialPgn);
               setGame(newGame);
-              setStartFen(null); // PGN usually contains setup, or assumes standard
-              // Set the index to the last move to show the final position.
+              setStartFen(null);
               setCurrentMoveIndex(newGame.history().length);
           } catch (e) {
               console.error("Failed to load PGN", e);
@@ -57,7 +54,6 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
       if (defaultTab) {
           setActiveTab(defaultTab);
       } else if (initialPgn && initialPgn.includes('[')) {
-           // Fallback heuristic if no defaultTab provided
            setActiveTab('review');
       } else {
            setActiveTab('analysis');
@@ -68,12 +64,7 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
   const currentFen = useMemo(() => {
       const history = game.history({ verbose: true });
       if (currentMoveIndex === 0) {
-        // If at start of history, return start FEN if exists, otherwise standard start.
-        // However, if game has moves, currentMoveIndex 0 means "before first move".
-
         if (startFen) return startFen;
-
-        // Standard start position
         return 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
       }
       
@@ -93,15 +84,19 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
   }, [game, currentMoveIndex]);
 
   // Stockfish hook
-  const { evalScore, bestLine, sendCommand, resetBestMove } = useStockfish();
+  const { evalScore, bestLine, lines, sendCommand, resetBestMove, isReady } = useStockfish();
 
   // Run analysis when FEN changes
   useEffect(() => {
+    if (!isReady) return;
+
     resetBestMove();
     sendCommand('stop');
     sendCommand(`position fen ${currentFen}`);
+    // Enable MultiPV 3
+    sendCommand('setoption name MultiPV value 3');
     sendCommand('go depth 20');
-  }, [currentFen, sendCommand, resetBestMove]);
+  }, [currentFen, sendCommand, resetBestMove, isReady]);
 
   // Calculate Arrows from Best Line
   const analysisArrows = useMemo(() => {
@@ -156,6 +151,12 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
             setActiveTab('analysis');
         }
     } catch (e) {}
+  };
+
+  const handleRetry = (moveIndex: number) => {
+      // Move to position BEFORE the mistake
+      setCurrentMoveIndex(moveIndex - 1);
+      setActiveTab('analysis');
   };
 
   // Format eval for text display
@@ -258,10 +259,8 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
                      }}
                      onMoveSelect={(index) => {
                          setCurrentMoveIndex(index);
-                         // Optional: auto switch to analysis?
-                         // setActiveTab('analysis');
-                         // Authentic: Review panel might stay open but board updates.
                      }}
+                     onRetry={handleRetry}
                      currentMoveIndex={currentMoveIndex}
                   />
               ) : (
@@ -270,6 +269,7 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
                     currentFen={currentFen}
                     evalScore={displayEval}
                     bestLine={bestLine}
+                    lines={lines} // Pass MultiPV lines
                     onNext={handleNext}
                     onPrev={handlePrev}
                     onFirst={handleFirst}

@@ -1,11 +1,12 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { Search, Star, HelpCircle, Loader2, BookOpen, ThumbsUp, Check, AlertCircle, XCircle, AlertTriangle } from 'lucide-react';
+import { Search, Star, HelpCircle, Loader2, BookOpen, ThumbsUp, Check, AlertCircle, XCircle, AlertTriangle, RefreshCcw } from 'lucide-react';
 import { analyzeGame, GameReviewData, MoveAnalysis } from '../utils/gameAnalysis';
 
 interface GameReviewPanelProps {
     pgn?: string;
     onStartReview?: () => void;
     onMoveSelect?: (moveIndex: number) => void;
+    onRetry?: (moveIndex: number) => void;
     currentMoveIndex?: number;
 }
 
@@ -54,11 +55,6 @@ const getClassificationColor = (classification: MoveAnalysis['classification']) 
 
 const getEvalDisplay = (move: MoveAnalysis) => {
     if (move.mate !== undefined) {
-        // Display mate sign. If it's mate for the side who just moved, it's usually positive.
-        // But move.mate is "moves to mate". Positive = White wins. Negative = Black wins.
-        // If Black moved and it's Mate -3 (Black mates in 3), we want to show M3.
-        // If White moved and it's Mate 3 (White mates in 3), we want to show M3.
-        // So abs is generally correct for "Moves until mate".
         return `M${Math.abs(move.mate)}`;
     }
     if (move.eval !== undefined) {
@@ -68,7 +64,7 @@ const getEvalDisplay = (move: MoveAnalysis) => {
     return "";
 }
 
-const GameReviewPanel: React.FC<GameReviewPanelProps> = ({ pgn, onStartReview, onMoveSelect, currentMoveIndex = -1 }) => {
+const GameReviewPanel: React.FC<GameReviewPanelProps> = ({ pgn, onStartReview, onMoveSelect, onRetry, currentMoveIndex = -1 }) => {
   const [data, setData] = useState<GameReviewData | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -78,7 +74,6 @@ const GameReviewPanel: React.FC<GameReviewPanelProps> = ({ pgn, onStartReview, o
   useEffect(() => {
       if (!pgn) return;
 
-      // Cancel previous analysis if any (not truly supported by analyzeGame yet, but we can ignore result)
       if (analysisAbortController.current) {
           analysisAbortController.current.abort();
       }
@@ -90,7 +85,6 @@ const GameReviewPanel: React.FC<GameReviewPanelProps> = ({ pgn, onStartReview, o
       setData(null);
 
       analyzeGame(pgn, (p) => setProgress(Math.round(p))).then(result => {
-          // Check if we should still apply this result
           if (currentPgn === pgn) {
              setData(result);
              setIsAnalyzing(false);
@@ -100,9 +94,7 @@ const GameReviewPanel: React.FC<GameReviewPanelProps> = ({ pgn, onStartReview, o
           setIsAnalyzing(false);
       });
 
-      return () => {
-          // Cleanup if component unmounts
-      };
+      return () => {};
   }, [pgn]);
 
   const countMoves = (classification: MoveAnalysis['classification'], color: 'w' | 'b') => {
@@ -110,7 +102,6 @@ const GameReviewPanel: React.FC<GameReviewPanelProps> = ({ pgn, onStartReview, o
       return data.moves.filter(m => m.classification === classification && m.color === color).length;
   };
 
-  // Group moves for display
   const moveRows: { moveNumber: number, w?: MoveAnalysis, b?: MoveAnalysis }[] = [];
   if (data) {
       for (let i = 0; i < data.moves.length; i += 2) {
@@ -121,6 +112,10 @@ const GameReviewPanel: React.FC<GameReviewPanelProps> = ({ pgn, onStartReview, o
           });
       }
   }
+
+  // Determine current move for feedback
+  const currentMoveAnalysis = data?.moves[currentMoveIndex - 1];
+  const isBadMove = currentMoveAnalysis && ['blunder', 'mistake', 'inaccuracy'].includes(currentMoveAnalysis.classification);
 
   return (
     <div className="flex flex-col h-full bg-[#262522] text-[#c3c3c3]">
@@ -166,9 +161,27 @@ const GameReviewPanel: React.FC<GameReviewPanelProps> = ({ pgn, onStartReview, o
                     onError={(e) => (e.currentTarget.src = 'https://www.chess.com/bundles/web/images/user-image.svg')} 
                 />
             </div>
-            <div className="bg-white text-[#2b2926] p-3 rounded-xl rounded-tl-none text-[15px] leading-snug shadow-md relative font-medium">
+            <div className="bg-white text-[#2b2926] p-3 rounded-xl rounded-tl-none text-[15px] leading-snug shadow-md relative font-medium w-full">
                 <div className="absolute top-0 left-[-8px] w-0 h-0 border-t-[10px] border-t-white border-l-[10px] border-l-transparent drop-shadow-sm"></div>
-                {data.accuracy.w > 80 ? "Great job! You played very accurately." : "There were some missed opportunities, let's review them."}
+                {isBadMove ? (
+                     <div className="flex flex-col gap-2">
+                         <span>
+                             That was a {currentMoveAnalysis?.classification}.
+                             {currentMoveAnalysis?.bestMove ? " There was a better move." : ""}
+                         </span>
+                         {onRetry && (
+                             <button
+                                onClick={() => onRetry(currentMoveIndex)}
+                                className="self-start bg-chess-green hover:bg-chess-greenHover text-white text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1 transition-colors"
+                             >
+                                 <RefreshCcw className="w-3 h-3" />
+                                 Retry
+                             </button>
+                         )}
+                     </div>
+                ) : (
+                    data.accuracy.w > 80 ? "Great job! You played very accurately." : "There were some missed opportunities, let's review them."
+                )}
             </div>
         </div>
 
