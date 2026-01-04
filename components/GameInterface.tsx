@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import Chessboard from './Chessboard';
-import { Settings, Flag, XCircle, Search, ChevronRight, RotateCcw, MessageCircle, AlertCircle, Copy, Check, Lightbulb, Undo2, RefreshCw } from 'lucide-react';
+import { Settings, Flag, XCircle, Search, ChevronRight, RotateCcw, MessageCircle, AlertCircle, Copy, Check, Lightbulb, Undo2, RefreshCw, Trophy } from 'lucide-react';
 import GameReviewPanel from './GameReviewPanel';
 import PlayBotsPanel from './PlayBotsPanel';
 import MoveList from './MoveList';
@@ -581,31 +581,78 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
                  {/* Game Over Overlay */}
                  {isGameOver && (
                      <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center p-6 z-20 backdrop-blur-sm animate-in fade-in duration-300">
-                         <h2 className="text-3xl font-black text-white mb-2 text-center shadow-black drop-shadow-md">{gameResult}</h2>
-                         <div className="flex flex-col w-full gap-3 mt-4 max-w-[200px]">
-                            <button 
-                                onClick={() => {
-                                    if (onAnalyze) onAnalyze(game.pgn(), 'review');
-                                }}
-                                className="w-full bg-chess-green hover:bg-chess-greenHover text-white font-bold py-3 rounded-lg shadow-lg flex items-center justify-center gap-2 transition-transform active:scale-95"
-                            >
-                                <Search className="w-5 h-5" />
-                                Game Review
-                            </button>
-                            <button 
-                                onClick={handleNewGame}
-                                className="w-full bg-[#383531] hover:bg-[#45423e] text-white font-bold py-3 rounded-lg shadow-lg flex items-center justify-center gap-2 transition-transform active:scale-95"
-                            >
-                                <RotateCcw className="w-5 h-5" />
-                                {activeBot ? "Rematch" : "New Game"}
-                            </button>
-                            <button
-                                onClick={handleExit}
-                                className="w-full bg-[#262421] hover:bg-[#363430] text-gray-300 font-bold py-3 rounded-lg shadow-lg flex items-center justify-center gap-2 transition-transform active:scale-95"
-                            >
-                                <XCircle className="w-5 h-5" />
-                                {activeBot ? "New Bot" : "Back to Home"}
-                            </button>
+                         <div className="bg-[#262522] rounded-lg shadow-2xl p-6 w-full max-w-[320px] border border-white/10 text-center">
+
+                             {/* Result Header */}
+                             <div className="mb-4">
+                                 {gameResult.includes('Won') ? (
+                                    <div className="w-16 h-16 bg-chess-green rounded-full flex items-center justify-center mx-auto mb-3 shadow-lg">
+                                        <Trophy className="w-8 h-8 text-white" />
+                                    </div>
+                                 ) : (
+                                    <div className="w-16 h-16 bg-gray-600 rounded-full flex items-center justify-center mx-auto mb-3 shadow-lg">
+                                        <span className="text-2xl font-black text-white">½</span>
+                                    </div>
+                                 )}
+                                 <h2 className="text-2xl font-black text-white mb-1 shadow-black">{gameResult}</h2>
+                                 <p className="text-gray-400 text-sm font-medium">by {gameResult.toLowerCase().includes('time') ? 'timeout' : 'checkmate'}</p>
+                             </div>
+
+                             {/* Avatar Vs */}
+                             <div className="flex justify-center items-center gap-4 mb-6">
+                                 <div className="flex flex-col items-center">
+                                      <div className="w-12 h-12 rounded bg-gray-500 overflow-hidden border-2 border-white/20">
+                                          <img src="https://picsum.photos/200" alt="Me" className="w-full h-full object-cover" />
+                                      </div>
+                                      <span className="text-xs font-bold text-gray-300 mt-1">You</span>
+                                      <span className="text-[10px] text-chess-green font-bold">+8</span>
+                                 </div>
+                                 <span className="text-gray-500 font-black text-lg">VS</span>
+                                 <div className="flex flex-col items-center">
+                                      <div className="w-12 h-12 rounded bg-gray-500 overflow-hidden border-2 border-white/20">
+                                          {onlineOpponent ? (
+                                              <img src={onlineOpponent.avatar} alt={onlineOpponent.name} className="w-full h-full object-cover" />
+                                          ) : activeBot ? (
+                                             <img src={activeBot.avatar} alt={activeBot.name} className="w-full h-full object-cover" />
+                                          ) : (
+                                             <img src="https://picsum.photos/id/64/100" alt="Opponent" className="w-full h-full object-cover" />
+                                          )}
+                                      </div>
+                                      <span className="text-xs font-bold text-gray-300 mt-1 truncate max-w-[80px]">
+                                          {onlineOpponent ? onlineOpponent.name : activeBot ? activeBot.name : "Opponent"}
+                                      </span>
+                                      <span className="text-[10px] text-red-500 font-bold">-8</span>
+                                 </div>
+                             </div>
+
+                             {/* Actions */}
+                             <div className="flex flex-col w-full gap-2">
+                                <button
+                                    onClick={() => {
+                                        if (onAnalyze) onAnalyze(game.pgn(), 'review');
+                                    }}
+                                    className="w-full bg-chess-green hover:bg-chess-greenHover text-white font-bold py-3 rounded-lg shadow-[0_4px_0_0_#457524] active:shadow-none active:translate-y-[4px] transition-all flex items-center justify-center gap-2 mb-1"
+                                >
+                                    <Search className="w-5 h-5" />
+                                    Game Review
+                                </button>
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={handleNewGame}
+                                        className="flex-1 bg-[#383531] hover:bg-[#45423e] text-white font-bold py-3 rounded-lg shadow-lg flex items-center justify-center gap-2 transition-transform active:scale-95 text-sm"
+                                    >
+                                        <RotateCcw className="w-4 h-4" />
+                                        {activeBot ? "Rematch" : "New Game"}
+                                    </button>
+                                    <button
+                                        onClick={handleExit}
+                                        className="flex-1 bg-[#262421] hover:bg-[#363430] text-gray-300 font-bold py-3 rounded-lg shadow-lg flex items-center justify-center gap-2 transition-transform active:scale-95 text-sm"
+                                    >
+                                        <XCircle className="w-4 h-4" />
+                                        {activeBot ? "New Bot" : "Home"}
+                                    </button>
+                                </div>
+                             </div>
                          </div>
                      </div>
                  )}

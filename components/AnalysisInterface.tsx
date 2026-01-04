@@ -120,7 +120,7 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
       const arrows: Arrow[] = [];
       if (!bestLine) return undefined;
 
-      // Best move arrow
+      // Best move arrow (Green)
       const parts = bestLine.split(' ');
       if (parts.length > 0) {
           const move = parts[0];
@@ -130,8 +130,28 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
               arrows.push([from, to, '#81b64c']);
           }
       }
+
+      // Threats (Red) - requires lines from MultiPV potentially or separate calculation
+      // But usually threat is "opponent's best response to my move" OR "what happens if I skip a turn".
+      // Stockfish JS doesn't support 'null move' analysis easily via UCI.
+      // However, we can approximate threats by looking at the best move for the *current side* if it's capturing/checking.
+      // Or, better: if `showThreats` is on, we display secondary lines as threats if they are damaging?
+      // Actually, 'Show Threats' usually means: what is the opponent threatening to do next?
+      // Since `bestLine` is for the *current* side to move, it *is* the threat if viewed from opponent perspective.
+      // If it's White's turn, `bestLine` is what White wants to do.
+      // If we want to show threats against Black, we show White's best move in Red.
+
+      if (showThreats) {
+          // In authentic mode, 'Show Threats' calculates what the opponent would do if it were their turn NOW (null move)
+          // OR it just highlights the best attack.
+          // Simple implementation: Highlight the best move in Red instead of Green to signify "Threat".
+          if (arrows.length > 0) {
+              arrows[0][2] = '#fa412d'; // Red
+          }
+      }
+
       return arrows;
-  }, [bestLine, retryState]);
+  }, [bestLine, retryState, showThreats]);
 
   // Calculate Square Styles (for move classification)
   const squareStyles = useMemo(() => {
