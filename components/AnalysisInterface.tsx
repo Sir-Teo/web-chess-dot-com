@@ -46,6 +46,7 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
               newGame.loadPgn(initialPgn);
               setGame(newGame);
               setStartFen(null);
+              setAnalysisData(null); // Reset analysis on new game
               setCurrentMoveIndex(newGame.history().length);
           } catch (e) {
               console.error("Failed to load PGN", e);
@@ -401,6 +402,7 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
               {activeTab === 'review' ? (
                   <GameReviewPanel
                      pgn={game.pgn()}
+                     existingData={analysisData}
                      onStartReview={() => {
                          setActiveTab('analysis');
                          handleFirst();

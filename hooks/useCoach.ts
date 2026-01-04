@@ -97,15 +97,16 @@ export const useCoach = (isEnabled: boolean) => {
 
     // Helper to generate reason text
     const getReason = (type: string, diff: number, pieceCaptured?: boolean, isCheck?: boolean) => {
-         if (type === 'missed-win') return "You missed a forced checkmate sequence.";
+         if (type === 'missed-win') return "You missed a forced checkmate sequence. Look for checks and captures!";
          if (type === 'blunder') {
-             if (diff > 500) return "You gave away a decisive advantage.";
-             return "This move hangs a piece or allows a strong tactic.";
+             if (diff > 500) return "You gave away a decisive advantage. Always check for hanging pieces.";
+             return "This move likely hangs a piece or misses a simple tactical defense.";
          }
-         if (type === 'mistake') return "This allows your opponent to gain a significant advantage.";
-         if (type === 'inaccuracy') return "There was a slightly better move available.";
-         if (type === 'best') return "This is the best move in the position.";
-         if (type === 'excellent') return "A very strong move.";
+         if (type === 'mistake') return "This allows your opponent to gain a significant advantage or coordinate their pieces.";
+         if (type === 'inaccuracy') return "There was a slightly better move available, but this is playable.";
+         if (type === 'best') return "This is the best move in the position! Great find.";
+         if (type === 'excellent') return "A very strong move. You are playing accurately.";
+         if (type === 'good') return "A solid move that maintains the position.";
          return "";
     };
 

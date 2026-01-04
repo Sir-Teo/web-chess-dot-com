@@ -32,6 +32,16 @@ export const BEGINNER_BOTS: BotProfile[] = [
         depth: 3
     },
     {
+        id: 'mittens',
+        name: 'Mittens',
+        rating: 1,
+        avatar: 'https://images.chesscomfiles.com/uploads/v1/user/125304386.53697669.200x200o.9f2913e1628d.jpeg',
+        flag: 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/a4/Flag_of_the_United_States.svg/200px-Flag_of_the_United_States.svg.png',
+        description: "Meow! I like chess. Do you like chess?",
+        skillLevel: 20,
+        depth: 22
+    },
+    {
         id: 'aron',
         name: 'Aron',
         rating: 700,
