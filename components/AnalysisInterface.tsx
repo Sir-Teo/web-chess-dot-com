@@ -15,9 +15,10 @@ interface AnalysisInterfaceProps {
   initialPgn?: string;
   initialFen?: string;
   defaultTab?: 'analysis' | 'review';
+  onNavigate?: (view: string, params?: any) => void;
 }
 
-const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initialFen, defaultTab }) => {
+const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initialFen, defaultTab, onNavigate }) => {
   const [activeTab, setActiveTab] = useState<'analysis' | 'review'>('analysis');
 
   // Master game record
@@ -37,6 +38,13 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
   // Analysis Features
   const [showThreats, setShowThreats] = useState(false);
   const [depth, setDepth] = useState(20);
+
+  // New: Practice Handler
+  const handlePractice = () => {
+      if (onNavigate) {
+          onNavigate('play-bots', { fen: currentFen });
+      }
+  };
   
   // Initialize game from PGN/FEN
   useEffect(() => {
@@ -451,6 +459,7 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
                     onToggleThreats={() => setShowThreats(!showThreats)}
                     depth={depth}
                     onDepthChange={setDepth}
+                    onPractice={handlePractice}
                   />
               )}
           </div>

@@ -33,9 +33,7 @@ const AppContent: React.FC = () => {
 
   const handleNavigate = (view: string, params?: any) => {
     setActiveTab(view);
-    if (params) {
-      setGameParams(params);
-    }
+    setGameParams(params || {});
   };
 
   const renderContent = () => {
@@ -45,15 +43,29 @@ const AppContent: React.FC = () => {
           <GameInterface
             initialMode="play"
             initialTimeControl={gameParams.timeControl}
+            initialFen={gameParams.fen}
             onAnalyze={handleAnalyze}
           />
         );
       case 'play-bots':
-        return <GameInterface initialMode="bots" onAnalyze={handleAnalyze} />;
+        return (
+            <GameInterface
+                initialMode="bots"
+                initialFen={gameParams.fen}
+                onAnalyze={handleAnalyze}
+            />
+        );
       case 'puzzles':
         return <PuzzlesInterface />;
       case 'analysis':
-        return <AnalysisInterface initialPgn={analysisData.pgn} initialFen={analysisData.fen} defaultTab={analysisTab} />;
+        return (
+            <AnalysisInterface
+                initialPgn={analysisData.pgn}
+                initialFen={analysisData.fen}
+                defaultTab={analysisTab}
+                onNavigate={handleNavigate}
+            />
+        );
       case 'learn-openings':
         return <OpeningsInterface onAnalyze={handleAnalyze} />;
       case 'learn-lessons':
