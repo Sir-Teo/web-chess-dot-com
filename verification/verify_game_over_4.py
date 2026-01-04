@@ -1,0 +1,34 @@
+from playwright.sync_api import sync_playwright, expect
+
+def run():
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
+
+        # 1. Navigate to app
+        page.goto("http://localhost:3000/web-chess-dot-com/")
+
+        # 2. Select Bot (mimic verify_review.py logic)
+        # Dashboard -> Play Bots
+        page.click("text=Play Computer")
+        page.wait_for_selector("text=Play Bots")
+        page.click("data-testid=play-bot-start")
+
+        # 3. Wait for game start
+        page.wait_for_selector("#chessboard-wrapper")
+
+        # 4. Resign
+        page.click("text=Resign")
+
+        # 5. Wait for Game Over Overlay
+        # It takes time for overlay to fade in
+        page.wait_for_selector("text=Rematch")
+
+        # 6. Screenshot
+        page.screenshot(path="verification/game_over_overlay.png")
+        print("Screenshot saved to verification/game_over_overlay.png")
+
+        browser.close()
+
+if __name__ == "__main__":
+    run()

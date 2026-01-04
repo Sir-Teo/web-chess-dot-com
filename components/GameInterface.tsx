@@ -276,6 +276,14 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
       handleNewGame();
   };
 
+  const handleExit = useCallback(() => {
+    setActiveBot(null);
+    setOnlineOpponent(null);
+    setHasGameStarted(false);
+    setIsGameOver(false);
+    setGameResult('');
+  }, []);
+
   const handleStartHumanGame = () => {
     setIsPlayFriendMode(true);
     setPlayMode('pass-and-play');
@@ -437,7 +445,14 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
                                 className="w-full bg-[#383531] hover:bg-[#45423e] text-white font-bold py-3 rounded-lg shadow-lg flex items-center justify-center gap-2 transition-transform active:scale-95"
                             >
                                 <RotateCcw className="w-5 h-5" />
-                                New Game
+                                {activeBot ? "Rematch" : "New Game"}
+                            </button>
+                            <button
+                                onClick={handleExit}
+                                className="w-full bg-[#262421] hover:bg-[#363430] text-gray-300 font-bold py-3 rounded-lg shadow-lg flex items-center justify-center gap-2 transition-transform active:scale-95"
+                            >
+                                <XCircle className="w-5 h-5" />
+                                {activeBot ? "New Bot" : "Back to Home"}
                             </button>
                          </div>
                      </div>
