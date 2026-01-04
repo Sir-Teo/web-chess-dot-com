@@ -52,8 +52,8 @@ const MoveList: React.FC<MoveListProps> = ({ game, onMoveClick, currentMoveIndex
                   {/* White Move */}
                   {move.w && (
                       <button
-                        className={`flex-1 text-left px-3 py-1.5 transition-colors font-bold ${
-                            isSelected(move.w.index) ? 'bg-[#484542] text-white shadow-inner' : 'text-[#c3c3c3] hover:text-white hover:bg-white/5'
+                        className={`flex-1 text-left px-3 py-1.5 transition-colors font-bold rounded-sm mx-1 ${
+                            isSelected(move.w.index) ? 'bg-[#484542] text-white shadow-inner border-b border-white/10' : 'text-[#c3c3c3] hover:text-white hover:bg-white/5'
                         }`}
                         onClick={() => onMoveClick?.(move.w!.after, move.w!.index)}
                       >
@@ -64,15 +64,15 @@ const MoveList: React.FC<MoveListProps> = ({ game, onMoveClick, currentMoveIndex
                   {/* Black Move */}
                   {move.b ? (
                       <button
-                        className={`flex-1 text-left px-3 py-1.5 transition-colors font-bold ${
-                            isSelected(move.b.index) ? 'bg-[#484542] text-white shadow-inner' : 'text-[#c3c3c3] hover:text-white hover:bg-white/5'
+                        className={`flex-1 text-left px-3 py-1.5 transition-colors font-bold rounded-sm mx-1 ${
+                            isSelected(move.b.index) ? 'bg-[#484542] text-white shadow-inner border-b border-white/10' : 'text-[#c3c3c3] hover:text-white hover:bg-white/5'
                         }`}
                         onClick={() => onMoveClick?.(move.b!.after, move.b!.index)}
                       >
                           {move.b.san}
                       </button>
                   ) : (
-                      <span className="flex-1"></span>
+                      <span className="flex-1 mx-1"></span>
                   )}
               </div>
           ))}

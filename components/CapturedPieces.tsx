@@ -48,17 +48,17 @@ const CapturedPieces: React.FC<CapturedPiecesProps> = ({ game, color }) => {
   if (myCaptures.length === 0 && !showPlus) return null;
 
   return (
-    <div className="flex items-center text-xs h-6 overflow-hidden">
+    <div className="flex items-center h-5 opacity-80 hover:opacity-100 transition-opacity">
       {myCaptures.map((p, i) => (
          <img
             key={i}
             src={`https://images.chesscomfiles.com/chess-themes/pieces/${pieceTheme}/150/${color === 'w' ? 'b' : 'w'}${p}.png`}
-            className="w-4 h-4 -ml-1 first:ml-0 opacity-90"
+            className="w-5 h-5 -ml-1.5 first:ml-0"
             alt={p}
          />
       ))}
       {showPlus && (
-          <span className="ml-1 text-[#b5b5b5] font-semibold text-[10px]">+{advantageValue}</span>
+          <span className="ml-1 text-[#a3a3a3] font-bold text-[10px]">+{advantageValue}</span>
       )}
     </div>
   );
