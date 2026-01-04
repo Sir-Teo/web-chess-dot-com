@@ -20,7 +20,7 @@ export const useCoach = (isEnabled: boolean) => {
     const [isThinking, setIsThinking] = useState(false);
 
     // Continuous Evaluation State
-    const [currentEval, setCurrentEval] = useState<{ score: number, mate?: number }>({ score: 0 });
+    const [currentEval, setCurrentEval] = useState<{ score: number, mate?: number, bestMove?: string }>({ score: 0 });
 
     // Cache the best move for the CURRENT position (before player moves)
     const currentPositionAnalysis = useRef<{ fen: string, bestMove: string, score: EngineScore | null } | null>(null);
@@ -74,7 +74,7 @@ export const useCoach = (isEnabled: boolean) => {
                 }
             }
 
-            setCurrentEval({ score: whiteScore, mate: whiteMate });
+            setCurrentEval({ score: whiteScore, mate: whiteMate, bestMove: result.bestMove });
 
             currentPositionAnalysis.current = {
                 fen,

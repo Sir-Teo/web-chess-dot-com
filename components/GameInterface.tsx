@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Chessboard from './Chessboard';
-import { Settings, Flag, XCircle, Search, ChevronRight, RotateCcw, MessageCircle, AlertCircle, Copy, Check } from 'lucide-react';
+import { Settings, Flag, XCircle, Search, ChevronRight, RotateCcw, MessageCircle, AlertCircle, Copy, Check, Lightbulb, Undo2 } from 'lucide-react';
 import GameReviewPanel from './GameReviewPanel';
 import PlayBotsPanel from './PlayBotsPanel';
 import MoveList from './MoveList';
@@ -85,6 +85,9 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
       currentEval
   } = useCoach(true); // Always enable for evaluation bar
 
+  // Hint State
+  const [hintArrow, setHintArrow] = useState<{ from: string, to: string } | null>(null);
+
   // Sync state if prop changes
   useEffect(() => {
     if (initialMode) setActivePanel(initialMode);
@@ -165,6 +168,9 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
           } else {
               resetFeedback();
           }
+
+          // Clear hint on move
+          setHintArrow(null);
 
           // Trigger Bot Response if in Bot Mode/Online and game not over
           if (isEngineOpponent && activeBot && !newGame.isGameOver()) {
@@ -259,6 +265,62 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
          return () => clearTimeout(timeout);
      }
   }, [game, isEngineOpponent, activeBot, userColor, isGameOver, sendCommand]);
+
+  const handleHint = useCallback(() => {
+      // Use best move from current coach evaluation
+      if (currentEval.bestMove) {
+          const from = currentEval.bestMove.substring(0, 2);
+          const to = currentEval.bestMove.substring(2, 4);
+          setHintArrow({ from, to });
+          // Auto clear after 3 seconds
+          setTimeout(() => setHintArrow(null), 3000);
+      }
+  }, [currentEval]);
+
+  const handleUndo = useCallback(() => {
+      if (game.history().length === 0 || isGameOver) return;
+
+      // Create new game instance to modify
+      const g = new Chess();
+      try {
+        g.loadPgn(game.pgn());
+      } catch (e) {
+        g.load(game.fen());
+      }
+
+      if (isEngineOpponent) {
+          // Logic for Bot Games:
+          if (g.turn() === userColor) {
+              // If it's the user's turn, the Bot moved last.
+              // To "Retry", we typically want to undo the Bot's move AND the User's move,
+              // so the user can play a different move.
+              g.undo(); // Undo Bot's move
+              g.undo(); // Undo User's move
+          } else {
+              // If it's the Bot's turn, the User moved last (and Bot is thinking).
+              // We just undo the User's move to let them correct it immediately.
+              g.undo();
+          }
+      } else {
+          // Pass and Play: Simple undo (go back one half-move)
+          g.undo();
+      }
+
+      setGame(g);
+      setFen(g.fen());
+      setLastMove(null);
+
+      // Update last move highlight based on new history
+      const h = g.history({verbose: true});
+      if (h.length > 0) {
+          const last = h[h.length - 1];
+          setLastMove({ from: last.from, to: last.to });
+      }
+
+      resetFeedback();
+      resetBestMove(); // Stop bot if it was thinking to prevent race condition
+      setHintArrow(null);
+  }, [game, isEngineOpponent, userColor, resetFeedback, resetBestMove]);
 
   const handleStartBotGame = (bot: BotProfile, color: 'w' | 'b' | 'random') => {
       setActiveBot(bot);
@@ -423,7 +485,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
                     onMove={onMove}
                     lastMove={lastMove}
                     boardOrientation={userColor === 'w' ? 'white' : 'black'}
-                    customArrows={isCoachMode && !viewFen ? coachArrows : undefined}
+                    customArrows={(isCoachMode && !viewFen) ? coachArrows : (hintArrow && !viewFen) ? [[hintArrow.from, hintArrow.to, '#f1c40f']] : undefined}
                  />
 
                  {/* Game Over Overlay */}
@@ -555,7 +617,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
                         }}
                    />
 
-                   <div className="mt-auto bg-[#211f1c] p-2 flex gap-1 border-t border-white/5">
+                   <div className="mt-auto bg-[#211f1c] p-2 flex flex-col gap-1 border-t border-white/5">
                         {/* Live Button when viewing history */}
                         {viewFen && (
                              <button
@@ -574,12 +636,35 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
                                  Back to Live Game
                              </button>
                         )}
-                        <button className="flex-1 bg-[#383531] hover:bg-[#45423e] rounded flex items-center justify-center py-3 text-gray-400 hover:text-white transition-colors font-bold text-sm" onClick={() => { setIsGameOver(true); setGameResult('Resigned'); }}>
-                            Resign
-                        </button>
-                        <button className="flex-1 bg-[#383531] hover:bg-[#45423e] rounded flex items-center justify-center py-3 text-gray-400 hover:text-white transition-colors font-bold text-sm">
-                            Draw
-                        </button>
+
+                        {/* Game Controls: Hint/Undo for Bots */}
+                        {isBotMode && !isGameOver && (
+                             <div className="flex gap-1 mb-1">
+                                 <button
+                                     onClick={handleHint}
+                                     className="flex-1 bg-[#383531] hover:bg-[#45423e] rounded flex items-center justify-center py-2 text-gray-300 hover:text-white transition-colors"
+                                     title="Hint"
+                                 >
+                                     <Lightbulb className="w-5 h-5" />
+                                 </button>
+                                 <button
+                                     onClick={handleUndo}
+                                     className="flex-1 bg-[#383531] hover:bg-[#45423e] rounded flex items-center justify-center py-2 text-gray-300 hover:text-white transition-colors"
+                                     title="Takeback"
+                                 >
+                                     <Undo2 className="w-5 h-5" />
+                                 </button>
+                             </div>
+                        )}
+
+                        <div className="flex gap-1">
+                            <button className="flex-1 bg-[#383531] hover:bg-[#45423e] rounded flex items-center justify-center py-3 text-gray-400 hover:text-white transition-colors font-bold text-sm" onClick={() => { setIsGameOver(true); setGameResult('Resigned'); }}>
+                                Resign
+                            </button>
+                            <button className="flex-1 bg-[#383531] hover:bg-[#45423e] rounded flex items-center justify-center py-3 text-gray-400 hover:text-white transition-colors font-bold text-sm">
+                                Draw
+                            </button>
+                        </div>
                    </div>
                </div>
           ) : isSearching ? (
