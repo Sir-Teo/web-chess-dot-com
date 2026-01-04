@@ -267,6 +267,7 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
               ) : (
                   <AnalysisPanel
                     game={game}
+                    currentFen={currentFen}
                     evalScore={displayEval}
                     bestLine={bestLine}
                     onNext={handleNext}

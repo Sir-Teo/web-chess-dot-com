@@ -55,7 +55,7 @@ const Chessboard: React.FC<ChessboardProps> = ({
   // sourceSquare: string (e.g. "e2")
   // targetSquare: string (e.g. "e4")
   // piece: string (e.g. "wP")
-  const onPieceDrop = ({ piece, sourceSquare, targetSquare }: { piece: any, sourceSquare: string, targetSquare: string | null }) => {
+  const onPieceDrop = (sourceSquare: string, targetSquare: string, piece: string) => {
     if (!interactable || !onMove || !targetSquare) return false;
 
     // piece is object in newer version? or string? documentation says DraggingPieceDataType
@@ -63,7 +63,7 @@ const Chessboard: React.FC<ChessboardProps> = ({
     // Let's assume pieceType or verify.
     // In types.d.ts: piece is DraggingPieceDataType { isSparePiece, position, pieceType }
 
-    const pieceType = (typeof piece === 'string') ? piece : piece.pieceType;
+    const pieceType = piece;
 
     // Check for promotion:
     const isPromotion = (pieceType[1] === 'P' && (
@@ -87,20 +87,17 @@ const Chessboard: React.FC<ChessboardProps> = ({
       style={{ userSelect: 'none' }}
     >
       <ReactChessboard
-        options={{
-            id: "GameBoard",
-            position: fen,
-            onPieceDrop: onPieceDrop,
-            boardOrientation: boardOrientation as 'white' | 'black',
-            allowDragging: interactable,
-            darkSquareStyle: { backgroundColor: themeColors.dark },
-            lightSquareStyle: { backgroundColor: themeColors.light },
-            squareStyles: customSquareStyles,
-            arrows: formattedArrows as any, // Type cast to avoid mismatch if strict
-            animationDurationInMs: animationSpeed === 'slow' ? 500 : animationSpeed === 'fast' ? 100 : 200,
-            showNotation: showCoordinates,
-            // pieces: customPieces // Removed to use default pieces
-        }}
+        id="GameBoard"
+        position={fen}
+        onPieceDrop={onPieceDrop}
+        boardOrientation={boardOrientation as 'white' | 'black'}
+        arePiecesDraggable={interactable}
+        customDarkSquareStyle={{ backgroundColor: themeColors.dark }}
+        customLightSquareStyle={{ backgroundColor: themeColors.light }}
+        customSquareStyles={customSquareStyles}
+        customArrows={formattedArrows as any}
+        animationDuration={animationSpeed === 'slow' ? 500 : animationSpeed === 'fast' ? 100 : 200}
+        showBoardNotation={showCoordinates}
       />
     </div>
   );
