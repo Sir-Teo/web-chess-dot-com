@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import Chessboard from './Chessboard';
-import { Settings, Flag, XCircle, Search, ChevronRight, RotateCcw, MessageCircle, AlertCircle, Copy, Check, Lightbulb, Undo2 } from 'lucide-react';
+import { Settings, Flag, XCircle, Search, ChevronRight, RotateCcw, MessageCircle, AlertCircle, Copy, Check, Lightbulb, Undo2, RefreshCw } from 'lucide-react';
 import GameReviewPanel from './GameReviewPanel';
 import PlayBotsPanel from './PlayBotsPanel';
 import MoveList from './MoveList';
@@ -95,6 +95,15 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
 
   // Pre-move State (Authenticity)
   const [preMove, setPreMove] = useState<{from: string, to: string, promotion?: string} | null>(null);
+
+  const customSquareStyles = useMemo(() => {
+    const styles: Record<string, React.CSSProperties> = {};
+    if (preMove) {
+        styles[preMove.from] = { backgroundColor: 'rgba(250, 65, 45, 0.5)' }; // Red highlight for pre-move source
+        styles[preMove.to] = { backgroundColor: 'rgba(250, 65, 45, 0.5)' }; // Red highlight for pre-move dest
+    }
+    return styles;
+  }, [preMove]);
 
   // Sync state if prop changes
   useEffect(() => {
@@ -372,6 +381,10 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
       setHintArrow(null);
   }, [game, isEngineOpponent, userColor, resetFeedback, resetBestMove]);
 
+  const handleFlipBoard = useCallback(() => {
+      setUserColor(prev => prev === 'w' ? 'b' : 'w');
+  }, []);
+
   const handleStartBotGame = (bot: BotProfile, color: 'w' | 'b' | 'random') => {
       setActiveBot(bot);
       setOnlineOpponent(null);
@@ -474,13 +487,6 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
       {/* Left Area (Board) */}
       <div className="flex-none lg:flex-1 flex flex-col items-center justify-center p-2 lg:p-4 bg-[#312e2b] relative">
         
-        {/* Coach Feedback Overlay */}
-        <CoachFeedback
-            feedback={feedback}
-            isThinking={isCoachThinking}
-            onClose={resetFeedback}
-        />
-
         {/* Evaluation Bar Desktop */}
         {!isGameOver && (
              <div className="hidden lg:block absolute left-4 top-1/2 -translate-y-1/2 h-[80vh] w-6 z-0">
@@ -490,6 +496,13 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
 
         <div className="w-full max-w-[400px] lg:max-w-[calc(100vh_-_10rem)] relative flex flex-col justify-center">
             
+            {/* Coach Feedback Overlay (Inside Container) */}
+            <CoachFeedback
+                feedback={feedback}
+                isThinking={isCoachThinking}
+                onClose={resetFeedback}
+            />
+
             {/* Opponent Info (Top) */}
             <div className="flex justify-between items-end mb-1 px-1 relative">
                 <div className="flex items-center gap-2 md:gap-3">
@@ -550,7 +563,8 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
                     onMove={onMove}
                     lastMove={lastMove}
                     boardOrientation={userColor === 'w' ? 'white' : 'black'}
-                    customArrows={(isCoachMode && !viewFen) ? coachArrows : (hintArrow && !viewFen) ? [[hintArrow.from, hintArrow.to, '#f1c40f']] : (preMove ? [[preMove.from, preMove.to, '#fa412d']] : undefined)}
+                    customArrows={(isCoachMode && !viewFen) ? coachArrows : (hintArrow && !viewFen) ? [[hintArrow.from, hintArrow.to, '#f1c40f']] : undefined}
+                    customSquareStyles={customSquareStyles}
                  />
 
                  {/* Game Over Overlay */}
@@ -708,15 +722,17 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
                         )}
 
                         {/* Game Controls: Hint/Undo for Bots */}
-                        {isBotMode && !isGameOver && (
+                        {(isBotMode || playMode === 'pass-and-play') && !isGameOver && (
                              <div className="flex gap-1 mb-1">
-                                 <button
-                                     onClick={handleHint}
-                                     className="flex-1 bg-[#383531] hover:bg-[#45423e] rounded flex items-center justify-center py-2 text-gray-300 hover:text-white transition-colors"
-                                     title="Hint"
-                                 >
-                                     <Lightbulb className="w-5 h-5" />
-                                 </button>
+                                 {isBotMode && (
+                                     <button
+                                         onClick={handleHint}
+                                         className="flex-1 bg-[#383531] hover:bg-[#45423e] rounded flex items-center justify-center py-2 text-gray-300 hover:text-white transition-colors"
+                                         title="Hint"
+                                     >
+                                         <Lightbulb className="w-5 h-5" />
+                                     </button>
+                                 )}
                                  <button
                                      onClick={handleUndo}
                                      className="flex-1 bg-[#383531] hover:bg-[#45423e] rounded flex items-center justify-center py-2 text-gray-300 hover:text-white transition-colors"
@@ -724,6 +740,15 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
                                  >
                                      <Undo2 className="w-5 h-5" />
                                  </button>
+                                 {playMode === 'pass-and-play' && (
+                                     <button
+                                         onClick={handleFlipBoard}
+                                         className="flex-1 bg-[#383531] hover:bg-[#45423e] rounded flex items-center justify-center py-2 text-gray-300 hover:text-white transition-colors"
+                                         title="Flip Board"
+                                     >
+                                         <RefreshCw className="w-5 h-5" />
+                                     </button>
+                                 )}
                              </div>
                         )}
 
