@@ -12,21 +12,10 @@ interface GameReviewPanelProps {
 }
 
 const EvaluationGraph: React.FC<{ moves: MoveAnalysis[], currentMoveIndex: number }> = ({ moves, currentMoveIndex }) => {
-    // We want to plot the evaluation over time.
-    // Eval is in CP. Range typically -500 to +500 visually, clamping at maybe +/- 1000.
-    // X axis is move index.
-
     if (moves.length === 0) return null;
 
     const height = 60;
-    const width = 300; // Assume full width of container roughly
     const maxCp = 800;
-
-    // Normalize points
-    // Y: 0 at bottom (Black winning), height at top (White winning)
-    // Center is height/2.
-    // If CP = 0, Y = height/2.
-    // If CP = +maxCp, Y = 0 (Top).  Wait, SVG coords: 0 is top. So +CP should be near 0.
 
     const getY = (evalCp: number | undefined, mate: number | undefined) => {
         let val = 0;
@@ -38,13 +27,7 @@ const EvaluationGraph: React.FC<{ moves: MoveAnalysis[], currentMoveIndex: numbe
 
         // Clamp
         val = Math.max(-maxCp, Math.min(maxCp, val));
-
-        // Map -maxCp ... +maxCp to height ... 0
-        // -maxCp -> height
-        // +maxCp -> 0
-        // 0 -> height/2
-
-        const percent = (val + maxCp) / (2 * maxCp); // 0 to 1 (0 = -max, 1 = +max)
+        const percent = (val + maxCp) / (2 * maxCp); // 0 to 1
         return height - (percent * height);
     };
 
@@ -71,8 +54,6 @@ const EvaluationGraph: React.FC<{ moves: MoveAnalysis[], currentMoveIndex: numbe
                     strokeWidth="1.5"
                     vectorEffect="non-scaling-stroke"
                  />
-
-                 {/* Area under curve (optional, tricky with polyline) */}
 
                  {/* Current Move Indicator Line */}
                  {currentMoveIndex > 0 && (
@@ -116,6 +97,7 @@ const ClassificationIcon: React.FC<{ classification: MoveAnalysis['classificatio
         case 'inaccuracy': return <div className="text-[#f7c045] font-black text-xs">?!</div>;
         case 'mistake': return <div className="text-[#e6912c] font-black text-xs">?</div>;
         case 'blunder': return <div className="text-[#fa412d] font-black text-xs">??</div>;
+        case 'missed-win': return <div className="bg-[#fa412d] w-4 h-4 rounded text-white flex items-center justify-center font-black text-[10px]">M</div>;
         case 'book': return <BookOpen className="w-3 h-3 text-[#a38d79]" />;
         default: return null;
     }
@@ -127,6 +109,7 @@ const getClassificationColor = (classification: MoveAnalysis['classification']) 
         case 'great': return 'bg-[#5c8bb0]/20 text-[#5c8bb0]';
         case 'best': return 'bg-[#95b776]/20 text-[#95b776]';
         case 'blunder': return 'bg-[#fa412d]/20 text-[#fa412d]';
+        case 'missed-win': return 'bg-[#ff8f87]/20 text-[#fa412d]';
         case 'mistake': return 'bg-[#e6912c]/20 text-[#e6912c]';
         case 'inaccuracy': return 'bg-[#f7c045]/20 text-[#f7c045]';
         default: return 'hover:bg-white/5';
@@ -195,7 +178,7 @@ const GameReviewPanel: React.FC<GameReviewPanelProps> = ({ pgn, onStartReview, o
 
   // Determine current move for feedback
   const currentMoveAnalysis = data?.moves[currentMoveIndex - 1];
-  const isBadMove = currentMoveAnalysis && ['blunder', 'mistake', 'inaccuracy'].includes(currentMoveAnalysis.classification);
+  const isBadMove = currentMoveAnalysis && ['blunder', 'mistake', 'inaccuracy', 'missed-win'].includes(currentMoveAnalysis.classification);
 
   const openingName = pgn ? identifyOpening(pgn) : "";
 
@@ -259,13 +242,16 @@ const GameReviewPanel: React.FC<GameReviewPanelProps> = ({ pgn, onStartReview, o
             </div>
             <div className="bg-white text-[#2b2926] p-3 rounded-xl rounded-tl-none text-[15px] leading-snug shadow-md relative font-medium w-full">
                 <div className="absolute top-0 left-[-8px] w-0 h-0 border-t-[10px] border-t-white border-l-[10px] border-l-transparent drop-shadow-sm"></div>
-                {isBadMove ? (
+                {currentMoveAnalysis ? (
                      <div className="flex flex-col gap-2">
                          <span>
-                             That was a {currentMoveAnalysis?.classification}.
-                             {currentMoveAnalysis?.bestMove ? " There was a better move." : ""}
+                             <span className="font-bold capitalize">{currentMoveAnalysis.classification.replace('-', ' ')}</span>
+                             {currentMoveAnalysis.classification === 'best' || currentMoveAnalysis.classification === 'great' || currentMoveAnalysis.classification === 'brilliant'
+                                ? "! "
+                                : ". "}
+                             {currentMoveAnalysis.reason}
                          </span>
-                         {onRetry && (
+                         {isBadMove && onRetry && (
                              <button
                                 onClick={() => onRetry(currentMoveIndex)}
                                 className="self-start bg-chess-green hover:bg-chess-greenHover text-white text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1 transition-colors"
@@ -336,6 +322,12 @@ const GameReviewPanel: React.FC<GameReviewPanelProps> = ({ pgn, onStartReview, o
                 p1Value={countMoves('blunder', 'w')} p2Value={countMoves('blunder', 'b')}
                 colorClass="text-[#fa412d]"
                 icon={<div className="w-5 h-5 rounded-full bg-[#fa412d] flex items-center justify-center text-white font-black text-[10px] shadow-sm">??</div>} 
+            />
+             <MoveStatRow
+                label="Missed Win"
+                p1Value={countMoves('missed-win', 'w')} p2Value={countMoves('missed-win', 'b')}
+                colorClass="text-[#fa412d]"
+                icon={<div className="w-5 h-5 rounded bg-[#fa412d] flex items-center justify-center text-white font-black text-[10px] shadow-sm">M</div>}
             />
         </div>
 

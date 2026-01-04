@@ -10,7 +10,8 @@ export interface MoveAnalysis {
     eval?: number; // centipawns
     mate?: number; // Mate in moves
     bestMove?: string;
-    classification: 'brilliant' | 'great' | 'best' | 'excellent' | 'good' | 'inaccuracy' | 'mistake' | 'blunder' | 'book';
+    classification: 'brilliant' | 'great' | 'best' | 'excellent' | 'good' | 'inaccuracy' | 'mistake' | 'blunder' | 'book' | 'missed-win';
+    reason?: string; // Explanation for the classification
 }
 
 export interface GameReviewData {
@@ -103,8 +104,6 @@ export class StockfishClient {
     }
 
     public async go(depth: number): Promise<{ bestMove: string, score: EngineScore | null }> {
-        // If a command is already running, we might want to wait or throw, but here we assume sequential usage
-        // or that the previous one will be overwritten by 'stop' if we implement it.
         return new Promise((resolve) => {
             this.currentCommand = 'go';
             this.score = null;
@@ -161,7 +160,6 @@ export const analyzeGame = async (pgn: string, onProgress?: (progress: number) =
         game.loadPgn(pgn);
     } catch (e) {
         console.error("Invalid PGN for analysis", e);
-        // Return empty result
         return { accuracy: { w: 0, b: 0 }, moves: [] };
     }
 
@@ -179,7 +177,6 @@ export const analyzeGame = async (pgn: string, onProgress?: (progress: number) =
     }
 
     const results: MoveAnalysis[] = [];
-    let lastEvalCp = 0; // Evaluation of previous position (White's perspective)
 
     // 3. Analyze Loop
     for (let i = 0; i < movesToAnalyze.length; i++) {
@@ -193,66 +190,122 @@ export const analyzeGame = async (pgn: string, onProgress?: (progress: number) =
         let evalCp = 0;
         let evalMate: number | undefined = undefined;
         let bestMove = '';
+        let reason = "";
 
         if (client) {
             try {
-                // A. Evaluate the position BEFORE the move to find the Best Move and its score.
+                // A. Evaluate position BEFORE (to see what was expected)
                 client.setPosition(fenBefore);
-                const bestMoveResult = await client.go(10); // Depth 10
-
+                const bestMoveResult = await client.go(10);
                 bestMove = bestMoveResult.bestMove;
 
-                // Normalized Score for "Before" position (White's perspective)
                 let scoreBefore = 0;
                 let scoreBeforeObj = bestMoveResult.score;
+                let mateBefore: number | undefined = undefined;
 
                 if (scoreBeforeObj) {
                     scoreBefore = getComparisonScore(scoreBeforeObj, turnBefore);
+                    if (scoreBeforeObj.unit === 'mate') {
+                        mateBefore = turnBefore === 'w' ? scoreBeforeObj.value : -scoreBeforeObj.value;
+                    }
                 }
 
                 // B. Check if played move matches best move
                 const playedMoveUci = move.from + move.to + (move.promotion || '');
                 classification = 'good';
-                evalCp = scoreBefore; // Default to before score unless recalculated
+                evalCp = scoreBefore;
 
-                if (scoreBeforeObj && scoreBeforeObj.unit === 'mate') {
-                    const mateVal = scoreBeforeObj.value;
-                    evalMate = turnBefore === 'w' ? mateVal : -mateVal;
-                }
+                // Check for forced mate sequence
+                const isForcedMate = mateBefore !== undefined &&
+                                     ((turnBefore === 'w' && mateBefore > 0) || (turnBefore === 'b' && mateBefore < 0));
 
                 if (bestMove === playedMoveUci) {
                     classification = 'best';
-                    lastEvalCp = scoreBefore;
+                    if (isForcedMate) {
+                        classification = 'great'; // Finding mate is great
+                        reason = "You found the correct winning move!";
+                    } else {
+                        reason = "This was the best move in the position.";
+                    }
+
+                    // If best move, we can just assume eval stays roughly same (or improves if opponent made mistake before)
+                    // But technically we should eval after to be sure of the *resulting* position score for the graph
+                    // However, to save time, we can reuse scoreBefore as a proxy,
+                    // or do a quick check. Let's reuse scoreBefore for "best" to save 50% compute.
+                    // WAIT: Graph needs score of resulting position. If we played best, score is maintained.
                 } else {
-                    // C. If not best move, we need to evaluate the RESULTING position (`fenAfter`)
+                    // C. Evaluate RESULTING position
                     client.setPosition(fenAfter);
                     const afterResult = await client.go(10);
 
-                    // Score for `fenAfter` (White's perspective)
                     let scoreAfter = 0;
                     const scoreAfterObj = afterResult.score;
+                    let mateAfter: number | undefined = undefined;
+
                     if (scoreAfterObj) {
                         scoreAfter = getComparisonScore(scoreAfterObj, turnAfter);
-                        evalCp = scoreAfter;
-
+                        evalCp = scoreAfter; // This is the eval *after* the move
                         if (scoreAfterObj.unit === 'mate') {
-                            const mateVal = scoreAfterObj.value;
-                            evalMate = turnAfter === 'w' ? mateVal : -mateVal;
-                        } else {
-                            evalMate = undefined;
+                            mateAfter = turnAfter === 'w' ? scoreAfterObj.value : -scoreAfterObj.value;
                         }
                     }
+                    evalMate = mateAfter; // Store for UI
 
                     const isWhite = move.color === 'w';
+                    // Loss calculation:
+                    // If White moved, loss = Before - After (e.g. 500 - 400 = 100 loss)
+                    // If Black moved, loss = After - Before (e.g. -400 - -500 = 100 loss)
+                    // Wait.
+                    // White Before: 500. White After: 400. Loss 100.
+                    // Black Before: 500 (White winning). Black moves. After: 600 (White winning more).
+                    // Black Before (from Black perspective): -500. After: -600. Loss 100.
+                    // Using normalized (White perspective) scores:
+                    // If White moved: Loss = scoreBefore - scoreAfter.
+                    // If Black moved: Loss = scoreAfter - scoreBefore.
+
                     const loss = isWhite ? (scoreBefore - scoreAfter) : (scoreAfter - scoreBefore);
 
-                    if (loss <= 20) classification = 'excellent';
-                    else if (loss <= 50) classification = 'good';
-                    else if (loss <= 100) classification = 'inaccuracy';
-                    else if (loss <= 200) classification = 'mistake';
-                    else classification = 'blunder';
+                    // CLASSIFICATION LOGIC
 
-                    lastEvalCp = scoreAfter;
+                    // 1. Missed Win
+                    // If we had a mate (isForcedMate) and now we don't (or mate is much slower/lost)
+                    if (isForcedMate) {
+                         // Check if we still have mate
+                         const stillHasMate = mateAfter !== undefined && ((isWhite && mateAfter > 0) || (!isWhite && mateAfter < 0));
+                         if (!stillHasMate) {
+                             classification = 'missed-win';
+                             reason = "You missed a forced checkmate.";
+                         } else {
+                             // Still mate but maybe slower?
+                             classification = 'good'; // or inaccuracy
+                             reason = "You still have a mate, but there was a faster way.";
+                         }
+                    }
+                    // 2. Blunder (High CP Loss or Losing winning position)
+                    else if (loss > 200) {
+                        classification = 'blunder';
+                        reason = "You gave away a significant advantage.";
+                        // Check for hung piece (approx 300+)
+                        if (loss > 250) reason = "You may have hung a piece or missed a tactic.";
+                    }
+                    // 3. Mistake
+                    else if (loss > 100) {
+                        classification = 'mistake';
+                        reason = "This move hurts your position.";
+                    }
+                    // 4. Inaccuracy
+                    else if (loss > 50) {
+                        classification = 'inaccuracy';
+                        reason = "There was a slightly better move.";
+                    }
+                    // 5. Good/Excellent
+                    else if (loss > 20) {
+                        classification = 'good';
+                        reason = "A solid move.";
+                    } else {
+                        classification = 'excellent';
+                        reason = "An excellent move!";
+                    }
                 }
             } catch (err) {
                 console.error("Error analyzing move", i, err);
@@ -269,7 +322,8 @@ export const analyzeGame = async (pgn: string, onProgress?: (progress: number) =
             eval: evalCp,
             mate: evalMate,
             bestMove: bestMove,
-            classification: classification
+            classification: classification,
+            reason: reason
         });
     }
 
@@ -286,11 +340,12 @@ const calculateAccuracy = (moves: MoveAnalysis[]): GameReviewData => {
 
     for (const m of moves) {
         const score = m.classification === 'best' ? 100 :
-                      m.classification === 'excellent' ? 90 :
                       m.classification === 'great' ? 95 :
+                      m.classification === 'excellent' ? 90 :
                       m.classification === 'good' ? 80 :
                       m.classification === 'inaccuracy' ? 50 :
-                      m.classification === 'mistake' ? 20 : 0;
+                      m.classification === 'mistake' ? 20 :
+                      m.classification === 'missed-win' ? 0 : 0; // Missed win is like a blunder
 
         if (m.color === 'w') {
             wScore += score;
