@@ -595,7 +595,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
                     </div>
                     <div className="flex flex-col justify-center">
                         <div className="flex items-center gap-1.5">
-                           <span className="text-white font-bold text-sm leading-none">
+                           <span className="text-white font-bold text-sm leading-none tracking-wide">
                               {onlineOpponent ? onlineOpponent.name : activeBot ? activeBot.name : "Opponent"}
                            </span>
                            {(onlineOpponent || activeBot) && <img src={onlineOpponent ? onlineOpponent.flag : activeBot?.flag} className="w-3 h-2 shadow-sm" alt="Flag" />}
@@ -603,11 +603,11 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
                                <span className="bg-yellow-600 text-[9px] px-1 rounded text-white font-bold leading-tight border border-white/10 hidden md:inline-block" title="Bot">BOT</span>
                            )}
                         </div>
-                        <div className="flex items-center gap-2 mt-1 h-4">
+                        <div className="flex items-center gap-2 mt-1 h-5">
                              {(onlineOpponent || activeBot) ? (
-                                <span className="text-xs text-gray-400 font-semibold">({onlineOpponent ? onlineOpponent.rating : activeBot?.rating})</span>
+                                <span className="text-xs text-[#a0a0a0] font-semibold">({onlineOpponent ? onlineOpponent.rating : activeBot?.rating})</span>
                              ) : (
-                                <span className="text-xs text-gray-500">1200</span>
+                                <span className="text-xs text-[#a0a0a0] font-semibold">1200</span>
                              )}
                              <CapturedPieces game={game} color={userColor === 'w' ? 'b' : 'w'} />
                         </div>
@@ -624,8 +624,8 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
 
                 {(activePanel === 'play' || isBotMode) && (
                     <div className={`
-                        px-2 py-1 md:px-3 md:py-1.5 rounded font-mono font-bold text-lg md:text-xl shadow-inner border
-                        ${game.turn() === (userColor === 'w' ? 'b' : 'w') && !isGameOver ? 'bg-white text-black' : 'bg-[#262421] text-white border-white/5'}
+                        px-3 py-1.5 md:px-4 md:py-2 rounded-[4px] font-mono font-bold text-2xl shadow-[0_4px_0_0_rgba(0,0,0,0.1)] cursor-default min-w-[100px] text-center
+                        ${game.turn() === (userColor === 'w' ? 'b' : 'w') && !isGameOver ? 'bg-white text-black shadow-[0_4px_0_0_#a0a0a0]' : 'bg-[#211f1c] text-[#706c66]'}
                     `}>
                         {formatTime(userColor === 'w' ? blackTime : whiteTime)}
                     </div>
@@ -647,35 +647,38 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
                  {/* Game Over Overlay */}
                  {isGameOver && (
                      <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center p-6 z-20 backdrop-blur-sm animate-in fade-in duration-300">
-                         <div className="bg-[#262522] rounded-lg shadow-2xl p-6 w-full max-w-[320px] border border-white/10 text-center">
+                         <div className="bg-[#262522] rounded-lg shadow-2xl p-6 w-full max-w-[340px] border border-white/10 text-center">
 
                              {/* Result Header */}
-                             <div className="mb-4">
+                             <div className="mb-6 relative">
+                                 {/* Confetti or Effects could go here */}
                                  {gameResult.includes('Won') ? (
-                                    <div className="w-16 h-16 bg-chess-green rounded-full flex items-center justify-center mx-auto mb-3 shadow-lg">
+                                    <div className="w-16 h-16 bg-[#81b64c] rounded-xl flex items-center justify-center mx-auto mb-4 shadow-lg transform rotate-3">
                                         <Trophy className="w-8 h-8 text-white" />
                                     </div>
                                  ) : (
-                                    <div className="w-16 h-16 bg-gray-600 rounded-full flex items-center justify-center mx-auto mb-3 shadow-lg">
-                                        <span className="text-2xl font-black text-white">½</span>
+                                    <div className="w-16 h-16 bg-[#403d39] rounded-xl flex items-center justify-center mx-auto mb-4 shadow-lg transform -rotate-3">
+                                        <span className="text-3xl font-black text-[#a0a0a0]">½</span>
                                     </div>
                                  )}
-                                 <h2 className="text-2xl font-black text-white mb-1 shadow-black">{gameResult}</h2>
-                                 <p className="text-gray-400 text-sm font-medium">by {gameResult.toLowerCase().includes('time') ? 'timeout' : 'checkmate'}</p>
+                                 <h2 className="text-2xl font-black text-white mb-1 drop-shadow-md">{gameResult}</h2>
+                                 <p className="text-[#a0a0a0] text-sm font-semibold">by {gameResult.toLowerCase().includes('time') ? 'timeout' : 'checkmate'}</p>
                              </div>
 
                              {/* Avatar Vs */}
-                             <div className="flex justify-center items-center gap-4 mb-6">
-                                 <div className="flex flex-col items-center">
-                                      <div className="w-12 h-12 rounded bg-gray-500 overflow-hidden border-2 border-white/20">
+                             <div className="flex justify-between items-center gap-2 mb-8 bg-[#211f1c] p-3 rounded-lg border border-white/5">
+                                 <div className="flex flex-col items-center flex-1">
+                                      <div className="w-12 h-12 rounded-lg bg-gray-500 overflow-hidden border border-white/10 mb-2">
                                           <img src="https://picsum.photos/200" alt="Me" className="w-full h-full object-cover" />
                                       </div>
-                                      <span className="text-xs font-bold text-gray-300 mt-1">You</span>
-                                      <span className="text-[10px] text-chess-green font-bold">+8</span>
+                                      <span className="text-xs font-bold text-gray-300">You</span>
+                                      <span className="text-[10px] text-[#81b64c] font-bold bg-[#81b64c]/10 px-1.5 py-0.5 rounded mt-0.5">+8</span>
                                  </div>
-                                 <span className="text-gray-500 font-black text-lg">VS</span>
-                                 <div className="flex flex-col items-center">
-                                      <div className="w-12 h-12 rounded bg-gray-500 overflow-hidden border-2 border-white/20">
+                                 <div className="flex flex-col items-center px-2">
+                                     <span className="text-[#504c47] font-black text-xl italic">VS</span>
+                                 </div>
+                                 <div className="flex flex-col items-center flex-1">
+                                      <div className="w-12 h-12 rounded-lg bg-gray-500 overflow-hidden border border-white/10 mb-2">
                                           {onlineOpponent ? (
                                               <img src={onlineOpponent.avatar} alt={onlineOpponent.name} className="w-full h-full object-cover" />
                                           ) : activeBot ? (
@@ -684,10 +687,10 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
                                              <img src="https://picsum.photos/id/64/100" alt="Opponent" className="w-full h-full object-cover" />
                                           )}
                                       </div>
-                                      <span className="text-xs font-bold text-gray-300 mt-1 truncate max-w-[80px]">
+                                      <span className="text-xs font-bold text-gray-300 truncate max-w-[80px]">
                                           {onlineOpponent ? onlineOpponent.name : activeBot ? activeBot.name : "Opponent"}
                                       </span>
-                                      <span className="text-[10px] text-red-500 font-bold">-8</span>
+                                      <span className="text-[10px] text-[#fa412d] font-bold bg-[#fa412d]/10 px-1.5 py-0.5 rounded mt-0.5">-8</span>
                                  </div>
                              </div>
 
@@ -732,14 +735,14 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
                     </div>
                     <div className="flex flex-col justify-center">
                         <div className="flex items-center gap-1.5">
-                            <span className="text-white font-bold text-sm leading-none">MasterTeo1205</span>
+                            <span className="text-white font-bold text-sm leading-none tracking-wide">MasterTeo1205</span>
                             <span className="text-lg md:text-xl leading-none">🇺🇸</span>
                         </div>
-                         <div className="flex items-center gap-2 mt-1 h-4">
-                             <span className="text-xs text-gray-500">850</span>
+                         <div className="flex items-center gap-2 mt-1 h-5">
+                             <span className="text-xs text-[#a0a0a0] font-semibold">850</span>
                              <CapturedPieces game={game} color={userColor} />
                              {openingName && (
-                                 <span className="text-[10px] text-gray-400 ml-1 bg-white/5 px-1.5 py-0.5 rounded border border-white/10 hidden sm:inline-block truncate max-w-[150px]" title={openingName}>
+                                 <span className="text-[10px] text-[#a0a0a0] font-semibold ml-1 bg-[#262421] px-1.5 py-0.5 rounded border border-white/10 hidden sm:inline-block truncate max-w-[150px]" title={openingName}>
                                      {openingName}
                                  </span>
                              )}
@@ -748,8 +751,8 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
                 </div>
                 {(activePanel === 'play' || isBotMode) && (
                     <div className={`
-                        px-2 py-1 md:px-3 md:py-1.5 rounded font-mono font-bold text-lg md:text-xl shadow-[0_4px_0_0_rgba(160,160,160,1)] cursor-default
-                        ${game.turn() === userColor && !isGameOver ? 'bg-white text-black' : 'bg-[#c3c3c3] text-black'}
+                        px-3 py-1.5 md:px-4 md:py-2 rounded-[4px] font-mono font-bold text-2xl shadow-[0_4px_0_0_rgba(0,0,0,0.1)] cursor-default min-w-[100px] text-center
+                        ${game.turn() === userColor && !isGameOver ? 'bg-white text-black shadow-[0_4px_0_0_#a0a0a0]' : 'bg-[#211f1c] text-[#706c66]'}
                     `}>
                         {formatTime(userColor === 'w' ? whiteTime : blackTime)}
                     </div>

@@ -50,8 +50,8 @@ const Chessboard: React.FC<ChessboardProps> = ({
 
     // Highlight Pre-move (Red/Pink overlay)
     if (preMove) {
-        styles[preMove.from] = { backgroundColor: 'rgba(244, 67, 54, 0.5)' }; // Red tint
-        styles[preMove.to] = { backgroundColor: 'rgba(244, 67, 54, 0.5)' };
+        styles[preMove.from] = { backgroundColor: 'rgba(244, 67, 54, 0.6)', border: '2px solid rgba(244, 67, 54, 0.8)' }; // Red tint
+        styles[preMove.to] = { backgroundColor: 'rgba(244, 67, 54, 0.6)', border: '2px solid rgba(244, 67, 54, 0.8)' };
     }
 
     return styles;
