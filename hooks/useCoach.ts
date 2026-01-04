@@ -6,6 +6,7 @@ interface CoachFeedback {
     type: 'best' | 'good' | 'inaccuracy' | 'mistake' | 'blunder' | 'neutral' | 'excellent' | 'missed-win';
     scoreDiff?: number;
     bestMove?: string;
+    reason?: string;
 }
 
 // Arrow definition: [from, to, color]
@@ -94,6 +95,20 @@ export const useCoach = (isEnabled: boolean) => {
         return score.value > 0 ? 20000 - (score.value * 100) : -20000 - (score.value * 100);
     };
 
+    // Helper to generate reason text
+    const getReason = (type: string, diff: number, pieceCaptured?: boolean, isCheck?: boolean) => {
+         if (type === 'missed-win') return "You missed a forced checkmate sequence.";
+         if (type === 'blunder') {
+             if (diff > 500) return "You gave away a decisive advantage.";
+             return "This move hangs a piece or allows a strong tactic.";
+         }
+         if (type === 'mistake') return "This allows your opponent to gain a significant advantage.";
+         if (type === 'inaccuracy') return "There was a slightly better move available.";
+         if (type === 'best') return "This is the best move in the position.";
+         if (type === 'excellent') return "A very strong move.";
+         return "";
+    };
+
     // Evaluate the move the player JUST made
     const evaluateMove = useCallback(async (fenBefore: string, move: { from: string, to: string, promotion?: string }, fenAfter: string) => {
         if (!isEnabled || !clientRef.current) return;
@@ -127,7 +142,8 @@ export const useCoach = (isEnabled: boolean) => {
              setFeedback({
                  message: "Best move!",
                  type: 'best',
-                 bestMove: beforeAnalysis.bestMove
+                 bestMove: beforeAnalysis.bestMove,
+                 reason: "You found the optimal continuation."
              });
              setArrows([[move.from, move.to, '#81b64c']]); // Chess.com Green
              setIsThinking(false);
@@ -157,35 +173,38 @@ export const useCoach = (isEnabled: boolean) => {
         if (beforeAnalysis.score?.unit === 'mate' && beforeAnalysis.score.value > 0 &&
            (afterResult.score?.unit !== 'mate' || (afterResult.score?.unit === 'mate' && afterResult.score.value < 0))) {
                type = 'missed-win';
-               message = "You missed a forced mate!";
+               message = "Missed Win";
                arrowColor = '#fa412d';
         } else if (loss <= 20) {
             type = 'excellent';
-            message = "Excellent move.";
+            message = "Excellent";
             arrowColor = '#96bc4b'; // Light green
         } else if (loss <= 50) {
             type = 'good';
-            message = "Good move.";
+            message = "Good";
              arrowColor = '#96bc4b';
         } else if (loss <= 150) {
             type = 'inaccuracy';
-            message = "Inaccuracy.";
+            message = "Inaccuracy";
             arrowColor = '#f7c045'; // Yellow
         } else if (loss <= 300) {
             type = 'mistake';
-            message = "Mistake.";
+            message = "Mistake";
             arrowColor = '#ffa459'; // Orange
         } else {
             type = 'blunder';
-            message = "Blunder.";
+            message = "Blunder";
             arrowColor = '#fa412d'; // Red
         }
+
+        const reason = getReason(type, loss);
 
         setFeedback({
             message,
             type,
             scoreDiff: loss,
-            bestMove: beforeAnalysis.bestMove
+            bestMove: beforeAnalysis.bestMove,
+            reason
         });
 
         setArrows([

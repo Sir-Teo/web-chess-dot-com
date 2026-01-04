@@ -38,22 +38,22 @@ const MoveList: React.FC<MoveListProps> = ({ game, onMoveClick, currentMoveIndex
 
   return (
     <div className="flex flex-col h-full bg-[#262522]">
-      <div className="flex items-center px-4 py-2 bg-[#211f1c] text-xs font-semibold text-gray-400 border-b border-white/10">
-         <span className="w-8 text-center">#</span>
-         <span className="flex-1">White</span>
-         <span className="flex-1">Black</span>
+      <div className="flex items-center px-4 py-1.5 bg-[#211f1c] text-xs font-semibold text-gray-500 uppercase tracking-wider border-b border-black/20">
+         <span className="w-10 text-center">#</span>
+         <span className="flex-1 pl-2">White</span>
+         <span className="flex-1 pl-2">Black</span>
       </div>
 
       <div className="flex-1 overflow-y-auto custom-scrollbar" ref={scrollRef}>
           {moves.map((move) => (
-              <div key={move.moveNumber} className={`flex text-sm py-1 ${move.moveNumber % 2 === 0 ? 'bg-white/5' : ''}`}>
-                  <span className="w-8 text-center text-[#898886] font-mono py-1">{move.moveNumber}.</span>
+              <div key={move.moveNumber} className={`flex text-sm py-0.5 ${move.moveNumber % 2 !== 0 ? 'bg-[#262421]' : 'bg-[#2b2926]'}`}>
+                  <span className="w-10 text-center text-[#555] font-mono py-1.5">{move.moveNumber}.</span>
 
                   {/* White Move */}
                   {move.w && (
                       <button
-                        className={`flex-1 text-left px-2 py-1 rounded transition-colors font-semibold ${
-                            isSelected(move.w.index) ? 'bg-[#484542] text-white' : 'text-white hover:bg-white/10'
+                        className={`flex-1 text-left px-3 py-1.5 transition-colors font-bold ${
+                            isSelected(move.w.index) ? 'bg-[#484542] text-white shadow-inner' : 'text-[#c3c3c3] hover:text-white hover:bg-white/5'
                         }`}
                         onClick={() => onMoveClick?.(move.w!.after, move.w!.index)}
                       >
@@ -64,8 +64,8 @@ const MoveList: React.FC<MoveListProps> = ({ game, onMoveClick, currentMoveIndex
                   {/* Black Move */}
                   {move.b ? (
                       <button
-                        className={`flex-1 text-left px-2 py-1 rounded transition-colors font-semibold ${
-                            isSelected(move.b.index) ? 'bg-[#484542] text-white' : 'text-white hover:bg-white/10'
+                        className={`flex-1 text-left px-3 py-1.5 transition-colors font-bold ${
+                            isSelected(move.b.index) ? 'bg-[#484542] text-white shadow-inner' : 'text-[#c3c3c3] hover:text-white hover:bg-white/5'
                         }`}
                         onClick={() => onMoveClick?.(move.b!.after, move.b!.index)}
                       >
@@ -78,8 +78,8 @@ const MoveList: React.FC<MoveListProps> = ({ game, onMoveClick, currentMoveIndex
           ))}
 
           {moves.length === 0 && (
-             <div className="flex flex-col items-center justify-center h-40 text-gray-500 text-sm italic">
-                 Game has not started
+             <div className="flex flex-col items-center justify-center h-40 text-gray-600 text-sm font-medium">
+                 Game Start
              </div>
           )}
       </div>
