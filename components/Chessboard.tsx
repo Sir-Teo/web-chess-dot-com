@@ -20,7 +20,7 @@ const Chessboard: React.FC<ChessboardProps> = ({
   boardOrientation = 'white',
   customArrows
 }) => {
-  const { boardTheme, pieceTheme, showCoordinates, animationSpeed } = useSettings();
+  const { boardTheme, showCoordinates, animationSpeed } = useSettings();
 
   const themeColors = useMemo(() => {
     return BOARD_THEMES.find(t => t.id === boardTheme) || BOARD_THEMES[0];
@@ -39,38 +39,36 @@ const Chessboard: React.FC<ChessboardProps> = ({
     return styles;
   }, [lastMove]);
 
-  const customPieces = useMemo(() => {
-      const pieces = ['wP', 'wN', 'wB', 'wR', 'wQ', 'wK', 'bP', 'bN', 'bB', 'bR', 'bQ', 'bK'];
-      const pieceComponents: Record<string, (args: any) => JSX.Element> = {};
-
-      pieces.forEach(p => {
-          pieceComponents[p] = ({ squareWidth }) => (
-            <div
-                style={{
-                    width: squareWidth,
-                    height: squareWidth,
-                    backgroundImage: `url(https://images.chesscomfiles.com/chess-themes/pieces/${pieceTheme}/150/${p}.png)`,
-                    backgroundSize: '100%',
-                    backgroundRepeat: 'no-repeat',
-                    backgroundPosition: 'center',
-                }}
-            />
-          );
+  // Convert tuple arrows to object arrows for react-chessboard
+  const formattedArrows = useMemo(() => {
+      if (!customArrows) return undefined;
+      // Check if it's already in correct format or tuple
+      return customArrows.map(arrow => {
+          if (Array.isArray(arrow)) {
+              return { startSquare: arrow[0], endSquare: arrow[1], color: arrow[2] || 'green' };
+          }
+          return arrow; // Assume it's already correct if not array
       });
-      return pieceComponents;
-  }, [pieceTheme]);
+  }, [customArrows]);
 
   // Types for callback arguments based on react-chessboard documentation
   // sourceSquare: string (e.g. "e2")
   // targetSquare: string (e.g. "e4")
   // piece: string (e.g. "wP")
-  const onDrop = (sourceSquare: string, targetSquare: string, piece: string) => {
-    if (!interactable || !onMove) return false;
+  const onPieceDrop = ({ piece, sourceSquare, targetSquare }: { piece: any, sourceSquare: string, targetSquare: string | null }) => {
+    if (!interactable || !onMove || !targetSquare) return false;
+
+    // piece is object in newer version? or string? documentation says DraggingPieceDataType
+    // but based on typical usage it might be just string in older versions or different here.
+    // Let's assume pieceType or verify.
+    // In types.d.ts: piece is DraggingPieceDataType { isSparePiece, position, pieceType }
+
+    const pieceType = (typeof piece === 'string') ? piece : piece.pieceType;
 
     // Check for promotion:
-    const isPromotion = (piece[1] === 'P' && (
-      (piece[0] === 'w' && targetSquare[1] === '8') ||
-      (piece[0] === 'b' && targetSquare[1] === '1')
+    const isPromotion = (pieceType[1] === 'P' && (
+      (pieceType[0] === 'w' && targetSquare[1] === '8') ||
+      (pieceType[0] === 'b' && targetSquare[1] === '1')
     ));
 
     if (isPromotion) {
@@ -89,18 +87,20 @@ const Chessboard: React.FC<ChessboardProps> = ({
       style={{ userSelect: 'none' }}
     >
       <ReactChessboard
-        id="GameBoard"
-        position={fen}
-        onDrop={onDrop}
-        boardOrientation={boardOrientation}
-        arePiecesDraggable={interactable}
-        customDarkSquareStyle={{ backgroundColor: themeColors.dark }}
-        customLightSquareStyle={{ backgroundColor: themeColors.light }}
-        customSquareStyles={customSquareStyles}
-        customArrows={customArrows}
-        animationDuration={animationSpeed === 'slow' ? 500 : animationSpeed === 'fast' ? 100 : 200}
-        showBoardNotation={showCoordinates}
-        customPieces={customPieces}
+        options={{
+            id: "GameBoard",
+            position: fen,
+            onPieceDrop: onPieceDrop,
+            boardOrientation: boardOrientation as 'white' | 'black',
+            allowDragging: interactable,
+            darkSquareStyle: { backgroundColor: themeColors.dark },
+            lightSquareStyle: { backgroundColor: themeColors.light },
+            squareStyles: customSquareStyles,
+            arrows: formattedArrows as any, // Type cast to avoid mismatch if strict
+            animationDurationInMs: animationSpeed === 'slow' ? 500 : animationSpeed === 'fast' ? 100 : 200,
+            showNotation: showCoordinates,
+            // pieces: customPieces // Removed to use default pieces
+        }}
       />
     </div>
   );
