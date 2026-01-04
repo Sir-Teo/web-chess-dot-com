@@ -29,10 +29,10 @@ export const useGameSound = () => {
         audio.currentTime = 0;
         audio.play().catch(e => {
             // Audio play failed (often due to user interaction policy)
-            console.warn("Audio play failed", e);
+            console.warn(`Audio play failed for ${type}:`, e);
         });
     } catch (error) {
-        console.error("Sound error", error);
+        console.error(`Sound error for ${type}:`, error);
     }
   }, []);
 

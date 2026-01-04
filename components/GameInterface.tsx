@@ -102,8 +102,8 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
   const customSquareStyles = useMemo(() => {
     const styles: Record<string, React.CSSProperties> = {};
     if (preMove) {
-        styles[preMove.from] = { backgroundColor: 'rgba(250, 65, 45, 0.5)' }; // Red highlight for pre-move source
-        styles[preMove.to] = { backgroundColor: 'rgba(250, 65, 45, 0.5)' }; // Red highlight for pre-move dest
+        styles[preMove.from] = { backgroundColor: 'rgba(244, 67, 54, 0.4)' }; // Softer red for pre-move source
+        styles[preMove.to] = { backgroundColor: 'rgba(244, 67, 54, 0.4)' }; // Softer red for pre-move dest
     }
 
     // Check Highlight
@@ -389,6 +389,9 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
   useEffect(() => {
      if (isEngineOpponent && activeBot && game.turn() !== userColor && !isGameOver) {
 
+         // Variable delay for more natural feel (500ms - 1500ms)
+         const delay = Math.floor(Math.random() * 1000) + 500;
+
          const timeout = setTimeout(() => {
              resetBestMove();
              if (activeBot.skillLevel !== undefined) {
@@ -396,7 +399,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
              }
              sendCommand(`position fen ${game.fen()}`);
              sendCommand(`go depth ${activeBot.depth || 10}`);
-         }, 1000);
+         }, delay);
          return () => clearTimeout(timeout);
      }
   }, [game, isEngineOpponent, activeBot, userColor, isGameOver, sendCommand, resetBestMove]);
