@@ -36,6 +36,7 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
 
   // Analysis Features
   const [showThreats, setShowThreats] = useState(false);
+  const [depth, setDepth] = useState(20);
   
   // Initialize game from PGN/FEN
   useEffect(() => {
@@ -107,8 +108,8 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
     sendCommand(`position fen ${currentFen}`);
     // Enable MultiPV 3
     sendCommand('setoption name MultiPV value 3');
-    sendCommand('go depth 20');
-  }, [currentFen, sendCommand, resetBestMove, isReady, showThreats]);
+    sendCommand(`go depth ${depth}`);
+  }, [currentFen, sendCommand, resetBestMove, isReady, showThreats, depth]);
 
   // Calculate Arrows from Best Line
   const analysisArrows = useMemo(() => {
@@ -426,6 +427,8 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
                     onMoveClick={(index) => setCurrentMoveIndex(index + 1)}
                     showThreats={showThreats}
                     onToggleThreats={() => setShowThreats(!showThreats)}
+                    depth={depth}
+                    onDepthChange={setDepth}
                   />
               )}
           </div>

@@ -11,7 +11,9 @@ import {
   MoreHorizontal,
   Activity,
   FlipHorizontal,
-  Target
+  Target,
+  Settings,
+  Cloud
 } from 'lucide-react';
 import MoveList from './MoveList';
 import { Chess } from 'chess.js';
@@ -33,6 +35,10 @@ interface AnalysisPanelProps {
   // New props for improved Analysis UI
   showThreats?: boolean;
   onToggleThreats?: () => void;
+
+  // Settings controls
+  depth?: number;
+  onDepthChange?: (depth: number) => void;
 }
 
 // Helper to format eval
@@ -80,7 +86,9 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
     currentMove = 0,
     onMoveClick,
     showThreats,
-    onToggleThreats
+    onToggleThreats,
+    depth = 20,
+    onDepthChange
 }) => {
 
   const turn = currentFen?.split(' ')[1] as 'w' | 'b' || 'w';
@@ -108,6 +116,9 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
             >
                 <Target className="w-5 h-5" />
             </button>
+            <button className="p-1.5 rounded hover:bg-white/10 text-gray-400 transition-colors">
+                <Settings className="w-5 h-5" />
+            </button>
         </div>
       </div>
 
@@ -117,9 +128,21 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
               <div className="flex items-center gap-2">
                   <Activity className="w-5 h-5 text-chess-green" />
                   <span className="font-bold text-white">Stockfish 16</span>
-                  <span className="text-xs bg-[#302e2b] px-1.5 py-0.5 rounded text-gray-400 border border-white/10">
-                      Depth {lines[0]?.depth || 20}
-                  </span>
+
+                  {/* Depth Selector (Mock Cloud Analysis) */}
+                  <div className="flex items-center gap-1 bg-[#302e2b] px-1.5 py-0.5 rounded border border-white/10 ml-2">
+                      <Cloud className="w-3 h-3 text-blue-400" />
+                      <select
+                        value={depth}
+                        onChange={(e) => onDepthChange && onDepthChange(parseInt(e.target.value))}
+                        className="bg-transparent text-xs text-gray-300 font-mono outline-none cursor-pointer"
+                      >
+                          <option value={15}>Depth 15</option>
+                          <option value={20}>Depth 20</option>
+                          <option value={25}>Depth 25</option>
+                          <option value={30}>Depth 30</option>
+                      </select>
+                  </div>
               </div>
           </div>
 
@@ -127,24 +150,24 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
           <div className="flex flex-col gap-1 mt-2">
               {lines.length > 0 ? (
                   lines.map((line) => (
-                      <div key={line.multipv} className="flex gap-2 bg-[#2a2926] p-1.5 rounded border border-white/5 text-xs hover:bg-[#32312e] cursor-pointer transition-colors">
+                      <div key={line.multipv} className="flex gap-2 bg-[#2a2926] p-1.5 rounded border border-white/5 text-xs hover:bg-[#32312e] cursor-pointer transition-colors group">
                            <div className={`font-mono font-bold w-12 text-right ${
                                formatScore(line.score, turn).includes('-') ? 'text-white' : 'text-chess-green'
                            }`}>
                                {formatScore(line.score, turn)}
                            </div>
-                           <div className="font-mono text-gray-400 break-all flex-1">
+                           <div className="font-mono text-gray-400 break-all flex-1 group-hover:text-gray-300">
                                {formatPV(line.pv, currentFen || game.fen())}
                            </div>
                       </div>
                   ))
               ) : (
-                  <div className="bg-[#2a2926] p-2 rounded border border-white/5 text-xs font-mono text-gray-400 break-all leading-relaxed h-12 overflow-hidden">
-                      <div className="flex gap-2">
+                  <div className="bg-[#2a2926] p-2 rounded border border-white/5 text-xs font-mono text-gray-400 break-all leading-relaxed h-12 overflow-hidden flex items-center">
+                      <div className="flex gap-2 w-full">
                            <span className={`font-mono font-bold ${String(evalScore).includes('-') ? 'text-white' : 'text-chess-green'}`}>
                                {evalScore}
                            </span>
-                           <span>{formattedBestLine}</span>
+                           <span className="truncate">{formattedBestLine}</span>
                       </div>
                   </div>
               )}
