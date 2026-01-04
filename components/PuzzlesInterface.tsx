@@ -28,6 +28,14 @@ const PuzzlesInterface: React.FC = () => {
     if (feedback === 'correct') return; // Already solved
 
     try {
+      // Check legality first without moving state yet if we want to be strict,
+      // but chess.move validates legality.
+      // We need to clone to check valid move?
+      // Actually we just attempt move on `chess` instance.
+
+      // Note: Authentic puzzles usually just highlight red and snap back if wrong,
+      // or highlight green and stay if right.
+
       const move = chess.move({
         from,
         to,
@@ -37,20 +45,31 @@ const PuzzlesInterface: React.FC = () => {
       if (!move) return;
 
       const expectedMove = currentPuzzle.moves[0];
-      const actualMoveUci = move.from + move.to;
+      // Normalize comparison (handle promotion in UCI string if present in puzzle)
+      // Usually puzzle.moves is ["e2e4"] or ["a7a8q"]
+      // move.from + move.to is "e2e4"
+      // move.promotion is 'q' -> "a7a8q" (if promotion happened)
 
-      // Check success
-      if (actualMoveUci === expectedMove || (move.promotion && actualMoveUci + move.promotion === expectedMove)) {
+      const playedUci = move.from + move.to + (move.promotion || '');
+
+      // Flexible match (if puzzle doesn't specify promo, assume q is fine?)
+      // Strict match is better.
+
+      const isCorrect = playedUci === expectedMove;
+
+      if (isCorrect) {
          setFen(chess.fen());
          setFeedback('correct');
-         setRating(r => r + 10 + streak);
+         // Authentic calculation logic (mock)
+         const bonus = 5 + Math.min(streak, 10);
+         setRating(r => r + 8 + bonus);
          setStreak(s => s + 1);
          setShowNextButton(true);
       } else {
         // Wrong move - feedback
         setFeedback('incorrect');
         setStreak(0);
-        setRating(r => Math.max(100, r - 10));
+        setRating(r => Math.max(100, r - 12)); // Lose points
 
         // Show the wrong move briefly then undo
         setFen(chess.fen());
@@ -58,7 +77,7 @@ const PuzzlesInterface: React.FC = () => {
             chess.undo();
             setFen(chess.fen());
             setFeedback('none'); // Reset feedback to allow trying again
-        }, 800);
+        }, 1000); // 1s delay before reset
       }
 
     } catch (e) {

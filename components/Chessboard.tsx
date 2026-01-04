@@ -11,6 +11,7 @@ interface ChessboardProps {
   boardOrientation?: 'white' | 'black';
   customArrows?: Arrow[];
   preMove?: { from: string, to: string } | null;
+  customSquareStyles?: Record<string, React.CSSProperties>;
 }
 
 const Chessboard: React.FC<ChessboardProps> = ({
@@ -20,7 +21,8 @@ const Chessboard: React.FC<ChessboardProps> = ({
   lastMove,
   boardOrientation = 'white',
   customArrows,
-  preMove
+  preMove,
+  customSquareStyles: propCustomSquareStyles
 }) => {
   const { boardTheme, showCoordinates, animationSpeed } = useSettings();
 
@@ -34,12 +36,19 @@ const Chessboard: React.FC<ChessboardProps> = ({
   
   // Custom styles for squares
   const customSquareStyles = useMemo(() => {
-    const styles: Record<string, React.CSSProperties> = {};
+    const styles: Record<string, React.CSSProperties> = { ...propCustomSquareStyles };
 
-    // Highlight last move
+    // Highlight last move (if not overridden by prop styles for those squares, or should it layer?)
+    // Layering is better. But CSSProperties in react-chessboard is simple object.
+    // We'll prioritize internal highlights (last move) or merge?
+    // Usually Analysis colors (prop) should take precedence or blend.
+    // For now, let's apply last move if no specific style exists, or mix?
+    // Let's just set them, overwriting if collision (last move usually less important than 'blunder' red).
+
     if (lastMove) {
-      styles[lastMove.from] = { backgroundColor: 'rgba(255, 255, 0, 0.4)' };
-      styles[lastMove.to] = { backgroundColor: 'rgba(255, 255, 0, 0.4)' };
+       // Only apply yellow if not already styled (e.g. by analysis)
+       if (!styles[lastMove.from]) styles[lastMove.from] = { backgroundColor: 'rgba(255, 255, 0, 0.4)' };
+       if (!styles[lastMove.to]) styles[lastMove.to] = { backgroundColor: 'rgba(255, 255, 0, 0.4)' };
     }
 
     // Highlight Pre-move (Red/Pink overlay)
@@ -48,13 +57,8 @@ const Chessboard: React.FC<ChessboardProps> = ({
         styles[preMove.to] = { backgroundColor: 'rgba(244, 67, 54, 0.5)' };
     }
 
-    // Right-click highlight (Circles) - simplified as background color for now as react-chessboard doesn't support circles easily via props
-    // We can use customArrows for this actually if we want circles?
-    // react-chessboard treats same start/end as circle? Let's check docs logic.
-    // Usually standard arrows are lines.
-
     return styles;
-  }, [lastMove, preMove]);
+  }, [lastMove, preMove, propCustomSquareStyles]);
 
   // Combine prop arrows + user arrows
   const allArrows = useMemo(() => {
