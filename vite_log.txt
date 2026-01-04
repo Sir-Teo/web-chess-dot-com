@@ -3,7 +3,10 @@
 > vite
 
 
-  VITE v6.4.1  ready in 350 ms
+  VITE v6.4.1  ready in 419 ms
 
   ➜  Local:   http://localhost:3000/web-chess-dot-com/
   ➜  Network: http://192.168.0.2:3000/web-chess-dot-com/
+4:08:38 PM [vite] (client) hmr update /components/GameReviewPanel.tsx, /components/GameInterface.tsx
+4:08:57 PM [vite] (client) hmr update /components/GameReviewPanel.tsx
+4:09:17 PM [vite] (client) hmr update /components/GameReviewPanel.tsx
