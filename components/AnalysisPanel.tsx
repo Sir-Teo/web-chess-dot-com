@@ -14,61 +14,37 @@ import {
 } from 'lucide-react';
 import MoveList from './MoveList';
 import { Chess } from 'chess.js';
+import { AnalysisLine } from '../hooks/useStockfish';
 
 interface AnalysisPanelProps {
-  game: Chess; // Added game prop
+  game: Chess;
   currentFen?: string;
   evalScore?: string | number;
   bestLine?: string;
+  lines?: AnalysisLine[]; // Added lines prop
   onNext?: () => void;
   onPrev?: () => void;
   onFirst?: () => void;
   onLast?: () => void;
   currentMove?: number;
-  onMoveClick?: (index: number) => void; // Added onMoveClick
+  onMoveClick?: (index: number) => void;
 }
 
-const AnalysisMenuItem: React.FC<{ 
-  icon: React.ReactNode; 
-  label: string; 
-  expanded?: boolean;
-}> = ({ icon, label, expanded }) => (
-  <div className="border-b border-white/5">
-    <button className={`w-full flex items-center justify-between p-4 hover:bg-[#2a2926] transition-colors ${expanded ? 'bg-[#2a2926]' : ''}`}>
-      <div className="flex items-center gap-3 text-gray-300">
-        {icon}
-        <span className="font-bold text-[15px]">{label}</span>
-      </div>
-      {expanded ? (
-        <ChevronDown className="w-5 h-5 text-gray-500" />
-      ) : (
-        <ChevronRight className="w-5 h-5 text-gray-500" />
-      )}
-    </button>
-  </div>
-);
+// Helper to format eval
+const formatScore = (score: { type: 'cp' | 'mate', value: number }, turn: 'w' | 'b') => {
+    if (score.type === 'mate') {
+        return `M${Math.abs(score.value)}`;
+    }
+    let val = score.value / 100;
+    if (turn === 'b') val = -val;
+    return val > 0 ? `+${val.toFixed(2)}` : val.toFixed(2);
+};
 
-const AnalysisPanel: React.FC<AnalysisPanelProps> = ({ 
-    game,
-    currentFen,
-    evalScore = "+0.33", 
-    bestLine = "...", 
-    onNext, 
-    onPrev, 
-    onFirst, 
-    onLast,
-    currentMove = 0,
-    onMoveClick
-}) => {
-
-  // Format the PV line from UCI to SAN
-  const formattedBestLine = React.useMemo(() => {
-    if (!bestLine || bestLine === "...") return "...";
-
-    // We need to apply moves to a temporary game to get SAN
-    const tempGame = new Chess(currentFen || game.fen()); // Fallback to game.fen if currentFen not passed
-    const uciMoves = bestLine.split(' ').slice(0, 10); // Limit to 10 moves for display
-
+// Helper to format PV
+const formatPV = (pv: string, fen: string) => {
+    if (!pv) return "...";
+    const tempGame = new Chess(fen);
+    const uciMoves = pv.split(' ').slice(0, 8);
     const sanMoves = [];
 
     for (const uci of uciMoves) {
@@ -76,7 +52,6 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
         const from = uci.substring(0, 2);
         const to = uci.substring(2, 4);
         const promotion = uci.length > 4 ? uci.substring(4, 5) : undefined;
-
         try {
             const move = tempGame.move({ from, to, promotion: promotion || 'q' });
             if (move) sanMoves.push(move.san);
@@ -84,8 +59,28 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
             break;
         }
     }
-
     return sanMoves.join(' ');
+};
+
+const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
+    game,
+    currentFen,
+    evalScore = "+0.33",
+    bestLine = "...",
+    lines = [],
+    onNext,
+    onPrev,
+    onFirst,
+    onLast,
+    currentMove = 0,
+    onMoveClick
+}) => {
+
+  const turn = currentFen?.split(' ')[1] as 'w' | 'b' || 'w';
+
+  // Format the main PV line from UCI to SAN (if lines empty)
+  const formattedBestLine = React.useMemo(() => {
+    return formatPV(bestLine, currentFen || game.fen());
   }, [bestLine, currentFen, game]);
 
   return (
@@ -104,15 +99,37 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
               <div className="flex items-center gap-2">
                   <Activity className="w-5 h-5 text-chess-green" />
                   <span className="font-bold text-white">Stockfish 16</span>
-                  <span className="text-xs bg-[#302e2b] px-1.5 py-0.5 rounded text-gray-400 border border-white/10">Depth 20</span>
-              </div>
-              <div className={`font-mono font-bold text-lg ${String(evalScore).includes('-') ? 'text-white' : 'text-chess-green'}`}>
-                  {evalScore}
+                  <span className="text-xs bg-[#302e2b] px-1.5 py-0.5 rounded text-gray-400 border border-white/10">
+                      Depth {lines[0]?.depth || 20}
+                  </span>
               </div>
           </div>
-          <div className="bg-[#2a2926] p-2 rounded border border-white/5 text-xs font-mono text-gray-400 break-all leading-relaxed h-12 overflow-hidden">
-              <span className="text-chess-green font-bold mr-2">PV:</span>
-              {formattedBestLine}
+
+          {/* MultiPV Display */}
+          <div className="flex flex-col gap-1 mt-2">
+              {lines.length > 0 ? (
+                  lines.map((line) => (
+                      <div key={line.multipv} className="flex gap-2 bg-[#2a2926] p-1.5 rounded border border-white/5 text-xs">
+                           <div className={`font-mono font-bold w-12 text-right ${
+                               formatScore(line.score, turn).includes('-') ? 'text-white' : 'text-chess-green'
+                           }`}>
+                               {formatScore(line.score, turn)}
+                           </div>
+                           <div className="font-mono text-gray-400 break-all flex-1">
+                               {formatPV(line.pv, currentFen || game.fen())}
+                           </div>
+                      </div>
+                  ))
+              ) : (
+                  <div className="bg-[#2a2926] p-2 rounded border border-white/5 text-xs font-mono text-gray-400 break-all leading-relaxed h-12 overflow-hidden">
+                      <div className="flex gap-2">
+                           <span className={`font-mono font-bold ${String(evalScore).includes('-') ? 'text-white' : 'text-chess-green'}`}>
+                               {evalScore}
+                           </span>
+                           <span>{formattedBestLine}</span>
+                      </div>
+                  </div>
+              )}
           </div>
       </div>
 
@@ -120,7 +137,7 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
         {/* Move List */}
         <MoveList
             game={game}
-            currentMoveIndex={currentMove === 0 ? -2 : currentMove - 1} // MoveList expects index of move in history (0-based). currentMove is 1-based (0 is start).
+            currentMoveIndex={currentMove === 0 ? -2 : currentMove - 1}
             onMoveClick={(_fen, index) => onMoveClick?.(index)}
         />
       </div>
