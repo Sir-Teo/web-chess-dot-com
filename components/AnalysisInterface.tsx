@@ -8,6 +8,8 @@ import { Chess } from 'chess.js';
 import { useStockfish } from '../hooks/useStockfish';
 import { Arrow } from '../hooks/useCoach';
 import { identifyOpening } from '../utils/openings';
+import { GameReviewData } from '../utils/gameAnalysis';
+import { Check, X, RefreshCcw } from 'lucide-react';
 
 interface AnalysisInterfaceProps {
   initialPgn?: string;
@@ -25,6 +27,12 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
 
   // Current position index (0 = start)
   const [currentMoveIndex, setCurrentMoveIndex] = useState(0);
+
+  // Analysis Data
+  const [analysisData, setAnalysisData] = useState<GameReviewData | null>(null);
+
+  // Retry Mode
+  const [retryState, setRetryState] = useState<{ isRetrying: boolean, bestMove?: string, feedback?: 'correct' | 'incorrect' | null } | null>(null);
 
   // Analysis Features
   const [showThreats, setShowThreats] = useState(false);
@@ -104,6 +112,9 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
 
   // Calculate Arrows from Best Line
   const analysisArrows = useMemo(() => {
+      // If retrying, show no arrows (user must guess) unless we want to give up?
+      if (retryState?.isRetrying) return [];
+
       const arrows: Arrow[] = [];
       if (!bestLine) return undefined;
 
@@ -117,13 +128,40 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
               arrows.push([from, to, '#81b64c']);
           }
       }
-
-      // TODO: If showThreats is true, we would need a separate Stockfish query for threats
-      // Usually "go depth 20 searchmoves ..." or similar advanced usage, or just evaluating the null move.
-      // For simplicity, we stick to best move for now or maybe render the *opponent's* best response as red?
-
       return arrows;
-  }, [bestLine, showThreats]);
+  }, [bestLine, retryState]);
+
+  // Calculate Square Styles (for move classification)
+  const squareStyles = useMemo(() => {
+      if (retryState?.isRetrying) return {};
+      if (activeTab !== 'review' || !analysisData || currentMoveIndex <= 0) return {};
+
+      const styles: Record<string, React.CSSProperties> = {};
+      const moveData = analysisData.moves[currentMoveIndex - 1];
+
+      if (moveData) {
+          let color = '';
+          // Using semi-transparent colors
+          switch (moveData.classification) {
+              case 'brilliant': color = 'rgba(27, 172, 166, 0.6)'; break;
+              case 'great': color = 'rgba(92, 139, 176, 0.6)'; break;
+              case 'best': color = 'rgba(149, 183, 118, 0.6)'; break;
+              case 'excellent': color = 'rgba(150, 188, 75, 0.6)'; break;
+              case 'good': color = 'rgba(150, 188, 75, 0.6)'; break; // Same as excellent/best usually
+              case 'inaccuracy': color = 'rgba(247, 192, 69, 0.6)'; break;
+              case 'mistake': color = 'rgba(230, 145, 44, 0.6)'; break;
+              case 'blunder': color = 'rgba(250, 65, 45, 0.6)'; break;
+              case 'missed-win': color = 'rgba(250, 65, 45, 0.6)'; break;
+              case 'book': color = 'rgba(163, 141, 121, 0.6)'; break;
+          }
+
+          if (color) {
+              styles[moveData.from] = { backgroundColor: color };
+              styles[moveData.to] = { backgroundColor: color };
+          }
+      }
+      return styles;
+  }, [activeTab, analysisData, currentMoveIndex, retryState]);
 
   const openingName = React.useMemo(() => {
      return identifyOpening(game.pgn());
@@ -145,6 +183,51 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
   
   // Interactive Move (Make move on board)
   const handleMove = (from: string, to: string) => {
+    // Retry Logic
+    if (retryState?.isRetrying) {
+        const playedUci = from + to; // Naive UCI (ignoring promo for match check usually fine unless promoting)
+        const playedUciPromo = from + to + 'q'; // Assume queen promo
+
+        // Check against best move
+        const target = retryState.bestMove;
+        if (!target) return;
+
+        // Simple check: does it match target? (Target is UCI)
+        const isCorrect = (playedUci === target || playedUciPromo === target || (target.length === 5 && playedUci === target.substring(0,4)));
+
+        if (isCorrect) {
+             setRetryState(prev => ({ ...prev!, feedback: 'correct' }));
+             // Make the move on the board visually?
+             // Yes, let's update game state effectively branching
+             // Wait, for retry we usually just show success and then maybe return to game.
+             // But let's actually play it.
+
+             // Branch from current point
+             const tempGame = new Chess(startFen || undefined);
+             const history = game.history();
+             for(let i=0; i<currentMoveIndex; i++) tempGame.move(history[i]);
+
+             tempGame.move({ from, to, promotion: 'q' });
+
+             // Update main game to this new branch?
+             // Or just update visual?
+             // Ideally we fork the game.
+             setGame(tempGame);
+             setCurrentMoveIndex(prev => prev + 1);
+
+             setTimeout(() => {
+                 setRetryState(null); // Exit retry mode
+                 setActiveTab('analysis');
+             }, 1500);
+        } else {
+             setRetryState(prev => ({ ...prev!, feedback: 'incorrect' }));
+             setTimeout(() => {
+                 setRetryState(prev => ({ ...prev!, feedback: null }));
+             }, 1000);
+        }
+        return;
+    }
+
     const tempGame = new Chess(currentFen);
     try {
         const move = tempGame.move({ from, to, promotion: 'q' });
@@ -169,10 +252,23 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
     } catch (e) {}
   };
 
-  const handleRetry = (moveIndex: number) => {
-      // Move to position BEFORE the mistake
-      setCurrentMoveIndex(moveIndex - 1);
-      setActiveTab('analysis');
+  const handleRetryStart = (moveIndex: number) => {
+      if (!analysisData) return;
+
+      const moveData = analysisData.moves[moveIndex - 1]; // The mistake move
+      // We want to retry the position BEFORE this move.
+      // The `bestMove` for the position BEFORE the mistake is what we want.
+      // But wait, `moveData` contains `bestMove` which is the best move for the position *before* the mistake was made?
+      // Yes, `analyzeGame` sets `bestMove` as the engine recommendation for `fenBefore`.
+
+      if (moveData && moveData.bestMove) {
+          setCurrentMoveIndex(moveIndex - 1); // Go to before move
+          setRetryState({
+              isRetrying: true,
+              bestMove: moveData.bestMove
+          });
+          setActiveTab('analysis'); // Switch to board view
+      }
   };
 
   // Format eval for text display
@@ -210,12 +306,40 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
                     interactable={true} 
                     fen={currentFen} 
                     onMove={handleMove}
-                    lastMove={lastMove}
+                    lastMove={retryState?.isRetrying ? null : lastMove}
                     customArrows={analysisArrows}
+                    customSquareStyles={squareStyles}
                  />
                  
+                 {/* Retry Feedback Overlay */}
+                 {retryState && (
+                     <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-2 pointer-events-none">
+                         <div className={`px-4 py-2 rounded-full font-bold shadow-lg flex items-center gap-2 animate-in fade-in slide-in-from-top-4
+                             ${retryState.feedback === 'correct' ? 'bg-chess-green text-white' :
+                               retryState.feedback === 'incorrect' ? 'bg-red-500 text-white' : 'bg-[#262522] text-white border border-white/20'}`}>
+
+                             {retryState.feedback === 'correct' ? (
+                                 <>
+                                     <Check className="w-5 h-5" />
+                                     <span>Correct!</span>
+                                 </>
+                             ) : retryState.feedback === 'incorrect' ? (
+                                 <>
+                                     <X className="w-5 h-5" />
+                                     <span>Try Again</span>
+                                 </>
+                             ) : (
+                                 <>
+                                     <RefreshCcw className="w-4 h-4 animate-spin-slow" />
+                                     <span>Find the best move</span>
+                                 </>
+                             )}
+                         </div>
+                     </div>
+                 )}
+
                  {/* Eval Bar Overlay (Mobile) */}
-                 {evalScore && (
+                 {evalScore && !retryState && (
                      <div className="lg:hidden absolute left-0 top-0 bottom-0 w-2 z-20 opacity-80 pointer-events-none">
                          <EvaluationBar
                             score={evalScore.type === 'cp' ? evalScore.value : 0}
@@ -283,7 +407,8 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
                      onMoveSelect={(index) => {
                          setCurrentMoveIndex(index);
                      }}
-                     onRetry={handleRetry}
+                     onRetry={handleRetryStart}
+                     onAnalysisComplete={setAnalysisData}
                      currentMoveIndex={currentMoveIndex}
                   />
               ) : (
