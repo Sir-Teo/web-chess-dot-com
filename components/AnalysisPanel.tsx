@@ -17,6 +17,7 @@ import { Chess } from 'chess.js';
 
 interface AnalysisPanelProps {
   game: Chess; // Added game prop
+  currentFen?: string;
   evalScore?: string | number;
   bestLine?: string;
   onNext?: () => void;
@@ -49,6 +50,7 @@ const AnalysisMenuItem: React.FC<{
 
 const AnalysisPanel: React.FC<AnalysisPanelProps> = ({ 
     game,
+    currentFen,
     evalScore = "+0.33", 
     bestLine = "...", 
     onNext, 
@@ -58,6 +60,34 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
     currentMove = 0,
     onMoveClick
 }) => {
+
+  // Format the PV line from UCI to SAN
+  const formattedBestLine = React.useMemo(() => {
+    if (!bestLine || bestLine === "...") return "...";
+
+    // We need to apply moves to a temporary game to get SAN
+    const tempGame = new Chess(currentFen || game.fen()); // Fallback to game.fen if currentFen not passed
+    const uciMoves = bestLine.split(' ').slice(0, 10); // Limit to 10 moves for display
+
+    const sanMoves = [];
+
+    for (const uci of uciMoves) {
+        if (uci.length < 4) continue;
+        const from = uci.substring(0, 2);
+        const to = uci.substring(2, 4);
+        const promotion = uci.length > 4 ? uci.substring(4, 5) : undefined;
+
+        try {
+            const move = tempGame.move({ from, to, promotion: promotion || 'q' });
+            if (move) sanMoves.push(move.san);
+        } catch (e) {
+            break;
+        }
+    }
+
+    return sanMoves.join(' ');
+  }, [bestLine, currentFen, game]);
+
   return (
     <div className="flex flex-col h-full bg-[#262522] text-[#c3c3c3]">
       {/* Header */}
@@ -82,7 +112,7 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
           </div>
           <div className="bg-[#2a2926] p-2 rounded border border-white/5 text-xs font-mono text-gray-400 break-all leading-relaxed h-12 overflow-hidden">
               <span className="text-chess-green font-bold mr-2">PV:</span>
-              {bestLine}
+              {formattedBestLine}
           </div>
       </div>
 
