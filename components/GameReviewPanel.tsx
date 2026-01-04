@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Search, Star, HelpCircle, Loader2, BookOpen, ThumbsUp, Check, AlertCircle, XCircle, AlertTriangle, RefreshCcw } from 'lucide-react';
 import { analyzeGame, GameReviewData, MoveAnalysis } from '../utils/gameAnalysis';
+import { identifyOpening } from '../utils/openings';
 
 interface GameReviewPanelProps {
     pgn?: string;
@@ -9,6 +10,85 @@ interface GameReviewPanelProps {
     onRetry?: (moveIndex: number) => void;
     currentMoveIndex?: number;
 }
+
+const EvaluationGraph: React.FC<{ moves: MoveAnalysis[], currentMoveIndex: number }> = ({ moves, currentMoveIndex }) => {
+    // We want to plot the evaluation over time.
+    // Eval is in CP. Range typically -500 to +500 visually, clamping at maybe +/- 1000.
+    // X axis is move index.
+
+    if (moves.length === 0) return null;
+
+    const height = 60;
+    const width = 300; // Assume full width of container roughly
+    const maxCp = 800;
+
+    // Normalize points
+    // Y: 0 at bottom (Black winning), height at top (White winning)
+    // Center is height/2.
+    // If CP = 0, Y = height/2.
+    // If CP = +maxCp, Y = 0 (Top).  Wait, SVG coords: 0 is top. So +CP should be near 0.
+
+    const getY = (evalCp: number | undefined, mate: number | undefined) => {
+        let val = 0;
+        if (mate !== undefined) {
+             val = mate > 0 ? maxCp : -maxCp;
+        } else {
+             val = evalCp ?? 0;
+        }
+
+        // Clamp
+        val = Math.max(-maxCp, Math.min(maxCp, val));
+
+        // Map -maxCp ... +maxCp to height ... 0
+        // -maxCp -> height
+        // +maxCp -> 0
+        // 0 -> height/2
+
+        const percent = (val + maxCp) / (2 * maxCp); // 0 to 1 (0 = -max, 1 = +max)
+        return height - (percent * height);
+    };
+
+    const points = moves.map((m, i) => {
+        const x = (i / (moves.length - 1)) * 100; // Percent width
+        const y = getY(m.eval, m.mate);
+        return `${x},${y}`;
+    }).join(' ');
+
+    // Highlight current move
+    const currentX = currentMoveIndex > 0 ? ((currentMoveIndex - 1) / (moves.length - 1)) * 100 : 0;
+
+    return (
+        <div className="w-full h-[60px] bg-[#302e2b] relative mb-2 border-b border-white/5 overflow-hidden">
+             <svg viewBox={`0 0 100 ${height}`} preserveAspectRatio="none" className="w-full h-full">
+                 {/* Center Line */}
+                 <line x1="0" y1={height/2} x2="100" y2={height/2} stroke="#ffffff" strokeOpacity="0.1" strokeWidth="0.5" />
+
+                 {/* Graph Line */}
+                 <polyline
+                    points={points}
+                    fill="none"
+                    stroke="#81b64c"
+                    strokeWidth="1.5"
+                    vectorEffect="non-scaling-stroke"
+                 />
+
+                 {/* Area under curve (optional, tricky with polyline) */}
+
+                 {/* Current Move Indicator Line */}
+                 {currentMoveIndex > 0 && (
+                     <line
+                        x1={currentX} y1="0"
+                        x2={currentX} y2={height}
+                        stroke="white"
+                        strokeWidth="1"
+                        vectorEffect="non-scaling-stroke"
+                        strokeDasharray="2,2"
+                     />
+                 )}
+             </svg>
+        </div>
+    );
+};
 
 const MoveStatRow: React.FC<{
   label: string;
@@ -117,19 +197,35 @@ const GameReviewPanel: React.FC<GameReviewPanelProps> = ({ pgn, onStartReview, o
   const currentMoveAnalysis = data?.moves[currentMoveIndex - 1];
   const isBadMove = currentMoveAnalysis && ['blunder', 'mistake', 'inaccuracy'].includes(currentMoveAnalysis.classification);
 
+  const openingName = pgn ? identifyOpening(pgn) : "";
+
   return (
     <div className="flex flex-col h-full bg-[#262522] text-[#c3c3c3]">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 bg-[#211f1c] border-b border-black/20 shadow-sm">
-        <div className="flex items-center gap-2">
-          <div className="w-6 h-6 rounded-full bg-gray-700 flex items-center justify-center text-white">
-            <Star className="w-3.5 h-3.5 fill-current" />
+      <div className="flex flex-col border-b border-black/20 shadow-sm bg-[#211f1c]">
+          <div className="flex items-center justify-between px-4 py-3">
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 rounded-full bg-gray-700 flex items-center justify-center text-white">
+                <Star className="w-3.5 h-3.5 fill-current" />
+              </div>
+              <h2 className="font-bold text-white text-lg">Game Review</h2>
+            </div>
+            <button className="text-gray-500 hover:text-white transition-colors">
+                <Search className="w-5 h-5" />
+            </button>
           </div>
-          <h2 className="font-bold text-white text-lg">Game Review</h2>
-        </div>
-        <button className="text-gray-500 hover:text-white transition-colors">
-            <Search className="w-5 h-5" />
-        </button>
+
+          {/* Opening Name */}
+          {!isAnalyzing && openingName && (
+              <div className="px-4 py-1 pb-2 text-xs text-gray-400 font-medium">
+                  Opening: <span className="text-white">{openingName}</span>
+              </div>
+          )}
+
+          {/* Graph */}
+          {!isAnalyzing && data && (
+              <EvaluationGraph moves={data.moves} currentMoveIndex={currentMoveIndex} />
+          )}
       </div>
 
       {isAnalyzing && (

@@ -7,6 +7,7 @@ import { User, ChevronRight } from 'lucide-react';
 import { Chess } from 'chess.js';
 import { useStockfish } from '../hooks/useStockfish';
 import { Arrow } from '../hooks/useCoach';
+import { identifyOpening } from '../utils/openings';
 
 interface AnalysisInterfaceProps {
   initialPgn?: string;
@@ -112,6 +113,10 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
       }
       return undefined;
   }, [bestLine]);
+
+  const openingName = React.useMemo(() => {
+     return identifyOpening(game.pgn());
+  }, [game]);
 
   // Navigation handlers
   const handleNext = () => {
@@ -234,19 +239,26 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
       <div className="flex-1 lg:flex-none w-full lg:w-[350px] xl:w-[420px] bg-[#262522] flex flex-col border-l border-white/10 shrink-0 h-auto lg:h-auto z-10 relative shadow-2xl overflow-hidden">
 
           {/* Tab Toggle */}
-          <div className="flex bg-[#211f1c] text-sm font-semibold border-b border-white/5">
-              <button
-                  onClick={() => setActiveTab('review')}
-                  className={`flex-1 py-3 border-b-2 hover:bg-[#2a2926] transition-colors ${activeTab === 'review' ? 'text-white border-chess-green' : 'text-[#c3c3c3] border-transparent'}`}
-              >
-                  Review
-              </button>
-              <button
-                  onClick={() => setActiveTab('analysis')}
-                  className={`flex-1 py-3 border-b-2 hover:bg-[#2a2926] transition-colors ${activeTab === 'analysis' ? 'text-white border-chess-green' : 'text-[#c3c3c3] border-transparent'}`}
-              >
-                  Analysis
-              </button>
+          <div className="flex flex-col bg-[#211f1c] border-b border-white/5">
+              <div className="flex text-sm font-semibold">
+                  <button
+                      onClick={() => setActiveTab('review')}
+                      className={`flex-1 py-3 border-b-2 hover:bg-[#2a2926] transition-colors ${activeTab === 'review' ? 'text-white border-chess-green' : 'text-[#c3c3c3] border-transparent'}`}
+                  >
+                      Review
+                  </button>
+                  <button
+                      onClick={() => setActiveTab('analysis')}
+                      className={`flex-1 py-3 border-b-2 hover:bg-[#2a2926] transition-colors ${activeTab === 'analysis' ? 'text-white border-chess-green' : 'text-[#c3c3c3] border-transparent'}`}
+                  >
+                      Analysis
+                  </button>
+              </div>
+              {openingName && activeTab === 'analysis' && (
+                  <div className="px-4 py-1 text-xs text-gray-400 font-medium border-t border-white/5">
+                       Opening: <span className="text-white">{openingName}</span>
+                  </div>
+              )}
           </div>
 
           <div className="flex-1 overflow-hidden relative">
