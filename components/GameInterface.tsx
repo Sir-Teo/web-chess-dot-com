@@ -102,8 +102,31 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
         styles[preMove.from] = { backgroundColor: 'rgba(250, 65, 45, 0.5)' }; // Red highlight for pre-move source
         styles[preMove.to] = { backgroundColor: 'rgba(250, 65, 45, 0.5)' }; // Red highlight for pre-move dest
     }
+
+    // Check Highlight
+    const currentGame = new Chess();
+    try {
+        currentGame.load(viewFen || fen);
+        if (currentGame.isCheck()) {
+            const turn = currentGame.turn();
+            // Find King
+            currentGame.board().forEach((row, rIdx) => {
+                row.forEach((square, cIdx) => {
+                    if (square && square.type === 'k' && square.color === turn) {
+                        const file = String.fromCharCode(97 + cIdx);
+                        const rank = 8 - rIdx;
+                        const sq = `${file}${rank}`;
+                        styles[sq] = {
+                            background: 'radial-gradient(circle, rgba(255,0,0,0.8) 0%, rgba(255,0,0,0) 70%)'
+                        };
+                    }
+                });
+            });
+        }
+    } catch(e) {}
+
     return styles;
-  }, [preMove]);
+  }, [preMove, fen, viewFen]);
 
   // Sync state if prop changes
   useEffect(() => {
@@ -143,16 +166,87 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
       }
   }, [game.fen(), isGameOver, onTurnStart]);
 
+  // Keyboard Navigation
+  useEffect(() => {
+      const handleKeyDown = (e: KeyboardEvent) => {
+          // Ignore if input/textarea is focused
+          if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+
+          if (!hasGameStarted && !activeBot) return;
+
+          const history = game.history({ verbose: true });
+          if (history.length === 0) return;
+
+          let newIndex = viewMoveIndex;
+
+          if (e.key === 'ArrowLeft') {
+              if (newIndex === -1) newIndex = history.length - 1; // From Live to Last Move
+              else if (newIndex === 0) newIndex = -2; // From First Move to Start Position
+              else if (newIndex === -2) return; // Already at Start
+              else newIndex = newIndex - 1;
+          } else if (e.key === 'ArrowRight') {
+              if (newIndex === -1) return; // Already live
+              newIndex = Math.min(history.length - 1, newIndex + 1);
+
+              // If at last move, maybe set to -1 (Live) to enable interaction?
+              if (newIndex === history.length - 1) {
+                  // Keep it at last move visually, but maybe user wants "Live" state.
+                  // Usually Right Arrow at end does nothing or goes to "Live" state if distinct.
+                  // Let's toggle to -1 if we hit the end to ensure "Live" logic works.
+                  // But visually index N-1 and Live are same board.
+                  // Except Live allows moves.
+                  // So yes, if we reach end, set -1.
+                  newIndex = -1;
+              }
+          } else if (e.key === 'ArrowUp' || e.key === 'Home') {
+              // Go to Start
+              // We need to support "Before First Move".
+              // `MoveList` handles index.
+              // Let's use -2 for Start? Or simply modify Logic.
+              // history[0].before is Start FEN.
+              // We'll handle this in the update logic.
+              newIndex = -2; // Start
+          } else if (e.key === 'ArrowDown' || e.key === 'End') {
+              newIndex = -1; // Live
+          }
+
+          if (newIndex !== viewMoveIndex) {
+              if (newIndex === -1) {
+                  setViewFen(null);
+                  setViewMoveIndex(-1);
+                  const last = history[history.length - 1];
+                  setLastMove({ from: last.from, to: last.to });
+              } else if (newIndex === -2) {
+                   // Start of game
+                   // history[0].before
+                   if (history.length > 0) {
+                       setViewFen(history[0].before);
+                       setViewMoveIndex(-2);
+                       setLastMove(null);
+                   }
+              } else {
+                  // Specific move
+                  // history[newIndex] is the move object.
+                  // We want the state AFTER this move.
+                  const move = history[newIndex];
+                  setViewFen(move.after);
+                  setViewMoveIndex(newIndex);
+                  setLastMove({ from: move.from, to: move.to });
+              }
+          }
+      };
+
+      window.addEventListener('keydown', handleKeyDown);
+      return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [game, viewMoveIndex, hasGameStarted, activeBot]);
+
+
   // Handle User Move
   const onMove = useCallback(async (from: string, to: string, promotion: string = 'q') => {
       if (game.isGameOver() || viewFen) return;
 
       // Handle Pre-moves (Engine games only usually)
       if (isEngineOpponent && game.turn() !== userColor) {
-           // Basic pre-move validation: We can't validate fully until the move happens,
-           // but we can store it.
-           // NOTE: Authentic pre-moves show on the board immediately in a specific color (red highlight usually).
-           // For simplicity in this clone, we just store it and maybe highlight the squares.
            setPreMove({ from, to, promotion });
            return;
       }
@@ -164,7 +258,6 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
       try {
         newGame.loadPgn(game.pgn());
       } catch (e) {
-        // Fallback for empty game or parsing error
         newGame.load(game.fen());
       }
 
@@ -755,7 +848,13 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
                             // Also update board last move indicator?
                             // This would require parsing the move to get from/to.
                             // For now, we just show the board position.
-                            setLastMove(null);
+
+                            // To recover "last move" indicator for historical states:
+                            // We can use the game history logic.
+                            const history = game.history({ verbose: true });
+                            if (history[index]) {
+                                setLastMove({ from: history[index].from, to: history[index].to });
+                            }
                         }}
                    />
 
