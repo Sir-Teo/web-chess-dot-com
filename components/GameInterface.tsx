@@ -20,17 +20,28 @@ import { identifyOpening } from '../utils/openings';
 interface GameInterfaceProps {
   initialMode?: 'play' | 'bots' | 'review';
   initialTimeControl?: number;
+  initialFen?: string;
   onAnalyze?: (pgn: string, tab?: 'analysis' | 'review') => void;
 }
 
-const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', initialTimeControl = 600, onAnalyze }) => {
+const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', initialTimeControl = 600, initialFen, onAnalyze }) => {
   const [activePanel, setActivePanel] = useState<'play' | 'review' | 'bots'>(initialMode);
   const [activeBot, setActiveBot] = useState<BotProfile | null>(null);
 
   const { openSettings } = useSettings();
 
   // Game State
-  const [game, setGame] = useState(new Chess());
+  const [game, setGame] = useState(() => {
+      const g = new Chess();
+      if (initialFen) {
+          try {
+              g.load(initialFen);
+          } catch (e) {
+              console.error("Invalid initialFen", e);
+          }
+      }
+      return g;
+  });
   const [fen, setFen] = useState(game.fen());
   const [viewFen, setViewFen] = useState<string | null>(null); // For history navigation
   const [viewMoveIndex, setViewMoveIndex] = useState<number>(-1); // -1 = live
@@ -139,6 +150,26 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
   useEffect(() => {
     if (initialTimeControl) setTimeControl(initialTimeControl);
   }, [initialTimeControl]);
+
+  // Handle initialFen change
+  useEffect(() => {
+      if (initialFen) {
+          const g = new Chess();
+          try {
+              g.load(initialFen);
+              setGame(g);
+              setFen(g.fen());
+              setIsGameOver(false);
+              setGameResult('');
+              setHasGameStarted(true); // If loading from FEN, assume we want to see/play it
+              // If it's a bot mode, we might need to trigger something?
+              // Usually practice is vs Computer, so we might want to ensure a bot is active or selected.
+              // For now, let user select bot if in bots mode.
+          } catch (e) {
+              console.error("Invalid initialFen update", e);
+          }
+      }
+  }, [initialFen]);
 
   const isBotMode = activePanel === 'bots';
   const isReviewMode = activePanel === 'review';

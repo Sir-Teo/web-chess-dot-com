@@ -39,6 +39,9 @@ interface AnalysisPanelProps {
   // Settings controls
   depth?: number;
   onDepthChange?: (depth: number) => void;
+
+  // New action
+  onPractice?: () => void;
 }
 
 // Helper to format eval
@@ -214,6 +217,14 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
              <button className="flex flex-col items-center gap-1 text-gray-400 hover:text-white group">
                  <Star className="w-6 h-6 group-hover:text-white" />
                  <span className="text-[10px] font-bold">Review</span>
+             </button>
+             <button
+                 onClick={onPractice}
+                 className="flex flex-col items-center gap-1 text-gray-400 hover:text-white group"
+                 title="Practice Position vs Computer"
+             >
+                 <Target className="w-6 h-6 group-hover:text-white" />
+                 <span className="text-[10px] font-bold">Practice</span>
              </button>
              <button className="flex flex-col items-center gap-1 text-gray-400 hover:text-white group">
                  <MoreHorizontal className="w-6 h-6 group-hover:text-white" />

@@ -230,6 +230,29 @@ const GameReviewPanel: React.FC<GameReviewPanelProps> = ({ pgn, existingData, on
 
   const openingName = pgn ? identifyOpening(pgn) : "";
 
+  // Key Moments Navigation
+  const keyMomentIndices = data?.moves.reduce((acc, move, idx) => {
+      if (['blunder', 'mistake', 'missed-win'].includes(move.classification)) {
+          acc.push(idx + 1); // 1-based index
+      }
+      return acc;
+  }, [] as number[]) || [];
+
+  const handleNextKeyMoment = () => {
+      if (!onMoveSelect || keyMomentIndices.length === 0) return;
+      const next = keyMomentIndices.find(idx => idx > currentMoveIndex);
+      if (next) onMoveSelect(next);
+      else onMoveSelect(keyMomentIndices[0]); // Loop or stop? Let's loop.
+  };
+
+  const handlePrevKeyMoment = () => {
+      if (!onMoveSelect || keyMomentIndices.length === 0) return;
+      // find last index < current
+      const prev = [...keyMomentIndices].reverse().find(idx => idx < currentMoveIndex);
+      if (prev) onMoveSelect(prev);
+      else onMoveSelect(keyMomentIndices[keyMomentIndices.length - 1]);
+  };
+
   return (
     <div className="flex flex-col h-full bg-[#262522] text-[#c3c3c3]">
       {/* Header */}
@@ -248,8 +271,14 @@ const GameReviewPanel: React.FC<GameReviewPanelProps> = ({ pgn, existingData, on
 
           {/* Opening Name */}
           {!isAnalyzing && openingName && (
-              <div className="px-4 py-1 pb-2 text-xs text-gray-400 font-medium">
-                  Opening: <span className="text-white">{openingName}</span>
+              <div className="px-4 py-1 pb-2 text-xs text-gray-400 font-medium flex justify-between items-center">
+                  <span>Opening: <span className="text-white">{openingName}</span></span>
+                  {keyMomentIndices.length > 0 && (
+                      <div className="flex gap-1">
+                          <button onClick={handlePrevKeyMoment} className="bg-white/10 hover:bg-white/20 px-2 py-0.5 rounded text-[10px] text-gray-300">Prev Key</button>
+                          <button onClick={handleNextKeyMoment} className="bg-white/10 hover:bg-white/20 px-2 py-0.5 rounded text-[10px] text-gray-300">Next Key</button>
+                      </div>
+                  )}
               </div>
           )}
 
