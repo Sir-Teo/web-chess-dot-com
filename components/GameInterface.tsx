@@ -93,6 +93,9 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
   // Hint State
   const [hintArrow, setHintArrow] = useState<{ from: string, to: string } | null>(null);
 
+  // Pre-move State (Authenticity)
+  const [preMove, setPreMove] = useState<{from: string, to: string, promotion?: string} | null>(null);
+
   // Sync state if prop changes
   useEffect(() => {
     if (initialMode) setActivePanel(initialMode);
@@ -135,7 +138,17 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
   const onMove = useCallback(async (from: string, to: string, promotion: string = 'q') => {
       if (game.isGameOver() || viewFen) return;
 
-      // Ensure it's user's turn if playing against engine/bot
+      // Handle Pre-moves (Engine games only usually)
+      if (isEngineOpponent && game.turn() !== userColor) {
+           // Basic pre-move validation: We can't validate fully until the move happens,
+           // but we can store it.
+           // NOTE: Authentic pre-moves show on the board immediately in a specific color (red highlight usually).
+           // For simplicity in this clone, we just store it and maybe highlight the squares.
+           setPreMove({ from, to, promotion });
+           return;
+      }
+
+      // Ensure it's user's turn if playing against engine/bot (and not pre-moving)
       if (isEngineOpponent && game.turn() !== userColor) return;
 
       const newGame = new Chess();
@@ -168,6 +181,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
           setGame(newGame);
           setFen(fenAfter);
           setLastMove({ from, to });
+          setPreMove(null); // Clear any pre-move
 
           // Identify Opening
           const op = identifyOpening(newGame.pgn());
@@ -184,6 +198,8 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
 
           // Clear hint on move
           setHintArrow(null);
+      } else {
+          setPreMove(null); // Invalid move
       }
   }, [game, isEngineOpponent, activeBot, sendCommand, resetBestMove, playSound, isCoachMode, evaluateMove, resetFeedback, userColor]);
 
@@ -220,11 +236,32 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
                   setGame(newGame);
                   setFen(newGame.fen());
                   setLastMove({ from, to });
+
+                  // Bot Chatter Logic
+                  if (activeBot) {
+                      if (newGame.isCheckmate()) {
+                          setBotMessage(activeBot.name === 'Nelson' ? "I can't believe it!" : "Good game!");
+                      } else if (newGame.isCheck()) {
+                          setBotMessage("Check!");
+                      } else if (move.captured) {
+                         if (Math.random() > 0.8) setBotMessage("Yum!");
+                      }
+
+                      setTimeout(() => setBotMessage(null), 3000);
+                  }
               }
           }
           resetBestMove();
       }
-  }, [bestMove, isEngineOpponent, game, resetBestMove, playSound]);
+  }, [bestMove, isEngineOpponent, game, resetBestMove, playSound, activeBot, userColor]);
+
+  // Execute Pre-move after Engine Move
+  useEffect(() => {
+      if (preMove && game.turn() === userColor && !isGameOver) {
+           onMove(preMove.from, preMove.to, preMove.promotion);
+           setPreMove(null); // Important to clear to avoid loops if invalid
+      }
+  }, [game.turn(), preMove, userColor, isGameOver, onMove]);
 
   // Reset game when switching modes
   useEffect(() => {
@@ -250,6 +287,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
       setIsPlayFriendMode(false);
       setBotMessage(null);
       setOpeningName("");
+      setPreMove(null);
       playSound('gameStart');
 
       if (activeBot) {
@@ -320,6 +358,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
       setGame(g);
       setFen(g.fen());
       setLastMove(null);
+      setPreMove(null);
 
       // Update last move highlight based on new history
       const h = g.history({verbose: true});
@@ -417,10 +456,16 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
   };
 
   // Determine if board should be interactable
-  // If engine/online mode: only user's turn.
+  // If engine/online mode: only user's turn OR pre-moving is allowed (technically we allow interaction)
   // If human/pass-and-play mode: any turn.
+  // NOTE: react-chessboard doesn't easily support moving on opponent turn for pre-moves without custom logic.
+  // We allow interaction if engine opponent and TURN is WRONG to capture the pre-move intent?
+  // Actually, react-chessboard blocks dragging if we don't handle it.
+  // We enabled it by checking `game.turn() !== userColor` in onMove.
+  // But `isInteractable` passed to Chessboard needs to be true.
+
   const isInteractable = !isGameOver && !viewFen && (
-      isEngineOpponent ? game.turn() === userColor : true
+      isEngineOpponent ? true : true // Allow interaction always to enable pre-moves (filtered in onMove)
   );
 
   return (
@@ -505,7 +550,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
                     onMove={onMove}
                     lastMove={lastMove}
                     boardOrientation={userColor === 'w' ? 'white' : 'black'}
-                    customArrows={(isCoachMode && !viewFen) ? coachArrows : (hintArrow && !viewFen) ? [[hintArrow.from, hintArrow.to, '#f1c40f']] : undefined}
+                    customArrows={(isCoachMode && !viewFen) ? coachArrows : (hintArrow && !viewFen) ? [[hintArrow.from, hintArrow.to, '#f1c40f']] : (preMove ? [[preMove.from, preMove.to, '#fa412d']] : undefined)}
                  />
 
                  {/* Game Over Overlay */}

@@ -1,83 +1,94 @@
 from playwright.sync_api import sync_playwright
-import time
 
-def verify_visuals():
+def run():
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
-        context = browser.new_context(viewport={'width': 1280, 'height': 800})
-        page = context.new_page()
+        page = browser.new_page()
 
-        print("Navigating to app...")
+        # Navigate to the app
         page.goto("http://localhost:3000/web-chess-dot-com/")
         page.wait_for_load_state("networkidle")
 
-        # 1. Start Bot Game
-        print("Starting Bot Game...")
-        page.click("text=Play Bots")
-        page.wait_for_timeout(500)
-        # Assuming PlayBotsPanel is open, we need to click "Choose" on Martin or similar
-        # Based on verify_complete_game.py, we have:
-        page.click("button[title='Play as White']")
-        page.click("data-testid=play-bot-start")
+        # 1. Verify Home Page Load
+        print("Home page loaded.")
+        page.screenshot(path="verification/home_page.png")
 
-        print("Waiting for game start...")
-        page.wait_for_selector("#chessboard-wrapper", timeout=10000)
+        # 2. Start Bot Game
+        # Click "Play Bots" on the dashboard
+        page.get_by_text("Play Bots").first.click()
 
-        # 2. Make Moves (e2-e4)
-        print("Making move e2-e4...")
-        board = page.locator("#chessboard-wrapper")
-        box = board.bounding_box()
-        if box:
-            square_width = box['width'] / 8
-            square_height = box['height'] / 8
-            # e2 (file 4, rank 6 from top) -> e4 (file 4, rank 4 from top)
-            x_e2 = box['x'] + (4 + 0.5) * square_width
-            y_e2 = box['y'] + (6 + 0.5) * square_height
-            x_e4 = box['x'] + (4 + 0.5) * square_width
-            y_e4 = box['y'] + (4 + 0.5) * square_height
+        # Now we are in the Bots panel.
+        # Wait for "Choose your opponent" or check for bot list.
+        # The PlayBotsPanel renders bot categories.
+        # Let's wait for a bot name, e.g., "Jimmy" or just wait for the panel.
+        page.wait_for_selector(".overflow-y-auto") # Wait for scroll area
 
-            page.mouse.move(x_e2, y_e2)
-            page.mouse.down()
-            page.mouse.move(x_e4, y_e4, steps=10)
-            page.mouse.up()
-            time.sleep(2) # Wait for bot response
+        # Choose "Jimmy" or any visible bot button
+        # The bot list items are buttons.
+        page.get_by_role("button", name="Jimmy").first.click()
 
-        # 3. Resign
-        print("Resigning...")
+        # Click Start Game (Choose button became "Choose", then "Play"?)
+        # Logic in PlayBotsPanel: Clicking a bot selects it. Then "Choose" button at bottom?
+        # No, clicking the bot item usually selects it.
+        # Let's look for the big "Choose" button at the bottom right or similar.
+        # Or maybe "Play" button.
+        page.get_by_text("Choose").click()
+
+        # Now clicking "Start Game" if strictly following flow?
+        # Actually usually clicking "Choose" enters the game setup or starts it?
+        # In GameInterface.tsx: handleStartBotGame is called.
+        # Let's check if the board wrapper appears.
+
+        # Wait for board - if "Choose" starts it immediately.
         try:
-            page.click("text=Resign", timeout=2000)
+             page.wait_for_selector("#chessboard-wrapper", timeout=3000)
         except:
-            page.click("button[title='Resign']")
+             # Maybe "Start Game" is needed
+             if page.get_by_text("Start Game").count() > 0:
+                 page.get_by_text("Start Game").click()
+             else:
+                 # Check if we need to click "Play"
+                 if page.get_by_text("Play").count() > 0:
+                      page.get_by_text("Play").click()
 
-        time.sleep(1)
+        page.wait_for_selector("#chessboard-wrapper")
+        print("Bot game started.")
+        page.screenshot(path="verification/bot_game_start.png")
 
-        # 4. Game Review
-        print("Going to Review...")
-        page.get_by_role("button", name="Game Review").click()
+        # 3. Verify Coach Mode
+        # Toggle Coach Mode
+        page.get_by_role("button", name="Coach").click()
+        page.wait_for_timeout(500)
+        page.screenshot(path="verification/coach_mode_active.png")
+        print("Coach mode toggled.")
 
-        # Wait for analysis
-        time.sleep(5)
+        # 4. Resign and Review
+        page.get_by_title("Resign").click()
+        # Confirm resignation (Game Over overlay appears)
+        # Click "Game Review"
+        page.get_by_text("Game Review").click()
 
-        # Screenshot Review
-        print("Taking Review Screenshot...")
-        page.screenshot(path="verification/review_panel.png")
+        # Wait for Game Review panel
+        page.wait_for_selector("text=Game Review", timeout=10000)
+        print("Entered Game Review.")
+        page.screenshot(path="verification/game_review.png")
 
         # 5. Analysis Mode
-        print("Going to Analysis...")
-        # Scroll to bottom if needed to find button
-        try:
-            page.get_by_role("button", name="Review Moves").click()
-        except:
-             # Maybe "Analysis" tab button?
-             page.click("text=Analysis")
+        # Switch tab to Analysis
+        page.get_by_text("Analysis").click()
 
-        time.sleep(2)
+        # Wait for Stockfish indicator
+        page.wait_for_selector("text=Stockfish 16")
+        print("Entered Analysis Mode.")
 
-        # Screenshot Analysis
-        print("Taking Analysis Screenshot...")
+        # Check for Threats toggle button
+        threats_btn = page.get_by_title("Show Threats")
+        if threats_btn.count() > 0:
+            print("Threats toggle found.")
+
         page.screenshot(path="verification/analysis_mode.png")
 
         browser.close()
 
 if __name__ == "__main__":
-    verify_visuals()
+    run()

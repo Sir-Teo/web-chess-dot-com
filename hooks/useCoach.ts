@@ -3,7 +3,7 @@ import { StockfishClient, EngineScore } from '../utils/gameAnalysis';
 
 interface CoachFeedback {
     message: string;
-    type: 'best' | 'good' | 'inaccuracy' | 'mistake' | 'blunder' | 'neutral' | 'excellent';
+    type: 'best' | 'good' | 'inaccuracy' | 'mistake' | 'blunder' | 'neutral' | 'excellent' | 'missed-win';
     scoreDiff?: number;
     bestMove?: string;
 }
@@ -90,7 +90,8 @@ export const useCoach = (isEnabled: boolean) => {
     const getCp = (score: EngineScore | null): number => {
         if (!score) return 0;
         if (score.unit === 'cp') return score.value;
-        return score.value > 0 ? 10000 - score.value : -10000 - score.value;
+        // Mate scores are extremely high value
+        return score.value > 0 ? 20000 - (score.value * 100) : -20000 - (score.value * 100);
     };
 
     // Evaluate the move the player JUST made
@@ -124,7 +125,7 @@ export const useCoach = (isEnabled: boolean) => {
         // 2. Check if best move
         if (bestMove === playedMoveUci) {
              setFeedback({
-                 message: "Excellent! That's the best move.",
+                 message: "Best move!",
                  type: 'best',
                  bestMove: beforeAnalysis.bestMove
              });
@@ -152,7 +153,13 @@ export const useCoach = (isEnabled: boolean) => {
         let message = "Good move.";
         let arrowColor = '#f1c40f'; // Default yellow/orange
 
-        if (loss <= 20) {
+        // Check for missed mate
+        if (beforeAnalysis.score?.unit === 'mate' && beforeAnalysis.score.value > 0 &&
+           (afterResult.score?.unit !== 'mate' || (afterResult.score?.unit === 'mate' && afterResult.score.value < 0))) {
+               type = 'missed-win';
+               message = "You missed a forced mate!";
+               arrowColor = '#fa412d';
+        } else if (loss <= 20) {
             type = 'excellent';
             message = "Excellent move.";
             arrowColor = '#96bc4b'; // Light green
@@ -160,17 +167,17 @@ export const useCoach = (isEnabled: boolean) => {
             type = 'good';
             message = "Good move.";
              arrowColor = '#96bc4b';
-        } else if (loss <= 100) {
+        } else if (loss <= 150) {
             type = 'inaccuracy';
-            message = "Inaccuracy. There was a better option.";
+            message = "Inaccuracy.";
             arrowColor = '#f7c045'; // Yellow
-        } else if (loss <= 200) {
+        } else if (loss <= 300) {
             type = 'mistake';
-            message = "Mistake. You lost some advantage.";
+            message = "Mistake.";
             arrowColor = '#ffa459'; // Orange
         } else {
             type = 'blunder';
-            message = "Blunder! That was a costly move.";
+            message = "Blunder.";
             arrowColor = '#fa412d'; // Red
         }
 
