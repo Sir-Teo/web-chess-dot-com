@@ -14,6 +14,7 @@ import { useGameTimer } from '../hooks/useGameTimer';
 import { useGameSound } from '../hooks/useGameSound';
 import { useSettings } from '../context/SettingsContext';
 import { ALL_BOTS, BotProfile } from '../utils/bots';
+import { identifyOpening } from '../utils/openings';
 
 interface GameInterfaceProps {
   initialMode?: 'play' | 'bots' | 'review';
@@ -54,6 +55,10 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
 
   // Coach Mode State
   const [isCoachMode, setIsCoachMode] = useState(false);
+
+  // Chat/Bot Messages
+  const [botMessage, setBotMessage] = useState<string | null>(null);
+  const [openingName, setOpeningName] = useState<string>("");
 
   // Sounds
   const { playSound } = useGameSound();
@@ -162,6 +167,12 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
           setFen(fenAfter);
           setLastMove({ from, to });
 
+          // Identify Opening
+          const op = identifyOpening(newGame.pgn());
+          if (op && op !== "Unknown Opening") {
+              setOpeningName(op);
+          }
+
           // Trigger Coach Evaluation
           if (isCoachMode) {
               evaluateMove(fenBefore, { from, to, promotion }, fenAfter);
@@ -175,6 +186,8 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
           // Trigger Bot Response if in Bot Mode/Online and game not over
           if (isEngineOpponent && activeBot && !newGame.isGameOver()) {
               resetBestMove();
+              setBotMessage(null); // Clear old message
+
               // Small delay for realism
               setTimeout(() => {
                   if (activeBot.skillLevel !== undefined) {
@@ -248,8 +261,15 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
       setIsSearching(false);
       setSearchState(null);
       setIsPlayFriendMode(false);
+      setBotMessage(null);
+      setOpeningName("");
       playSound('gameStart');
-  }, [resetTimer, playSound, resetFeedback]);
+
+      if (activeBot) {
+          setTimeout(() => setBotMessage("Good luck! Have fun."), 1000);
+          setTimeout(() => setBotMessage(null), 5000);
+      }
+  }, [resetTimer, playSound, resetFeedback, activeBot]);
 
   // Automatic Engine Move Start
   useEffect(() => {
@@ -435,7 +455,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
         <div className="w-full max-w-[400px] lg:max-w-[calc(100vh_-_10rem)] relative flex flex-col justify-center">
             
             {/* Opponent Info (Top) */}
-            <div className="flex justify-between items-end mb-1 px-1">
+            <div className="flex justify-between items-end mb-1 px-1 relative">
                 <div className="flex items-center gap-2 md:gap-3">
                     <div className="w-8 h-8 md:w-10 md:h-10 rounded bg-gray-500 overflow-hidden border border-white/20 relative group">
                         {onlineOpponent ? (
@@ -467,6 +487,15 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
                         </div>
                     </div>
                 </div>
+
+                {/* Bot Chat Bubble */}
+                {botMessage && (
+                     <div className="absolute left-14 bottom-12 bg-white text-black text-xs font-bold px-3 py-2 rounded-xl rounded-bl-none shadow-lg animate-in fade-in zoom-in duration-200 z-10 max-w-[200px]">
+                         {botMessage}
+                         <div className="absolute bottom-[-6px] left-[0px] w-0 h-0 border-l-[10px] border-l-white border-b-[10px] border-b-transparent"></div>
+                     </div>
+                )}
+
                 {(activePanel === 'play' || isBotMode) && (
                     <div className={`
                         px-2 py-1 md:px-3 md:py-1.5 rounded font-mono font-bold text-lg md:text-xl shadow-inner border
@@ -535,6 +564,11 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
                          <div className="flex items-center gap-2 mt-1 h-4">
                              <span className="text-xs text-gray-500">850</span>
                              <CapturedPieces game={game} color={userColor} />
+                             {openingName && (
+                                 <span className="text-[10px] text-gray-400 ml-1 bg-white/5 px-1.5 py-0.5 rounded border border-white/10 hidden sm:inline-block truncate max-w-[150px]" title={openingName}>
+                                     {openingName}
+                                 </span>
+                             )}
                         </div>
                     </div>
                 </div>
