@@ -1,0 +1,9 @@
+
+> chess.com-clone@0.0.0 dev
+> vite
+
+
+  VITE v5.4.21  ready in 369 ms
+
+  ➜  Local:   http://localhost:3000/web-chess-dot-com/
+  ➜  Network: http://192.168.0.2:3000/web-chess-dot-com/
