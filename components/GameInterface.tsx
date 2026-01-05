@@ -44,6 +44,8 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
       }
       return g;
   });
+  // Track the desired start position for "Rematch" or initial load
+  const [startPosition, setStartPosition] = useState<string | null>(initialFen || null);
   const [fen, setFen] = useState(game.fen());
   const [viewFen, setViewFen] = useState<string | null>(null); // For history navigation
   const [viewMoveIndex, setViewMoveIndex] = useState<number>(-1); // -1 = live
@@ -164,6 +166,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
 
   // Handle initialFen change
   useEffect(() => {
+      setStartPosition(initialFen || null);
       if (initialFen) {
           const g = new Chess();
           try {
@@ -173,9 +176,6 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
               setIsGameOver(false);
               setGameResult('');
               setHasGameStarted(true); // If loading from FEN, assume we want to see/play it
-              // If it's a bot mode, we might need to trigger something?
-              // Usually practice is vs Computer, so we might want to ensure a bot is active or selected.
-              // For now, let user select bot if in bots mode.
           } catch (e) {
               console.error("Invalid initialFen update", e);
           }
@@ -408,6 +408,14 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
 
   const handleNewGame = useCallback(() => {
       const newGame = new Chess();
+      // Use startPosition if available (e.g. Practice Mode)
+      if (startPosition) {
+          try {
+              newGame.load(startPosition);
+          } catch (e) {
+               console.error("Failed to load start position", e);
+          }
+      }
       setGame(newGame);
       setFen(newGame.fen());
       setViewFen(null);
@@ -425,7 +433,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
       setPreMove(null);
       playSound('gameStart');
 
-  }, [resetTimer, playSound, resetFeedback, activeBot]);
+  }, [resetTimer, playSound, resetFeedback, activeBot, startPosition]);
 
   // Automatic Engine Move (Start or Resume)
   // This handles cases where the bot is activated after the user has already moved (Sandbox -> Game transition)
@@ -553,6 +561,9 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
           // But here, Play Coach mode is basically "Play Bot + Coach On"
       }
 
+      // If we are already in a practice session (custom start position) and it's the first game with this bot,
+      // we might want to respect the current board state?
+      // handleNewGame will use startPosition if set.
       handleNewGame();
   };
 
