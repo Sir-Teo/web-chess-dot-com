@@ -107,6 +107,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
   const {
       onTurnStart,
       evaluateMove,
+      getBestMove,
       feedback,
       arrows: coachArrows,
       isThinking: isCoachThinking,
@@ -445,17 +446,19 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
      }
   }, [game, isEngineOpponent, activeBot, userColor, isGameOver, sendCommand, resetBestMove]);
 
-  const handleMoveSuggestion = useCallback(() => {
-      // Use best move from current coach evaluation
-      if (currentEval.bestMove) {
-          const from = currentEval.bestMove.substring(0, 2);
-          const to = currentEval.bestMove.substring(2, 4);
-          // Simplified: Just show the arrow immediately
+  const handleMoveSuggestion = useCallback(async () => {
+      // Use getBestMove from useCoach which handles async waiting
+      const currentFen = game.fen();
+      const move = await getBestMove(currentFen);
+
+      if (move) {
+          const from = move.substring(0, 2);
+          const to = move.substring(2, 4);
           setSuggestionArrow({ from, to });
           // Auto clear after 3 seconds
           setTimeout(() => setSuggestionArrow(null), 3000);
       }
-  }, [currentEval]);
+  }, [game, getBestMove]);
 
   const handleUndo = useCallback(() => {
       if (game.history().length === 0 || isGameOver) return;
@@ -716,9 +719,10 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
                     lastMove={lastMove}
                     boardOrientation={userColor === 'w' ? 'white' : 'black'}
                     customArrows={
-                        (isCoachMode && !viewFen) ? coachArrows :
-                        (suggestionArrow && !viewFen) ? [[suggestionArrow.from, suggestionArrow.to, '#f1c40f']] :
-                        undefined
+                        [
+                            ...((isCoachMode && !viewFen) ? coachArrows : []),
+                            ...((suggestionArrow && !viewFen) ? [[suggestionArrow.from, suggestionArrow.to, '#f1c40f']] : [])
+                        ] as any
                     }
                     customSquareStyles={customSquareStyles}
                  />
