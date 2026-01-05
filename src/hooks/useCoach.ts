@@ -29,10 +29,14 @@ export const useCoach = (isEnabled: boolean, settings: CoachSettings) => {
     const [isThinking, setIsThinking] = useState(false);
 
     // Continuous Evaluation State
-    const [currentEval, setCurrentEval] = useState<{ score: number, mate?: number, bestMove?: string }>({ score: 0 });
+    const [currentEval, setCurrentEval] = useState<{ fen?: string, score: number, mate?: number, bestMove?: string }>({ score: 0 });
 
     // Cache the best move for the CURRENT position (before player moves)
     const currentPositionAnalysis = useRef<{ fen: string, bestMove: string, score: EngineScore | null } | null>(null);
+
+    // Track active search to prevent duplicates and allow awaiting results
+    const currentSearchPromise = useRef<Promise<{ bestMove: string, score: EngineScore | null }> | null>(null);
+    const currentSearchFen = useRef<string | null>(null);
 
     // Initialize Coach Engine
     useEffect(() => {
@@ -59,9 +63,19 @@ export const useCoach = (isEnabled: boolean, settings: CoachSettings) => {
         clientRef.current.stop();
         clientRef.current.setPosition(fen);
 
+        const promise = clientRef.current.go(15);
+        currentSearchPromise.current = promise;
+        currentSearchFen.current = fen;
+
         try {
             // 1. Analyze Current Position (Normal)
-            const result = await clientRef.current.go(15);
+            const result = await promise;
+
+            // If the search was superseded, ignore result (basic check)
+            // But usually we want to cache it anyway if it finished?
+            // If `currentSearchFen` changed, it means another search started.
+            // But `await promise` returns the result of *this* search.
+
             const scoreObj = result.score;
 
             // Normalize Score to White Perspective for Eval Bar
@@ -79,7 +93,7 @@ export const useCoach = (isEnabled: boolean, settings: CoachSettings) => {
                 }
             }
 
-            setCurrentEval({ score: whiteScore, mate: whiteMate, bestMove: result.bestMove });
+            setCurrentEval({ fen, score: whiteScore, mate: whiteMate, bestMove: result.bestMove });
 
             currentPositionAnalysis.current = {
                 fen,
@@ -88,28 +102,19 @@ export const useCoach = (isEnabled: boolean, settings: CoachSettings) => {
             };
 
             // 2. Threat Analysis (If enabled)
-            // What if we pass? (Null move analysis)
-            // We construct a FEN with the active color swapped.
-            // Note: This is a simplification. En passant target should be cleared.
-            // Full move clock doesn't matter much for immediate threats.
-            if (settings.showThreatArrows) {
+            // Only if we are still on the same FEN (user hasn't moved yet)
+            if (settings.showThreatArrows && currentSearchFen.current === fen) {
                  const parts = fen.split(' ');
                  const activeColor = parts[1];
                  const newColor = activeColor === 'w' ? 'b' : 'w';
-                 // Clear ep target (parts[3]) to '-' because if we pass, we can't capture en passant next?
-                 // Actually, if we pass, the opponent moves. They might capture en passant if WE moved a pawn two squares previously.
-                 // But wait, if we pass, we didn't move. So en passant target should be from the previous move (opponent's last move).
-                 // So if it's currently our turn, the EP target is available for US to capture.
-                 // If we pass, the opponent moves. The EP target is now gone (you can only capture EP immediately).
-                 // So yes, clear EP target.
-                 // Also need to handle halfmove clock (parts[4]) but stockfish handles it.
 
                  parts[1] = newColor;
                  parts[3] = '-';
                  const flippedFen = parts.join(' ');
 
                  clientRef.current.setPosition(flippedFen);
-                 const threatResult = await clientRef.current.go(10); // Quick search for threats
+                 // We don't track this search in currentSearchPromise as it's secondary
+                 const threatResult = await clientRef.current.go(10);
 
                  if (threatResult.bestMove) {
                      const from = threatResult.bestMove.substring(0, 2);
@@ -126,6 +131,43 @@ export const useCoach = (isEnabled: boolean, settings: CoachSettings) => {
             console.error("Coach analysis failed", e);
         }
     }, [settings.showThreatArrows]);
+
+    // Retrieve best move for a specific FEN, waiting if necessary
+    const getBestMove = useCallback(async (fen: string): Promise<string | null> => {
+        // 1. Check cached analysis
+        if (currentPositionAnalysis.current && currentPositionAnalysis.current.fen === fen) {
+            return currentPositionAnalysis.current.bestMove;
+        }
+
+        // 2. Check ongoing search
+        if (currentSearchFen.current === fen && currentSearchPromise.current) {
+            try {
+                const result = await currentSearchPromise.current;
+                return result.bestMove;
+            } catch (e) {
+                return null;
+            }
+        }
+
+        // 3. Trigger new search if needed (and client exists)
+        if (clientRef.current) {
+             clientRef.current.stop();
+             clientRef.current.setPosition(fen);
+             const promise = clientRef.current.go(15);
+
+             // Update refs so subsequent calls join this search
+             currentSearchPromise.current = promise;
+             currentSearchFen.current = fen;
+
+             const res = await promise;
+
+             // Cache it
+             currentPositionAnalysis.current = { fen, bestMove: res.bestMove, score: res.score };
+             return res.bestMove;
+        }
+
+        return null;
+    }, []);
 
     // Helper to get CP for comparison
     const getCp = (score: EngineScore | null): number => {
@@ -277,6 +319,7 @@ export const useCoach = (isEnabled: boolean, settings: CoachSettings) => {
     return {
         onTurnStart,
         evaluateMove,
+        getBestMove, // Exposed method
         feedback,
         arrows: [...arrows, ...threatArrows], // Combine standard arrows and threat arrows
         isThinking,
