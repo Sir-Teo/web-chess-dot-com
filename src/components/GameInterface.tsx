@@ -7,7 +7,9 @@ import { PlayCoachPanel } from './PlayCoachPanel';
 import MoveList from './MoveList';
 import CapturedPieces from './CapturedPieces';
 import CoachFeedback from './CoachFeedback';
+import CoachSettingsModal from './CoachSettingsModal';
 import EvaluationBar from './EvaluationBar';
+// Ensure imports are visible for diff
 import { Chess } from 'chess.js';
 import { useStockfish } from '../hooks/useStockfish';
 import { useCoach, CoachSettings } from '../hooks/useCoach';
@@ -148,7 +150,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
     } catch(e) {}
 
     return styles;
-  }, [preMove, fen, viewFen]);
+  }, [preMove, fen, viewFen, suggestionArrow]);
 
   // Sync state if prop changes
   useEffect(() => {
@@ -448,6 +450,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
       if (currentEval.bestMove) {
           const from = currentEval.bestMove.substring(0, 2);
           const to = currentEval.bestMove.substring(2, 4);
+          // Simplified: Just show the arrow immediately
           setSuggestionArrow({ from, to });
           // Auto clear after 3 seconds
           setTimeout(() => setSuggestionArrow(null), 3000);
@@ -700,7 +703,11 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
                     onMove={onMove}
                     lastMove={lastMove}
                     boardOrientation={userColor === 'w' ? 'white' : 'black'}
-                    customArrows={(isCoachMode && !viewFen) ? coachArrows : (suggestionArrow && !viewFen) ? [[suggestionArrow.from, suggestionArrow.to, '#f1c40f']] : undefined}
+                    customArrows={
+                        (isCoachMode && !viewFen) ? coachArrows :
+                        (suggestionArrow && !viewFen) ? [[suggestionArrow.from, suggestionArrow.to, '#f1c40f']] :
+                        undefined
+                    }
                     customSquareStyles={customSquareStyles}
                  />
 
