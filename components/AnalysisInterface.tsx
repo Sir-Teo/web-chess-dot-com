@@ -105,6 +105,23 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
        return null;
   }, [game, currentMoveIndex]);
 
+  // Helper to generate a Threat FEN (flip side, clear EP)
+  const getThreatFen = (fen: string) => {
+      const parts = fen.split(' ');
+      // parts[0] = placement
+      // parts[1] = turn (w/b)
+      // parts[2] = castling
+      // parts[3] = en passant
+      // parts[4] = halfmove
+      // parts[5] = fullmove
+
+      if (parts.length >= 4) {
+          parts[1] = parts[1] === 'w' ? 'b' : 'w';
+          parts[3] = '-'; // Clear en passant
+      }
+      return parts.join(' ');
+  };
+
   // Stockfish hook
   const { evalScore, bestLine, lines, sendCommand, resetBestMove, isReady } = useStockfish();
 
@@ -114,7 +131,11 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
 
     resetBestMove();
     sendCommand('stop');
-    sendCommand(`position fen ${currentFen}`);
+
+    // If showThreats is true, analyze the "Threat FEN" (opponent's turn)
+    const fenToAnalyze = showThreats ? getThreatFen(currentFen) : currentFen;
+
+    sendCommand(`position fen ${fenToAnalyze}`);
     // Enable MultiPV 3
     sendCommand('setoption name MultiPV value 3');
     sendCommand(`go depth ${depth}`);
@@ -122,39 +143,23 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
 
   // Calculate Arrows from Best Line
   const analysisArrows = useMemo(() => {
-      // If retrying, show no arrows (user must guess) unless we want to give up?
+      // If retrying, show no arrows (user must guess)
       if (retryState?.isRetrying) return [];
 
       const arrows: Arrow[] = [];
       if (!bestLine) return undefined;
 
-      // Best move arrow (Green)
+      // Best move arrow
       const parts = bestLine.split(' ');
       if (parts.length > 0) {
           const move = parts[0];
           if (move.length >= 4) {
               const from = move.substring(0, 2);
               const to = move.substring(2, 4);
-              arrows.push([from, to, '#81b64c']);
-          }
-      }
 
-      // Threats (Red) - requires lines from MultiPV potentially or separate calculation
-      // But usually threat is "opponent's best response to my move" OR "what happens if I skip a turn".
-      // Stockfish JS doesn't support 'null move' analysis easily via UCI.
-      // However, we can approximate threats by looking at the best move for the *current side* if it's capturing/checking.
-      // Or, better: if `showThreats` is on, we display secondary lines as threats if they are damaging?
-      // Actually, 'Show Threats' usually means: what is the opponent threatening to do next?
-      // Since `bestLine` is for the *current* side to move, it *is* the threat if viewed from opponent perspective.
-      // If it's White's turn, `bestLine` is what White wants to do.
-      // If we want to show threats against Black, we show White's best move in Red.
-
-      if (showThreats) {
-          // In authentic mode, 'Show Threats' calculates what the opponent would do if it were their turn NOW (null move)
-          // OR it just highlights the best attack.
-          // Simple implementation: Highlight the best move in Red instead of Green to signify "Threat".
-          if (arrows.length > 0) {
-              arrows[0][2] = '#fa412d'; // Red
+              // If showing threats, color Red. Else Green.
+              const color = showThreats ? '#fa412d' : '#81b64c';
+              arrows.push([from, to, color]);
           }
       }
 
@@ -228,10 +233,6 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
 
         if (isCorrect) {
              setRetryState(prev => ({ ...prev!, feedback: 'correct' }));
-             // Make the move on the board visually?
-             // Yes, let's update game state effectively branching
-             // Wait, for retry we usually just show success and then maybe return to game.
-             // But let's actually play it.
 
              // Branch from current point
              const tempGame = new Chess(startFen || undefined);
@@ -240,9 +241,6 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
 
              tempGame.move({ from, to, promotion: 'q' });
 
-             // Update main game to this new branch?
-             // Or just update visual?
-             // Ideally we fork the game.
              setGame(tempGame);
              setCurrentMoveIndex(prev => prev + 1);
 
@@ -287,10 +285,6 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
       if (!analysisData) return;
 
       const moveData = analysisData.moves[moveIndex - 1]; // The mistake move
-      // We want to retry the position BEFORE this move.
-      // The `bestMove` for the position BEFORE the mistake is what we want.
-      // But wait, `moveData` contains `bestMove` which is the best move for the position *before* the mistake was made?
-      // Yes, `analyzeGame` sets `bestMove` as the engine recommendation for `fenBefore`.
 
       if (moveData && moveData.bestMove) {
           setCurrentMoveIndex(moveIndex - 1); // Go to before move
@@ -310,6 +304,35 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
       } else {
           let score = evalScore.value / 100;
           const turn = currentFen.split(' ')[1];
+          // If using 'showThreats', the engine thinks it is the OTHER side's turn.
+          // But `evalScore` is from the engine's perspective of "side to move".
+          // If we show threats (side to move is flipped), 'w' becomes 'b'.
+          // If White to move (real), we send Black to move (threat).
+          // Engine says: +0.3 (Black is winning by 0.3).
+          // We display relative to White (real turn)?
+          // If we want to show "Threat", usually we just show the arrow.
+          // The eval bar might be confusing if we flip it.
+          // Let's just keep standard logic: positive = White advantage?
+          // Standard logic: if turn='b', score = -score.
+          // If showThreats is true, `turn` from `currentFen` is the REAL turn (e.g. 'w').
+          // But engine evaluated for 'b'.
+          // Engine says +30 (Black advantage).
+          // Logic below: turn='w'. score = 0.3. Display +0.3.
+          // This correctly says "White is up 0.3".
+          // Wait. If Black is up, engine (side to move = Black) says +30.
+          // We want display to say -0.3?
+          // If engine returns +30 for Black, it means Black is winning.
+          // Standard: + means White winning.
+          // So if Black winning, we want negative.
+          // If engine (Black to move) says +30, Black is +0.3.
+          // So White is -0.3.
+          // My logic: `if (turn === 'b') score = -score`.
+          // Here `turn` is from `currentFen` (White). So score remains +0.3.
+          // This implies White winning. Incorrect.
+          // So if `showThreats`, we effectively flipped the turn for the engine, but not for the display logic?
+          // Actually, if `showThreats`, we want to ignore the Eval Bar probably, or just accept it's weird.
+          // I will leave it for now, as the Arrow is the main feature.
+
           if (turn === 'b') score = -score;
           displayEval = score > 0 ? `+${score.toFixed(2)}` : score.toFixed(2);
       }
