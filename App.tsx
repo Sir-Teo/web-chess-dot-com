@@ -55,6 +55,14 @@ const AppContent: React.FC = () => {
                 onAnalyze={handleAnalyze}
             />
         );
+      case 'play-coach':
+        return (
+            <GameInterface
+                initialMode="coach"
+                initialFen={gameParams.fen}
+                onAnalyze={handleAnalyze}
+            />
+        );
       case 'puzzles':
         return <PuzzlesInterface />;
       case 'analysis':
