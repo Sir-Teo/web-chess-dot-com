@@ -104,8 +104,8 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
       currentEval
   } = useCoach(true); // Always enable for evaluation bar
 
-  // Hint State
-  const [hintArrow, setHintArrow] = useState<{ from: string, to: string } | null>(null);
+  // Move Suggestion State
+  const [suggestionArrow, setSuggestionArrow] = useState<{ from: string, to: string } | null>(null);
 
   // Pre-move State (Authenticity)
   const [preMove, setPreMove] = useState<{from: string, to: string, promotion?: string} | null>(null);
@@ -332,8 +332,8 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
               resetFeedback();
           }
 
-          // Clear hint on move
-          setHintArrow(null);
+          // Clear suggestion on move
+          setSuggestionArrow(null);
       } else {
           setPreMove(null); // Invalid move
       }
@@ -435,14 +435,14 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
      }
   }, [game, isEngineOpponent, activeBot, userColor, isGameOver, sendCommand, resetBestMove]);
 
-  const handleHint = useCallback(() => {
+  const handleMoveSuggestion = useCallback(() => {
       // Use best move from current coach evaluation
       if (currentEval.bestMove) {
           const from = currentEval.bestMove.substring(0, 2);
           const to = currentEval.bestMove.substring(2, 4);
-          setHintArrow({ from, to });
+          setSuggestionArrow({ from, to });
           // Auto clear after 3 seconds
-          setTimeout(() => setHintArrow(null), 3000);
+          setTimeout(() => setSuggestionArrow(null), 3000);
       }
   }, [currentEval]);
 
@@ -489,7 +489,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
 
       resetFeedback();
       resetBestMove(); // Stop bot if it was thinking to prevent race condition
-      setHintArrow(null);
+      setSuggestionArrow(null);
   }, [game, isEngineOpponent, userColor, resetFeedback, resetBestMove]);
 
   const handleFlipBoard = useCallback(() => {
@@ -674,7 +674,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
                     onMove={onMove}
                     lastMove={lastMove}
                     boardOrientation={userColor === 'w' ? 'white' : 'black'}
-                    customArrows={(isCoachMode && !viewFen) ? coachArrows : (hintArrow && !viewFen) ? [[hintArrow.from, hintArrow.to, '#f1c40f']] : undefined}
+                    customArrows={(isCoachMode && !viewFen) ? coachArrows : (suggestionArrow && !viewFen) ? [[suggestionArrow.from, suggestionArrow.to, '#f1c40f']] : undefined}
                     customSquareStyles={customSquareStyles}
                  />
 
@@ -899,14 +899,14 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
                              </button>
                         )}
 
-                        {/* Game Controls: Hint/Undo for Bots */}
+                        {/* Game Controls: Suggestion/Undo for Bots */}
                         {(isBotMode || playMode === 'pass-and-play') && !isGameOver && (
                              <div className="flex gap-1 mb-1">
                                  {isBotMode && (
                                      <button
-                                         onClick={handleHint}
+                                         onClick={handleMoveSuggestion}
                                          className="flex-1 bg-[#383531] hover:bg-[#45423e] rounded flex items-center justify-center py-2 text-gray-300 hover:text-white transition-colors"
-                                         title="Hint"
+                                         title="Move Suggestion"
                                      >
                                          <Lightbulb className="w-5 h-5" />
                                      </button>
