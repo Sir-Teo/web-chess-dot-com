@@ -1,13 +1,16 @@
 import React, { useEffect, useRef } from 'react';
 import { Chess } from 'chess.js';
+import { GameReviewData } from '../utils/gameAnalysis';
+import MoveClassificationIcon from './MoveClassificationIcon';
 
 interface MoveListProps {
   game: Chess;
   onMoveClick?: (fen: string, moveIndex: number) => void;
   currentMoveIndex?: number; // -1 means latest
+  analysisData?: GameReviewData | null;
 }
 
-const MoveList: React.FC<MoveListProps> = ({ game, onMoveClick, currentMoveIndex = -1 }) => {
+const MoveList: React.FC<MoveListProps> = ({ game, onMoveClick, currentMoveIndex = -1, analysisData }) => {
   const history = game.history({ verbose: true });
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -29,11 +32,13 @@ const MoveList: React.FC<MoveListProps> = ({ game, onMoveClick, currentMoveIndex
   }
 
   const isSelected = (index: number) => {
-      // If currentMoveIndex is -1, it usually means "live", which is essentially after the last move.
-      // But if we want to highlight the *last played move*, that would be history.length - 1.
-      // Let's assume currentMoveIndex tracks the index of the move *just made*.
       if (currentMoveIndex === -1) return index === history.length - 1;
       return currentMoveIndex === index;
+  };
+
+  const getMoveClassification = (index: number) => {
+      if (!analysisData || !analysisData.moves[index]) return null;
+      return analysisData.moves[index].classification;
   };
 
   return (
@@ -52,24 +57,26 @@ const MoveList: React.FC<MoveListProps> = ({ game, onMoveClick, currentMoveIndex
                   {/* White Move */}
                   {move.w && (
                       <button
-                        className={`flex-1 text-left px-3 py-1.5 transition-colors font-bold rounded-sm mx-1 ${
+                        className={`flex-1 flex items-center justify-between text-left px-2 py-1.5 transition-colors font-bold rounded-sm mx-1 ${
                             isSelected(move.w.index) ? 'bg-[#5c5955] text-[#f1f1f1] shadow-inner border-b border-white/10 ring-1 ring-white/5' : 'text-[#c3c3c3] hover:text-white hover:bg-white/5'
                         }`}
                         onClick={() => onMoveClick?.(move.w!.after, move.w!.index)}
                       >
-                          {move.w.san}
+                          <span>{move.w.san}</span>
+                          <MoveClassificationIcon classification={getMoveClassification(move.w.index)} size={12} />
                       </button>
                   )}
 
                   {/* Black Move */}
                   {move.b ? (
                       <button
-                        className={`flex-1 text-left px-3 py-1.5 transition-colors font-bold rounded-sm mx-1 ${
+                        className={`flex-1 flex items-center justify-between text-left px-2 py-1.5 transition-colors font-bold rounded-sm mx-1 ${
                             isSelected(move.b.index) ? 'bg-[#5c5955] text-[#f1f1f1] shadow-inner border-b border-white/10 ring-1 ring-white/5' : 'text-[#c3c3c3] hover:text-white hover:bg-white/5'
                         }`}
                         onClick={() => onMoveClick?.(move.b!.after, move.b!.index)}
                       >
-                          {move.b.san}
+                          <span>{move.b.san}</span>
+                          <MoveClassificationIcon classification={getMoveClassification(move.b.index)} size={12} />
                       </button>
                   ) : (
                       <span className="flex-1 mx-1"></span>
