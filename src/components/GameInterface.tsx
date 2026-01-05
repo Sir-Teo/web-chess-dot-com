@@ -523,9 +523,21 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
       handleNewGame();
   };
 
-  const handleStartCoachGame = (settings: { botId: string, userColor: 'w' | 'b' | 'random' }) => {
-       const bot = ALL_BOTS.find(b => b.id === settings.botId) || ALL_BOTS[0];
-       setActiveBot(bot);
+  const handleStartCoachGame = (settings: { botId: string, userColor: 'w' | 'b' | 'random', skillLevel?: number }) => {
+       // Find base bot
+       const baseBot = ALL_BOTS.find(b => b.id === settings.botId) || ALL_BOTS[ALL_BOTS.length - 1]; // Default to stockfish or last bot
+
+       // Create custom coach bot with overridden skill level
+       const coachBot: BotProfile = {
+           ...baseBot,
+           name: "The Coach",
+           avatar: "https://images.chesscomfiles.com/uploads/v1/user/57539420.f35d2592.200x200o.423977759dc2.jpeg", // Consistent with Panel
+           skillLevel: settings.skillLevel ?? baseBot.skillLevel,
+           depth: settings.skillLevel ? Math.min(20, settings.skillLevel + 2) : baseBot.depth, // Approximate depth
+           rating: settings.skillLevel ? settings.skillLevel * 150 : baseBot.rating
+       };
+
+       setActiveBot(coachBot);
        setOnlineOpponent(null);
        setPlayMode('online');
        setIsCoachMode(true); // Activate Coach
