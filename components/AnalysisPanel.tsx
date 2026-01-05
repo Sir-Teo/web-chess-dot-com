@@ -224,7 +224,7 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
           <div className="flex items-center justify-between text-xs text-gray-400 mb-1">
               <div className="flex items-center gap-1.5">
                   <Activity className="w-3.5 h-3.5 text-chess-green" />
-                  <span className="font-semibold text-gray-300">Stockfish 16 NNUE</span>
+                  <span className="font-semibold text-gray-300">Stockfish 10 (Lite)</span>
                   <span className="bg-[#302e2b] px-1.5 py-0.5 rounded border border-white/5 text-[10px] font-mono">
                      D{depth}
                   </span>
