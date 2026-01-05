@@ -1,0 +1,1174 @@
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import Chessboard from './Chessboard';
+import { Settings, Flag, XCircle, Search, ChevronRight, RotateCcw, MessageCircle, AlertCircle, Copy, Check, Lightbulb, Undo2, RefreshCw, Trophy } from 'lucide-react';
+import GameReviewPanel from './GameReviewPanel';
+import PlayBotsPanel from './PlayBotsPanel';
+import MoveList from './MoveList';
+import CapturedPieces from './CapturedPieces';
+import CoachFeedback from './CoachFeedback';
+import EvaluationBar from './EvaluationBar';
+import { Chess } from 'chess.js';
+import { useStockfish } from '../hooks/useStockfish';
+import { useCoach, CoachSettings } from '../hooks/useCoach';
+import { useGameTimer } from '../hooks/useGameTimer';
+import { useGameSound } from '../hooks/useGameSound';
+import { useBotChatter } from '../hooks/useBotChatter';
+import { useSettings } from '../context/SettingsContext';
+import { ALL_BOTS, BotProfile } from '../utils/bots';
+import { identifyOpening } from '../utils/openings';
+
+interface GameInterfaceProps {
+  initialMode?: 'play' | 'bots' | 'review';
+  initialTimeControl?: number;
+  initialFen?: string;
+  onAnalyze?: (pgn: string, tab?: 'analysis' | 'review') => void;
+}
+
+const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', initialTimeControl = 600, initialFen, onAnalyze }) => {
+  const [activePanel, setActivePanel] = useState<'play' | 'review' | 'bots'>(initialMode);
+  const [activeBot, setActiveBot] = useState<BotProfile | null>(null);
+
+  const { openSettings } = useSettings();
+
+  // Game State
+  const [game, setGame] = useState(() => {
+      const g = new Chess();
+      if (initialFen) {
+          try {
+              g.load(initialFen);
+          } catch (e) {
+              console.error("Invalid initialFen", e);
+          }
+      }
+      return g;
+  });
+  const [fen, setFen] = useState(game.fen());
+  const [viewFen, setViewFen] = useState<string | null>(null); // For history navigation
+  const [viewMoveIndex, setViewMoveIndex] = useState<number>(-1); // -1 = live
+  const [lastMove, setLastMove] = useState<{from: string, to: string} | null>(null);
+  const [isGameOver, setIsGameOver] = useState(false);
+  const [gameResult, setGameResult] = useState<string>('');
+
+  // New: Start Game Flag to show board in Play Friend mode
+  const [hasGameStarted, setHasGameStarted] = useState(false);
+
+  // New: Simulated Matching State
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchState, setSearchState] = useState<'searching' | 'found' | null>(null);
+  const [isPlayFriendMode, setIsPlayFriendMode] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  // New: Play Mode (online vs local)
+  const [playMode, setPlayMode] = useState<'online' | 'pass-and-play'>('online');
+  const [onlineOpponent, setOnlineOpponent] = useState<{name: string, rating: number, avatar: string, flag: string} | null>(null);
+
+  // User Color (default 'w')
+  const [userColor, setUserColor] = useState<'w' | 'b'>('w');
+
+  // Coach Mode State
+  const [isCoachMode, setIsCoachMode] = useState(false);
+  const [coachSettings, setCoachSettings] = useState<CoachSettings>({
+      showSuggestionArrows: true,
+      showThreatArrows: true,
+      showEvalBar: true,
+      showFeedback: true
+  });
+  const [showCoachSettings, setShowCoachSettings] = useState(false);
+
+  // Chat/Bot Messages
+  const [openingName, setOpeningName] = useState<string>("");
+
+  // Sounds
+  const { playSound } = useGameSound();
+
+  // Bot Chatter Hook
+  const botMessage = useBotChatter(game, activeBot, userColor, isGameOver);
+
+  // Timer State
+  const [timeControl, setTimeControl] = useState(initialTimeControl);
+  const { whiteTime, blackTime, formatTime, startTimer, stopTimer, resetTimer } = useGameTimer(
+    timeControl,
+    game.turn(),
+    isGameOver,
+    (loser) => {
+      setIsGameOver(true);
+      setGameResult(loser === 'w' ? 'Black Won (Time)' : 'White Won (Time)');
+      playSound('gameEnd');
+    }
+  );
+
+  // Engine for Bot
+  const { bestMove, sendCommand, resetBestMove, isReady } = useStockfish();
+
+  // Coach Hook (also provides analysis/evaluation)
+  const {
+      onTurnStart,
+      evaluateMove,
+      feedback,
+      arrows: coachArrows,
+      isThinking: isCoachThinking,
+      resetFeedback,
+      currentEval
+  } = useCoach(true, coachSettings); // Always enable for evaluation bar
+
+  // Move Suggestion State
+  const [suggestionArrow, setSuggestionArrow] = useState<{ from: string, to: string } | null>(null);
+
+  // Pre-move State (Authenticity)
+  const [preMove, setPreMove] = useState<{from: string, to: string, promotion?: string} | null>(null);
+
+  const customSquareStyles = useMemo(() => {
+    const styles: Record<string, React.CSSProperties> = {};
+    if (preMove) {
+        styles[preMove.from] = { backgroundColor: 'rgba(244, 67, 54, 0.4)' }; // Softer red for pre-move source
+        styles[preMove.to] = { backgroundColor: 'rgba(244, 67, 54, 0.4)' }; // Softer red for pre-move dest
+    }
+
+    // Check Highlight
+    const currentGame = new Chess();
+    try {
+        currentGame.load(viewFen || fen);
+        if (currentGame.isCheck()) {
+            const turn = currentGame.turn();
+            // Find King
+            currentGame.board().forEach((row, rIdx) => {
+                row.forEach((square, cIdx) => {
+                    if (square && square.type === 'k' && square.color === turn) {
+                        const file = String.fromCharCode(97 + cIdx);
+                        const rank = 8 - rIdx;
+                        const sq = `${file}${rank}`;
+                        styles[sq] = {
+                            background: 'radial-gradient(circle, rgba(255,0,0,0.8) 0%, rgba(255,0,0,0) 70%)'
+                        };
+                    }
+                });
+            });
+        }
+    } catch(e) {}
+
+    return styles;
+  }, [preMove, fen, viewFen]);
+
+  // Sync state if prop changes
+  useEffect(() => {
+    if (initialMode) setActivePanel(initialMode);
+  }, [initialMode]);
+
+  useEffect(() => {
+    if (initialTimeControl) setTimeControl(initialTimeControl);
+  }, [initialTimeControl]);
+
+  // Handle initialFen change
+  useEffect(() => {
+      if (initialFen) {
+          const g = new Chess();
+          try {
+              g.load(initialFen);
+              setGame(g);
+              setFen(g.fen());
+              setIsGameOver(false);
+              setGameResult('');
+              setHasGameStarted(true); // If loading from FEN, assume we want to see/play it
+              // If it's a bot mode, we might need to trigger something?
+              // Usually practice is vs Computer, so we might want to ensure a bot is active or selected.
+              // For now, let user select bot if in bots mode.
+          } catch (e) {
+              console.error("Invalid initialFen update", e);
+          }
+      }
+  }, [initialFen]);
+
+  const isBotMode = activePanel === 'bots';
+  const isReviewMode = activePanel === 'review';
+  // Only consider it an engine opponent if there is an active bot or we are in bot mode
+  // This allows sandbox play (empty board) when no game is active
+  const isEngineOpponent = isBotMode || (activePanel === 'play' && playMode === 'online' && !!activeBot);
+
+  // Check Game Over
+  useEffect(() => {
+     if (game.isGameOver()) {
+         setIsGameOver(true);
+         stopTimer();
+         playSound('gameEnd');
+         if (game.isCheckmate()) setGameResult(game.turn() === 'w' ? 'Black Won' : 'White Won');
+         else if (game.isDraw()) setGameResult('Draw');
+         else setGameResult('Game Over');
+     } else {
+         if (!isGameOver && game.history().length > 0) {
+             startTimer();
+         }
+     }
+  }, [game, fen, stopTimer, startTimer, isGameOver, playSound]);
+
+  // Coach: On turn start (Continuous Analysis)
+  useEffect(() => {
+      if (!isGameOver) {
+           onTurnStart(game.fen());
+      }
+  }, [game.fen(), isGameOver, onTurnStart]);
+
+  // Keyboard Navigation
+  useEffect(() => {
+      const handleKeyDown = (e: KeyboardEvent) => {
+          // Ignore if input/textarea is focused
+          if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+
+          if (!hasGameStarted && !activeBot) return;
+
+          const history = game.history({ verbose: true });
+          if (history.length === 0) return;
+
+          let newIndex = viewMoveIndex;
+
+          if (e.key === 'ArrowLeft') {
+              if (newIndex === -1) newIndex = history.length - 1; // From Live to Last Move
+              else if (newIndex === 0) newIndex = -2; // From First Move to Start Position
+              else if (newIndex === -2) return; // Already at Start
+              else newIndex = newIndex - 1;
+          } else if (e.key === 'ArrowRight') {
+              if (newIndex === -1) return; // Already live
+              newIndex = Math.min(history.length - 1, newIndex + 1);
+
+              // If at last move, maybe set to -1 (Live) to enable interaction?
+              if (newIndex === history.length - 1) {
+                  // Keep it at last move visually, but maybe user wants "Live" state.
+                  // Usually Right Arrow at end does nothing or goes to "Live" state if distinct.
+                  // Let's toggle to -1 if we hit the end to ensure "Live" logic works.
+                  // But visually index N-1 and Live are same board.
+                  // Except Live allows moves.
+                  // So yes, if we reach end, set -1.
+                  newIndex = -1;
+              }
+          } else if (e.key === 'ArrowUp' || e.key === 'Home') {
+              // Go to Start
+              // We need to support "Before First Move".
+              // `MoveList` handles index.
+              // Let's use -2 for Start? Or simply modify Logic.
+              // history[0].before is Start FEN.
+              // We'll handle this in the update logic.
+              newIndex = -2; // Start
+          } else if (e.key === 'ArrowDown' || e.key === 'End') {
+              newIndex = -1; // Live
+          }
+
+          if (newIndex !== viewMoveIndex) {
+              if (newIndex === -1) {
+                  setViewFen(null);
+                  setViewMoveIndex(-1);
+                  const last = history[history.length - 1];
+                  setLastMove({ from: last.from, to: last.to });
+              } else if (newIndex === -2) {
+                   // Start of game
+                   // history[0].before
+                   if (history.length > 0) {
+                       setViewFen(history[0].before);
+                       setViewMoveIndex(-2);
+                       setLastMove(null);
+                   }
+              } else {
+                  // Specific move
+                  // history[newIndex] is the move object.
+                  // We want the state AFTER this move.
+                  const move = history[newIndex];
+                  setViewFen(move.after);
+                  setViewMoveIndex(newIndex);
+                  setLastMove({ from: move.from, to: move.to });
+              }
+          }
+      };
+
+      window.addEventListener('keydown', handleKeyDown);
+      return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [game, viewMoveIndex, hasGameStarted, activeBot]);
+
+
+  // Handle User Move
+  const onMove = useCallback(async (from: string, to: string, promotion: string = 'q') => {
+      if (game.isGameOver() || viewFen) return;
+
+      // Handle Pre-moves (Engine games only usually)
+      if (isEngineOpponent && game.turn() !== userColor) {
+           setPreMove({ from, to, promotion });
+           return;
+      }
+
+      // Ensure it's user's turn if playing against engine/bot (and not pre-moving)
+      if (isEngineOpponent && game.turn() !== userColor) return;
+
+      const newGame = new Chess();
+      try {
+        newGame.loadPgn(game.pgn());
+      } catch (e) {
+        newGame.load(game.fen());
+      }
+
+      // Save fen before move for coach evaluation
+      const fenBefore = newGame.fen();
+      const move = newGame.move({ from, to, promotion });
+
+      if (move) {
+          // Sound effects
+          if (newGame.isCheckmate() || newGame.isCheck()) {
+              playSound('check');
+          } else if (move.captured) {
+              playSound('capture');
+          } else if (move.flags.includes('k') || move.flags.includes('q')) { // Castle
+              playSound('castle');
+          } else if (move.flags.includes('p')) { // Promotion
+              playSound('promote');
+          } else {
+              playSound('move');
+          }
+
+          const fenAfter = newGame.fen();
+          setGame(newGame);
+          setFen(fenAfter);
+          setLastMove({ from, to });
+          setPreMove(null); // Clear any pre-move
+
+          // Identify Opening
+          const op = identifyOpening(newGame.pgn());
+          if (op && op !== "Unknown Opening") {
+              setOpeningName(op);
+          }
+
+          // Trigger Coach Evaluation
+          if (isCoachMode) {
+              evaluateMove(fenBefore, { from, to, promotion }, fenAfter);
+          } else {
+              resetFeedback();
+          }
+
+          // Clear suggestion on move
+          setSuggestionArrow(null);
+      } else {
+          setPreMove(null); // Invalid move
+      }
+  }, [game, isEngineOpponent, activeBot, sendCommand, resetBestMove, playSound, isCoachMode, evaluateMove, resetFeedback, userColor]);
+
+  // Handle Engine Move (Bot)
+  useEffect(() => {
+      if (isEngineOpponent && bestMove && !game.isGameOver()) {
+          const from = bestMove.substring(0, 2);
+          const to = bestMove.substring(2, 4);
+          const promotion = bestMove.length > 4 ? bestMove.substring(4, 5) : undefined;
+
+          // Ensure engine moves only on its turn
+          if (game.turn() !== userColor) {
+              const newGame = new Chess();
+              try {
+                newGame.loadPgn(game.pgn());
+              } catch (e) {
+                newGame.load(game.fen());
+              }
+              const move = newGame.move({ from, to, promotion });
+
+              if (move) {
+                  if (newGame.isCheckmate() || newGame.isCheck()) {
+                     playSound('check');
+                  } else if (move.captured) {
+                     playSound('capture');
+                  } else if (move.flags.includes('k') || move.flags.includes('q')) {
+                     playSound('castle');
+                  } else if (move.flags.includes('p')) {
+                     playSound('promote');
+                  } else {
+                     playSound('move');
+                  }
+
+                  setGame(newGame);
+                  setFen(newGame.fen());
+                  setLastMove({ from, to });
+              }
+          }
+          resetBestMove();
+      }
+  }, [bestMove, isEngineOpponent, game, resetBestMove, playSound, activeBot, userColor]);
+
+  // Execute Pre-move after Engine Move
+  useEffect(() => {
+      if (preMove && game.turn() === userColor && !isGameOver) {
+           onMove(preMove.from, preMove.to, preMove.promotion);
+           setPreMove(null); // Important to clear to avoid loops if invalid
+      }
+  }, [game.turn(), preMove, userColor, isGameOver, onMove]);
+
+  // Reset game when switching modes
+  useEffect(() => {
+      if (!isReviewMode) {
+          // Logic for reset if needed
+      }
+  }, [activePanel, isReviewMode]);
+
+  const handleNewGame = useCallback(() => {
+      const newGame = new Chess();
+      setGame(newGame);
+      setFen(newGame.fen());
+      setViewFen(null);
+      setViewMoveIndex(-1);
+      setLastMove(null);
+      setIsGameOver(false);
+      setGameResult('');
+      setHasGameStarted(true); // Ensure board is shown
+      resetTimer();
+      resetFeedback();
+      setIsSearching(false);
+      setSearchState(null);
+      setIsPlayFriendMode(false);
+      setOpeningName("");
+      setPreMove(null);
+      playSound('gameStart');
+
+  }, [resetTimer, playSound, resetFeedback, activeBot]);
+
+  // Automatic Engine Move (Start or Resume)
+  // This handles cases where the bot is activated after the user has already moved (Sandbox -> Game transition)
+  // or if it's simply the engine's turn to start.
+  useEffect(() => {
+     if (isEngineOpponent && activeBot && game.turn() !== userColor && !isGameOver) {
+
+         // Variable delay for more natural feel (500ms - 1500ms)
+         const delay = Math.floor(Math.random() * 1000) + 500;
+
+         const timeout = setTimeout(() => {
+             resetBestMove();
+             if (activeBot.skillLevel !== undefined) {
+                 sendCommand(`setoption name Skill Level value ${activeBot.skillLevel}`);
+             }
+             sendCommand(`position fen ${game.fen()}`);
+             sendCommand(`go depth ${activeBot.depth || 10}`);
+         }, delay);
+         return () => clearTimeout(timeout);
+     }
+  }, [game, isEngineOpponent, activeBot, userColor, isGameOver, sendCommand, resetBestMove]);
+
+  const handleMoveSuggestion = useCallback(() => {
+      // Use best move from current coach evaluation
+      if (currentEval.bestMove) {
+          const from = currentEval.bestMove.substring(0, 2);
+          const to = currentEval.bestMove.substring(2, 4);
+          setSuggestionArrow({ from, to });
+          // Auto clear after 3 seconds
+          setTimeout(() => setSuggestionArrow(null), 3000);
+      }
+  }, [currentEval]);
+
+  const handleUndo = useCallback(() => {
+      if (game.history().length === 0 || isGameOver) return;
+
+      // Create new game instance to modify
+      const g = new Chess();
+      try {
+        g.loadPgn(game.pgn());
+      } catch (e) {
+        g.load(game.fen());
+      }
+
+      if (isEngineOpponent) {
+          // Logic for Bot Games:
+          if (g.turn() === userColor) {
+              // If it's the user's turn, the Bot moved last.
+              // To "Retry", we typically want to undo the Bot's move AND the User's move,
+              // so the user can play a different move.
+              g.undo(); // Undo Bot's move
+              g.undo(); // Undo User's move
+          } else {
+              // If it's the Bot's turn, the User moved last (and Bot is thinking).
+              // We just undo the User's move to let them correct it immediately.
+              g.undo();
+          }
+      } else {
+          // Pass and Play: Simple undo (go back one half-move)
+          g.undo();
+      }
+
+      setGame(g);
+      setFen(g.fen());
+      setLastMove(null);
+      setPreMove(null);
+
+      // Update last move highlight based on new history
+      const h = g.history({verbose: true});
+      if (h.length > 0) {
+          const last = h[h.length - 1];
+          setLastMove({ from: last.from, to: last.to });
+      }
+
+      resetFeedback();
+      resetBestMove(); // Stop bot if it was thinking to prevent race condition
+      setSuggestionArrow(null);
+  }, [game, isEngineOpponent, userColor, resetFeedback, resetBestMove]);
+
+  const handleFlipBoard = useCallback(() => {
+      setUserColor(prev => prev === 'w' ? 'b' : 'w');
+  }, []);
+
+  const handleStartBotGame = (bot: BotProfile, color: 'w' | 'b' | 'random') => {
+      setActiveBot(bot);
+      setOnlineOpponent(null);
+      setPlayMode('online'); // Treat bot games as 'online' in terms of engine interaction
+
+      let finalColor: 'w' | 'b' = 'w';
+      if (color === 'random') {
+          finalColor = Math.random() > 0.5 ? 'w' : 'b';
+      } else {
+          finalColor = color;
+      }
+      setUserColor(finalColor);
+
+      handleNewGame();
+  };
+
+  const handleExit = useCallback(() => {
+    setActiveBot(null);
+    setOnlineOpponent(null);
+    setHasGameStarted(false);
+    setIsGameOver(false);
+    setGameResult('');
+  }, []);
+
+  const handleStartHumanGame = () => {
+    setIsPlayFriendMode(true);
+    setPlayMode('pass-and-play');
+    setActivePanel('play');
+    setActiveBot(null);
+    setOnlineOpponent(null);
+    setHasGameStarted(false);
+  };
+
+  const handleOnlinePlay = () => {
+    setIsSearching(true);
+    setSearchState('searching');
+    setActiveBot(null);
+    setOnlineOpponent(null);
+    setPlayMode('online');
+
+    // Simulate searching
+    setTimeout(() => {
+        setSearchState('found');
+        playSound('notify');
+
+        // Pick random bot but pretend it's a human
+        const randomBot = ALL_BOTS[Math.floor(Math.random() * ALL_BOTS.length)];
+        // Generate pseudo-human profile
+        const randomName = `Guest${Math.floor(Math.random() * 899999 + 100000)}`;
+        const randomAvatar = `https://picsum.photos/seed/${randomName}/200`;
+        const randomCountry = randomBot.flag;
+
+        setOnlineOpponent({
+            name: randomName,
+            rating: randomBot.rating + Math.floor(Math.random() * 100 - 50),
+            avatar: randomAvatar,
+            flag: randomCountry
+        });
+
+        setTimeout(() => {
+             setActiveBot(randomBot); // The engine
+             handleNewGame();
+        }, 1500);
+
+    }, 2500);
+  };
+
+  const handleCopyLink = () => {
+      navigator.clipboard.writeText(window.location.href);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+  };
+
+  // Update timer on new game or time control change
+  useEffect(() => {
+      resetTimer();
+  }, [timeControl, resetTimer]);
+
+  const getTimeControlLabel = (seconds: number) => {
+      const mins = Math.floor(seconds / 60);
+      return `${mins} min`;
+  };
+
+  // Determine if board should be interactable
+  // If engine/online mode: only user's turn OR pre-moving is allowed (technically we allow interaction)
+  // If human/pass-and-play mode: any turn.
+  // NOTE: react-chessboard doesn't easily support moving on opponent turn for pre-moves without custom logic.
+  // We allow interaction if engine opponent and TURN is WRONG to capture the pre-move intent?
+  // Actually, react-chessboard blocks dragging if we don't handle it.
+  // We enabled it by checking `game.turn() !== userColor` in onMove.
+  // But `isInteractable` passed to Chessboard needs to be true.
+
+  const isInteractable = !isGameOver && !viewFen && (
+      isEngineOpponent ? true : true // Allow interaction always to enable pre-moves (filtered in onMove)
+  );
+
+  return (
+    <div className="flex flex-col lg:flex-row h-full md:h-screen w-full overflow-hidden bg-chess-dark">
+
+      {/* Left Area (Board) */}
+      <div className="flex-none lg:flex-1 flex flex-col items-center justify-center p-2 lg:p-4 bg-[#312e2b] relative">
+
+        {/* Evaluation Bar Desktop */}
+        {!isGameOver && (isCoachMode ? coachSettings.showEvalBar : true) && (
+             <div className="hidden lg:block absolute left-4 top-1/2 -translate-y-1/2 h-[80vh] w-6 z-0">
+                <EvaluationBar score={currentEval.score} mate={currentEval.mate} />
+            </div>
+        )}
+
+        <div className="w-full max-w-[400px] lg:max-w-[calc(100vh_-_10rem)] relative flex flex-col justify-center">
+
+            {/* Coach Feedback Overlay (Inside Container) */}
+            <CoachFeedback
+                feedback={feedback}
+                isThinking={isCoachThinking}
+                onClose={resetFeedback}
+            />
+
+            {/* Opponent Info (Top) */}
+            <div className="flex justify-between items-end mb-1 px-1 relative">
+                <div className="flex items-center gap-2 md:gap-3">
+                    <div className="w-8 h-8 md:w-10 md:h-10 rounded bg-gray-500 overflow-hidden border border-white/20 relative group">
+                        {onlineOpponent ? (
+                            <img src={onlineOpponent.avatar} alt={onlineOpponent.name} className="w-full h-full object-cover" />
+                        ) : activeBot ? (
+                           <img src={activeBot.avatar} alt={activeBot.name} className="w-full h-full object-cover" />
+                        ) : (
+                           <img src="https://picsum.photos/id/64/100" alt="Opponent" className="w-full h-full object-cover" />
+                        )}
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
+                    </div>
+                    <div className="flex flex-col justify-center">
+                        <div className="flex items-center gap-1.5">
+                           <span className="text-white font-bold text-sm leading-none tracking-wide">
+                              {onlineOpponent ? onlineOpponent.name : activeBot ? activeBot.name : "Opponent"}
+                           </span>
+                           {(onlineOpponent || activeBot) && <img src={onlineOpponent ? onlineOpponent.flag : activeBot?.flag} className="w-3 h-2 shadow-sm" alt="Flag" />}
+                           {activeBot && !onlineOpponent && (
+                               <span className="bg-yellow-600 text-[9px] px-1 rounded text-white font-bold leading-tight border border-white/10 hidden md:inline-block" title="Bot">BOT</span>
+                           )}
+                        </div>
+                        <div className="flex items-center gap-2 mt-1 h-5">
+                             {(onlineOpponent || activeBot) ? (
+                                <span className="text-xs text-[#a0a0a0] font-semibold">({onlineOpponent ? onlineOpponent.rating : activeBot?.rating})</span>
+                             ) : (
+                                <span className="text-xs text-[#a0a0a0] font-semibold">1200</span>
+                             )}
+                             <CapturedPieces game={game} color={userColor === 'w' ? 'b' : 'w'} />
+                        </div>
+                    </div>
+                </div>
+
+                {/* Bot Chat Bubble */}
+                {botMessage && (
+                     <div className="absolute left-14 bottom-12 bg-white text-black text-xs font-bold px-3 py-2 rounded-xl rounded-bl-none shadow-lg animate-in fade-in zoom-in duration-200 z-10 max-w-[200px]">
+                         {botMessage}
+                         <div className="absolute bottom-[-6px] left-[0px] w-0 h-0 border-l-[10px] border-l-white border-b-[10px] border-b-transparent"></div>
+                     </div>
+                )}
+
+                {(activePanel === 'play' || isBotMode) && (
+                    <div className={`
+                        px-3 py-1.5 md:px-4 md:py-2 rounded-[4px] font-mono font-bold text-2xl shadow-[0_4px_0_0_rgba(0,0,0,0.1)] cursor-default min-w-[100px] text-center
+                        ${game.turn() === (userColor === 'w' ? 'b' : 'w') && !isGameOver ? 'bg-white text-black shadow-[0_4px_0_0_#a0a0a0]' : 'bg-[#211f1c] text-[#706c66]'}
+                    `}>
+                        {formatTime(userColor === 'w' ? blackTime : whiteTime)}
+                    </div>
+                )}
+            </div>
+
+            <div className="rounded-sm shadow-2xl ring-4 ring-black/10 relative aspect-square">
+                 <Chessboard
+                    key={userColor} // Force re-mount on color change to ensure orientation updates
+                    interactable={isInteractable}
+                    fen={viewFen || fen}
+                    onMove={onMove}
+                    lastMove={lastMove}
+                    boardOrientation={userColor === 'w' ? 'white' : 'black'}
+                    customArrows={(isCoachMode && !viewFen) ? coachArrows : (suggestionArrow && !viewFen) ? [[suggestionArrow.from, suggestionArrow.to, '#f1c40f']] : undefined}
+                    customSquareStyles={customSquareStyles}
+                 />
+
+                 {/* Game Over Overlay */}
+                 {isGameOver && (
+                     <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center p-6 z-20 backdrop-blur-sm animate-in fade-in duration-300">
+                         <div className="bg-[#262522] rounded-lg shadow-2xl p-6 w-full max-w-[340px] border border-white/10 text-center">
+
+                             {/* Result Header */}
+                             <div className="mb-6 relative">
+                                 {/* Confetti or Effects could go here */}
+                                 {gameResult.includes('Won') ? (
+                                    <div className="w-16 h-16 bg-[#81b64c] rounded-xl flex items-center justify-center mx-auto mb-4 shadow-lg transform rotate-3">
+                                        <Trophy className="w-8 h-8 text-white" />
+                                    </div>
+                                 ) : (
+                                    <div className="w-16 h-16 bg-[#403d39] rounded-xl flex items-center justify-center mx-auto mb-4 shadow-lg transform -rotate-3">
+                                        <span className="text-3xl font-black text-[#a0a0a0]">½</span>
+                                    </div>
+                                 )}
+                                 <h2 className="text-2xl font-black text-white mb-1 drop-shadow-md">{gameResult}</h2>
+                                 <p className="text-[#a0a0a0] text-sm font-semibold">by {gameResult.toLowerCase().includes('time') ? 'timeout' : 'checkmate'}</p>
+                             </div>
+
+                             {/* Avatar Vs */}
+                             <div className="flex justify-between items-center gap-2 mb-8 bg-[#211f1c] p-3 rounded-lg border border-white/5">
+                                 <div className="flex flex-col items-center flex-1">
+                                      <div className="w-12 h-12 rounded-lg bg-gray-500 overflow-hidden border border-white/10 mb-2">
+                                          <img src="https://picsum.photos/200" alt="Me" className="w-full h-full object-cover" />
+                                      </div>
+                                      <span className="text-xs font-bold text-gray-300">You</span>
+                                      <span className="text-[10px] text-[#81b64c] font-bold bg-[#81b64c]/10 px-1.5 py-0.5 rounded mt-0.5">+8</span>
+                                 </div>
+                                 <div className="flex flex-col items-center px-2">
+                                     <span className="text-[#504c47] font-black text-xl italic">VS</span>
+                                 </div>
+                                 <div className="flex flex-col items-center flex-1">
+                                      <div className="w-12 h-12 rounded-lg bg-gray-500 overflow-hidden border border-white/10 mb-2">
+                                          {onlineOpponent ? (
+                                              <img src={onlineOpponent.avatar} alt={onlineOpponent.name} className="w-full h-full object-cover" />
+                                          ) : activeBot ? (
+                                             <img src={activeBot.avatar} alt={activeBot.name} className="w-full h-full object-cover" />
+                                          ) : (
+                                             <img src="https://picsum.photos/id/64/100" alt="Opponent" className="w-full h-full object-cover" />
+                                          )}
+                                      </div>
+                                      <span className="text-xs font-bold text-gray-300 truncate max-w-[80px]">
+                                          {onlineOpponent ? onlineOpponent.name : activeBot ? activeBot.name : "Opponent"}
+                                      </span>
+                                      <span className="text-[10px] text-[#fa412d] font-bold bg-[#fa412d]/10 px-1.5 py-0.5 rounded mt-0.5">-8</span>
+                                 </div>
+                             </div>
+
+                             {/* Actions */}
+                             <div className="flex flex-col w-full gap-2">
+                                <button
+                                    onClick={() => {
+                                        if (onAnalyze) onAnalyze(game.pgn(), 'review');
+                                    }}
+                                    className="w-full bg-chess-green hover:bg-chess-greenHover text-white font-bold py-3 rounded-lg shadow-[0_4px_0_0_#457524] active:shadow-none active:translate-y-[4px] transition-all flex items-center justify-center gap-2 mb-1"
+                                >
+                                    <Search className="w-5 h-5" />
+                                    Game Review
+                                </button>
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={handleNewGame}
+                                        className="flex-1 bg-[#383531] hover:bg-[#45423e] text-white font-bold py-3 rounded-lg shadow-lg flex items-center justify-center gap-2 transition-transform active:scale-95 text-sm"
+                                    >
+                                        <RotateCcw className="w-4 h-4" />
+                                        {activeBot ? "Rematch" : "New Game"}
+                                    </button>
+                                    <button
+                                        onClick={handleExit}
+                                        className="flex-1 bg-[#262421] hover:bg-[#363430] text-gray-300 font-bold py-3 rounded-lg shadow-lg flex items-center justify-center gap-2 transition-transform active:scale-95 text-sm"
+                                    >
+                                        <XCircle className="w-4 h-4" />
+                                        {activeBot ? "New Bot" : "Home"}
+                                    </button>
+                                </div>
+                             </div>
+                         </div>
+                     </div>
+                 )}
+            </div>
+
+            {/* Player Info (Bottom) */}
+            <div className="flex justify-between items-start mt-1 px-1">
+                <div className="flex items-center gap-2 md:gap-3">
+                    <div className="w-8 h-8 md:w-10 md:h-10 rounded bg-gray-500 overflow-hidden border border-white/20 relative group">
+                        <img src="https://picsum.photos/200" alt="Me" className="w-full h-full object-cover" />
+                    </div>
+                    <div className="flex flex-col justify-center">
+                        <div className="flex items-center gap-1.5">
+                            <span className="text-white font-bold text-sm leading-none tracking-wide">MasterTeo1205</span>
+                            <span className="text-lg md:text-xl leading-none">🇺🇸</span>
+                        </div>
+                         <div className="flex items-center gap-2 mt-1 h-5">
+                             <span className="text-xs text-[#a0a0a0] font-semibold">850</span>
+                             <CapturedPieces game={game} color={userColor} />
+                             {openingName && (
+                                 <span className="text-[10px] text-[#a0a0a0] font-semibold ml-1 bg-[#262421] px-1.5 py-0.5 rounded border border-white/10 hidden sm:inline-block truncate max-w-[150px]" title={openingName}>
+                                     {openingName}
+                                 </span>
+                             )}
+                        </div>
+                    </div>
+                </div>
+                {(activePanel === 'play' || isBotMode) && (
+                    <div className={`
+                        px-3 py-1.5 md:px-4 md:py-2 rounded-[4px] font-mono font-bold text-2xl shadow-[0_4px_0_0_rgba(0,0,0,0.1)] cursor-default min-w-[100px] text-center
+                        ${game.turn() === userColor && !isGameOver ? 'bg-white text-black shadow-[0_4px_0_0_#a0a0a0]' : 'bg-[#211f1c] text-[#706c66]'}
+                    `}>
+                        {formatTime(userColor === 'w' ? whiteTime : blackTime)}
+                    </div>
+                )}
+            </div>
+        </div>
+      </div>
+
+      {/* Right Sidebar */}
+      <div className="flex-1 lg:flex-none w-full lg:w-[350px] xl:w-[420px] bg-[#262522] flex flex-col border-l border-white/10 shrink-0 h-auto lg:h-auto z-10 relative shadow-2xl overflow-hidden">
+
+          {/* Mock Tab Switcher */}
+          <div className="absolute top-0 left-[-40px] flex flex-col gap-2 p-2 z-0 pointer-events-none md:pointer-events-auto opacity-0 md:opacity-100">
+             {activePanel !== 'bots' && (
+                 <button
+                    onClick={() => setActivePanel(activePanel === 'play' ? 'review' : 'play')}
+                    className="bg-[#262522] p-2 rounded-l-md text-gray-400 hover:text-white shadow-lg border-y border-l border-white/10 pointer-events-auto"
+                    title="Toggle View"
+                 >
+                    <ChevronRight className={`w-5 h-5 transition-transform ${activePanel === 'play' ? 'rotate-180' : ''}`} />
+                 </button>
+             )}
+          </div>
+
+          {activePanel === 'review' ? (
+              <GameReviewPanel
+                  pgn={game.pgn()}
+                  onStartReview={() => {
+                      if (onAnalyze) onAnalyze(game.pgn(), 'review');
+                  }}
+              />
+          ) : activePanel === 'bots' && !activeBot ? (
+              <PlayBotsPanel onStartGame={handleStartBotGame} />
+          ) : (activePanel === 'bots' && activeBot) || hasGameStarted ? (
+               // Active Game View (Move List)
+               <div className="flex flex-col h-full bg-[#262522]">
+                   <div className="flex items-center justify-between px-4 py-2 bg-[#211f1c] border-b border-white/5">
+                        <span className="font-bold text-white text-sm">
+                            Game vs {onlineOpponent ? onlineOpponent.name : activeBot ? activeBot.name : 'Opponent'}
+                        </span>
+                        <div className="flex gap-2">
+
+                             {/* Coach Toggle */}
+                             <button
+                                onClick={() => setIsCoachMode(!isCoachMode)}
+                                className={`flex items-center gap-1 px-2 py-1 rounded transition-colors ${isCoachMode ? 'bg-chess-green text-white' : 'text-gray-400 hover:text-white'}`}
+                                title="Toggle Coach Mode"
+                             >
+                                 <MessageCircle className="w-4 h-4" />
+                                 <span className="text-xs font-bold">Coach</span>
+                             </button>
+
+                             {/* Coach Settings Cog */}
+                             {isCoachMode && (
+                                 <div className="relative">
+                                    <button
+                                        title="Coach Settings"
+                                        onClick={() => setShowCoachSettings(!showCoachSettings)}
+                                        className="text-gray-400 hover:text-white p-1 rounded"
+                                    >
+                                        <Settings className="w-4 h-4" />
+                                    </button>
+
+                                    {showCoachSettings && (
+                                        <div className="absolute top-full right-0 mt-2 w-56 bg-[#302e2b] rounded-lg shadow-xl border border-white/10 p-3 z-50">
+                                            <h4 className="text-white font-bold text-xs uppercase mb-3 text-center tracking-wider">Coach Settings</h4>
+
+                                            <div className="space-y-2">
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-gray-300 text-sm">Suggestion Arrows</span>
+                                                    <div
+                                                        className={`w-8 h-4 rounded-full p-0.5 cursor-pointer ${coachSettings.showSuggestionArrows ? 'bg-chess-green' : 'bg-gray-600'}`}
+                                                        onClick={() => setCoachSettings(s => ({...s, showSuggestionArrows: !s.showSuggestionArrows}))}
+                                                    >
+                                                        <div className={`w-3 h-3 bg-white rounded-full shadow-sm transition-transform ${coachSettings.showSuggestionArrows ? 'translate-x-4' : ''}`} />
+                                                    </div>
+                                                </div>
+
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-gray-300 text-sm">Threat Arrows</span>
+                                                    <div
+                                                        className={`w-8 h-4 rounded-full p-0.5 cursor-pointer ${coachSettings.showThreatArrows ? 'bg-chess-green' : 'bg-gray-600'}`}
+                                                        onClick={() => setCoachSettings(s => ({...s, showThreatArrows: !s.showThreatArrows}))}
+                                                    >
+                                                        <div className={`w-3 h-3 bg-white rounded-full shadow-sm transition-transform ${coachSettings.showThreatArrows ? 'translate-x-4' : ''}`} />
+                                                    </div>
+                                                </div>
+
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-gray-300 text-sm">Evaluation Bar</span>
+                                                    <div
+                                                        className={`w-8 h-4 rounded-full p-0.5 cursor-pointer ${coachSettings.showEvalBar ? 'bg-chess-green' : 'bg-gray-600'}`}
+                                                        onClick={() => setCoachSettings(s => ({...s, showEvalBar: !s.showEvalBar}))}
+                                                    >
+                                                        <div className={`w-3 h-3 bg-white rounded-full shadow-sm transition-transform ${coachSettings.showEvalBar ? 'translate-x-4' : ''}`} />
+                                                    </div>
+                                                </div>
+
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-gray-300 text-sm">Move Feedback</span>
+                                                    <div
+                                                        className={`w-8 h-4 rounded-full p-0.5 cursor-pointer ${coachSettings.showFeedback ? 'bg-chess-green' : 'bg-gray-600'}`}
+                                                        onClick={() => setCoachSettings(s => ({...s, showFeedback: !s.showFeedback}))}
+                                                    >
+                                                        <div className={`w-3 h-3 bg-white rounded-full shadow-sm transition-transform ${coachSettings.showFeedback ? 'translate-x-4' : ''}`} />
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="mt-3 pt-2 border-t border-white/10 text-center">
+                                                <button
+                                                    className="text-xs text-gray-400 hover:text-white"
+                                                    onClick={() => setShowCoachSettings(false)}
+                                                >
+                                                    Close
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+                                 </div>
+                             )}
+
+                             <div className="w-px bg-white/10 mx-1"></div>
+
+                             <button className="text-gray-400 hover:text-white" title="Resign" onClick={() => { setIsGameOver(true); setGameResult('Aborted'); }}>
+                                 <Flag className="w-4 h-4" />
+                             </button>
+                             <button className="text-gray-400 hover:text-white" title="Abort" onClick={handleNewGame}>
+                                 <XCircle className="w-4 h-4" />
+                             </button>
+                        </div>
+                   </div>
+                   <MoveList
+                        game={game}
+                        currentMoveIndex={viewMoveIndex}
+                        onMoveClick={(fen, index) => {
+                            setViewFen(fen);
+                            setViewMoveIndex(index);
+                            // Also update board last move indicator?
+                            // This would require parsing the move to get from/to.
+                            // For now, we just show the board position.
+
+                            // To recover "last move" indicator for historical states:
+                            // We can use the game history logic.
+                            const history = game.history({ verbose: true });
+                            if (history[index]) {
+                                setLastMove({ from: history[index].from, to: history[index].to });
+                            }
+                        }}
+                   />
+
+                   <div className="mt-auto bg-[#211f1c] p-2 flex flex-col gap-1 border-t border-white/5">
+                        {isGameOver && (
+                             <button
+                                onClick={() => {
+                                    if (onAnalyze) onAnalyze(game.pgn(), 'review');
+                                }}
+                                className="w-full bg-chess-green hover:bg-chess-greenHover text-white font-bold py-3 rounded mb-2 shadow-lg flex items-center justify-center gap-2 transition-transform active:scale-95"
+                            >
+                                <Search className="w-5 h-5" />
+                                Game Review
+                            </button>
+                        )}
+                        {/* Live Button when viewing history */}
+                        {viewFen && (
+                             <button
+                                className="w-full mb-2 bg-[#383531] hover:bg-[#45423e] text-chess-green font-bold py-1 rounded"
+                                onClick={() => {
+                                    setViewFen(null);
+                                    setViewMoveIndex(-1);
+                                    // Restore last move indicator
+                                    const history = game.history({ verbose: true });
+                                    if (history.length > 0) {
+                                        const last = history[history.length - 1];
+                                        setLastMove({ from: last.from, to: last.to });
+                                    }
+                                }}
+                             >
+                                 Back to Live Game
+                             </button>
+                        )}
+
+                        {/* Game Controls: Suggestion/Undo for Bots */}
+                        {(isBotMode || playMode === 'pass-and-play') && !isGameOver && (
+                             <div className="flex gap-1 mb-1">
+                                 {isBotMode && (
+                                     <button
+                                         onClick={handleMoveSuggestion}
+                                         className="flex-1 bg-[#383531] hover:bg-[#45423e] rounded flex items-center justify-center py-2 text-gray-300 hover:text-white transition-colors"
+                                         title="Move Suggestion"
+                                     >
+                                         <Lightbulb className="w-5 h-5" />
+                                     </button>
+                                 )}
+                                 <button
+                                     onClick={handleUndo}
+                                     className="flex-1 bg-[#383531] hover:bg-[#45423e] rounded flex items-center justify-center py-2 text-gray-300 hover:text-white transition-colors"
+                                     title="Takeback"
+                                 >
+                                     <Undo2 className="w-5 h-5" />
+                                 </button>
+                                 {playMode === 'pass-and-play' && (
+                                     <button
+                                         onClick={handleFlipBoard}
+                                         className="flex-1 bg-[#383531] hover:bg-[#45423e] rounded flex items-center justify-center py-2 text-gray-300 hover:text-white transition-colors"
+                                         title="Flip Board"
+                                     >
+                                         <RefreshCw className="w-5 h-5" />
+                                     </button>
+                                 )}
+                             </div>
+                        )}
+
+                        <div className="flex gap-1">
+                            <button className="flex-1 bg-[#383531] hover:bg-[#45423e] rounded flex items-center justify-center py-3 text-gray-400 hover:text-white transition-colors font-bold text-sm" onClick={() => { setIsGameOver(true); setGameResult('Resigned'); }}>
+                                Resign
+                            </button>
+                            <button className="flex-1 bg-[#383531] hover:bg-[#45423e] rounded flex items-center justify-center py-3 text-gray-400 hover:text-white transition-colors font-bold text-sm">
+                                Draw
+                            </button>
+                        </div>
+                   </div>
+               </div>
+          ) : isSearching ? (
+             <div className="flex-1 flex flex-col items-center justify-center p-8 text-center animate-in fade-in">
+                 {searchState === 'searching' ? (
+                     <>
+                        <div className="w-24 h-24 relative mb-6">
+                            <div className="absolute inset-0 border-4 border-white/10 rounded-full"></div>
+                            <div className="absolute inset-0 border-4 border-t-chess-green rounded-full animate-spin"></div>
+                            <img src="https://picsum.photos/200" className="absolute inset-2 rounded-full opacity-50" />
+                        </div>
+                        <h3 className="text-2xl font-bold text-white mb-2">Searching...</h3>
+                        <p className="text-gray-400 mb-8">Finding an opponent for you</p>
+                        <button
+                            onClick={() => { setIsSearching(false); setSearchState(null); }}
+                            className="bg-[#383531] hover:bg-[#45423e] text-white px-8 py-3 rounded-lg font-bold"
+                        >
+                            Cancel
+                        </button>
+                     </>
+                 ) : (
+                    <>
+                        <div className="w-24 h-24 relative mb-6">
+                            <div className="absolute inset-0 rounded-full border-4 border-chess-green animate-ping"></div>
+                             <div className="w-full h-full rounded-full bg-chess-green flex items-center justify-center">
+                                 <Check className="w-12 h-12 text-white" />
+                             </div>
+                        </div>
+                        <h3 className="text-2xl font-bold text-white mb-2">Opponent Found!</h3>
+                        <p className="text-gray-400">Starting game...</p>
+                    </>
+                 )}
+             </div>
+          ) : isPlayFriendMode ? (
+              <div className="flex-1 flex flex-col p-6 text-center animate-in fade-in">
+                   <div className="mb-6">
+                        <div className="w-16 h-16 bg-[#383531] rounded-full flex items-center justify-center mx-auto mb-4">
+                             <Search className="w-8 h-8 text-chess-green" />
+                        </div>
+                        <h2 className="text-2xl font-bold text-white mb-2">Play a Friend</h2>
+                        <p className="text-gray-400 text-sm">Share this link to invite someone to play.</p>
+                   </div>
+
+                   <div className="bg-[#1b1a19] p-4 rounded-lg border border-white/10 mb-6">
+                       <label className="text-xs text-gray-500 font-bold uppercase block text-left mb-2">Challenge Link</label>
+                       <div className="flex gap-2">
+                           <input
+                              readOnly
+                              value={window.location.href}
+                              className="flex-1 bg-[#262522] border border-white/10 rounded px-3 py-2 text-gray-300 text-sm focus:outline-none"
+                           />
+                           <button
+                              onClick={handleCopyLink}
+                              className="bg-[#383531] hover:bg-[#45423e] px-3 rounded flex items-center justify-center transition-colors relative"
+                              title="Copy"
+                           >
+                               {copied ? <Check className="w-5 h-5 text-green-500" /> : <Copy className="w-5 h-5 text-gray-400" />}
+                           </button>
+                       </div>
+                   </div>
+
+                   <button
+                        onClick={handleNewGame}
+                        className="w-full bg-chess-green hover:bg-chess-greenHover text-white font-bold py-4 rounded-lg shadow-[0_4px_0_0_#537a32] active:shadow-none active:translate-y-[4px] transition-all text-xl mb-3"
+                   >
+                        Start Game
+                   </button>
+                   <button
+                        onClick={() => setIsPlayFriendMode(false)}
+                        className="text-gray-400 hover:text-white font-semibold text-sm"
+                   >
+                        Cancel
+                   </button>
+              </div>
+          ) : (
+            <>
+                {/* Play Panel Content */}
+                <div className="flex bg-[#211f1c] text-sm font-semibold border-b border-white/5">
+                    <button className="flex-1 py-3 text-white border-b-2 border-chess-green bg-[#262522]">New Game</button>
+                    <button className="flex-1 py-3 text-[#c3c3c3] hover:text-white hover:bg-[#2a2926]">Games</button>
+                    <button className="flex-1 py-3 text-[#c3c3c3] hover:text-white hover:bg-[#2a2926]">Players</button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-4 flex flex-col items-center justify-center text-center">
+                    <div className="mb-4 md:mb-6">
+                        <img src="https://www.chess.com/bundles/web/images/color-icons/handshake.svg" alt="Start" className="w-12 h-12 md:w-16 md:h-16 opacity-50 mx-auto mb-2" />
+                        <h3 className="text-white font-bold text-lg">Play Chess</h3>
+                    </div>
+
+                    <div className="w-full space-y-2">
+                        <button
+                            onClick={handleOnlinePlay}
+                            className="w-full bg-chess-green hover:bg-chess-greenHover text-white font-bold py-3 md:py-4 rounded-lg shadow-[0_4px_0_0_#537a32] active:shadow-none active:translate-y-[4px] transition-all text-xl flex items-center justify-center gap-2"
+                        >
+                            <span>Play</span>
+                        </button>
+                        <div className="grid grid-cols-2 gap-2">
+                            <button
+                                onClick={handleStartHumanGame}
+                                className="bg-[#383531] hover:bg-[#45423e] text-gray-300 py-3 rounded font-semibold text-sm transition-colors border-b-4 border-[#252422] active:border-b-0 active:translate-y-1"
+                            >
+                                Play Friend
+                            </button>
+                            <button
+                                onClick={() => setActivePanel('bots')}
+                                className="bg-[#383531] hover:bg-[#45423e] text-gray-300 py-3 rounded font-semibold text-sm transition-colors border-b-4 border-[#252422] active:border-b-0 active:translate-y-1"
+                            >
+                                Play Computer
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="mt-4 md:mt-8 w-full">
+                        <div className="flex justify-between items-center mb-2 px-1">
+                            <span className="text-xs font-bold text-gray-500 uppercase">Time Controls</span>
+                            <Settings
+                                className="w-4 h-4 text-gray-500 cursor-pointer hover:text-white"
+                                onClick={openSettings}
+                            />
+                        </div>
+                        <div className="grid grid-cols-3 gap-2">
+                            {[600, 60, 900].map(t => (
+                                <button
+                                    key={t}
+                                    onClick={() => setTimeControl(t)}
+                                    className={`
+                                        py-2 rounded text-sm font-semibold border border-transparent transition-colors
+                                        ${timeControl === t ? 'bg-[#302e2b] text-white border-white/20' : 'bg-[#211f1c] text-[#c3c3c3] hover:bg-[#302e2b] hover:border-white/10'}
+                                    `}
+                                >
+                                    {getTimeControlLabel(t)}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+
+                {/* Bottom Controls */}
+                <div className="bg-[#211f1c] p-2 flex gap-1 border-t border-white/5">
+                    <button className="flex-1 bg-[#383531] hover:bg-[#45423e] rounded flex items-center justify-center py-3 text-gray-400 hover:text-white transition-colors" title="Resign" onClick={() => { setIsGameOver(true); setGameResult('Aborted'); }}>
+                        <Flag className="w-5 h-5" />
+                    </button>
+                    <button className="flex-1 bg-[#383531] hover:bg-[#45423e] rounded flex items-center justify-center py-3 text-gray-400 hover:text-white transition-colors" title="Draw">
+                        <span className="font-bold text-lg">½</span>
+                    </button>
+                    <button className="flex-1 bg-[#383531] hover:bg-[#45423e] rounded flex items-center justify-center py-3 text-gray-400 hover:text-white transition-colors" title="Abort" onClick={handleNewGame}>
+                        <XCircle className="w-5 h-5" />
+                    </button>
+                </div>
+            </>
+          )}
+      </div>
+    </div>
+  );
+};
+
+export default GameInterface;
