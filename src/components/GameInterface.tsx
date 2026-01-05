@@ -3,6 +3,7 @@ import Chessboard from './Chessboard';
 import { Settings, Flag, XCircle, Search, ChevronRight, RotateCcw, MessageCircle, AlertCircle, Copy, Check, Lightbulb, Undo2, RefreshCw, Trophy } from 'lucide-react';
 import GameReviewPanel from './GameReviewPanel';
 import PlayBotsPanel from './PlayBotsPanel';
+import { PlayCoachPanel } from './PlayCoachPanel';
 import MoveList from './MoveList';
 import CapturedPieces from './CapturedPieces';
 import CoachFeedback from './CoachFeedback';
@@ -18,14 +19,14 @@ import { ALL_BOTS, BotProfile } from '../utils/bots';
 import { identifyOpening } from '../utils/openings';
 
 interface GameInterfaceProps {
-  initialMode?: 'play' | 'bots' | 'review';
+  initialMode?: 'play' | 'bots' | 'review' | 'coach';
   initialTimeControl?: number;
   initialFen?: string;
   onAnalyze?: (pgn: string, tab?: 'analysis' | 'review') => void;
 }
 
 const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', initialTimeControl = 600, initialFen, onAnalyze }) => {
-  const [activePanel, setActivePanel] = useState<'play' | 'review' | 'bots'>(initialMode);
+  const [activePanel, setActivePanel] = useState<'play' | 'review' | 'bots' | 'coach'>(initialMode);
   const [activeBot, setActiveBot] = useState<BotProfile | null>(null);
 
   const { openSettings } = useSettings();
@@ -519,6 +520,24 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
       handleNewGame();
   };
 
+  const handleStartCoachGame = (settings: { botId: string, userColor: 'w' | 'b' | 'random' }) => {
+       const bot = ALL_BOTS.find(b => b.id === settings.botId) || ALL_BOTS[0];
+       setActiveBot(bot);
+       setOnlineOpponent(null);
+       setPlayMode('online');
+       setIsCoachMode(true); // Activate Coach
+
+       let finalColor: 'w' | 'b' = 'w';
+       if (settings.userColor === 'random') {
+           finalColor = Math.random() > 0.5 ? 'w' : 'b';
+       } else {
+           finalColor = settings.userColor;
+       }
+       setUserColor(finalColor);
+
+       handleNewGame();
+  };
+
   const handleExit = useCallback(() => {
     setActiveBot(null);
     setOnlineOpponent(null);
@@ -827,6 +846,8 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
               />
           ) : activePanel === 'bots' && !activeBot ? (
               <PlayBotsPanel onStartGame={handleStartBotGame} />
+          ) : activePanel === 'coach' && !hasGameStarted ? (
+              <PlayCoachPanel onStartGame={handleStartCoachGame} />
           ) : (activePanel === 'bots' && activeBot) || hasGameStarted ? (
                // Active Game View (Move List)
                <div className="flex flex-col h-full bg-[#262522]">
@@ -856,63 +877,12 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
                                     >
                                         <Settings className="w-4 h-4" />
                                     </button>
-
-                                    {showCoachSettings && (
-                                        <div className="absolute top-full right-0 mt-2 w-56 bg-[#302e2b] rounded-lg shadow-xl border border-white/10 p-3 z-50">
-                                            <h4 className="text-white font-bold text-xs uppercase mb-3 text-center tracking-wider">Coach Settings</h4>
-
-                                            <div className="space-y-2">
-                                                <div className="flex items-center justify-between">
-                                                    <span className="text-gray-300 text-sm">Suggestion Arrows</span>
-                                                    <div
-                                                        className={`w-8 h-4 rounded-full p-0.5 cursor-pointer ${coachSettings.showSuggestionArrows ? 'bg-chess-green' : 'bg-gray-600'}`}
-                                                        onClick={() => setCoachSettings(s => ({...s, showSuggestionArrows: !s.showSuggestionArrows}))}
-                                                    >
-                                                        <div className={`w-3 h-3 bg-white rounded-full shadow-sm transition-transform ${coachSettings.showSuggestionArrows ? 'translate-x-4' : ''}`} />
-                                                    </div>
-                                                </div>
-
-                                                <div className="flex items-center justify-between">
-                                                    <span className="text-gray-300 text-sm">Threat Arrows</span>
-                                                    <div
-                                                        className={`w-8 h-4 rounded-full p-0.5 cursor-pointer ${coachSettings.showThreatArrows ? 'bg-chess-green' : 'bg-gray-600'}`}
-                                                        onClick={() => setCoachSettings(s => ({...s, showThreatArrows: !s.showThreatArrows}))}
-                                                    >
-                                                        <div className={`w-3 h-3 bg-white rounded-full shadow-sm transition-transform ${coachSettings.showThreatArrows ? 'translate-x-4' : ''}`} />
-                                                    </div>
-                                                </div>
-
-                                                <div className="flex items-center justify-between">
-                                                    <span className="text-gray-300 text-sm">Evaluation Bar</span>
-                                                    <div
-                                                        className={`w-8 h-4 rounded-full p-0.5 cursor-pointer ${coachSettings.showEvalBar ? 'bg-chess-green' : 'bg-gray-600'}`}
-                                                        onClick={() => setCoachSettings(s => ({...s, showEvalBar: !s.showEvalBar}))}
-                                                    >
-                                                        <div className={`w-3 h-3 bg-white rounded-full shadow-sm transition-transform ${coachSettings.showEvalBar ? 'translate-x-4' : ''}`} />
-                                                    </div>
-                                                </div>
-
-                                                <div className="flex items-center justify-between">
-                                                    <span className="text-gray-300 text-sm">Move Feedback</span>
-                                                    <div
-                                                        className={`w-8 h-4 rounded-full p-0.5 cursor-pointer ${coachSettings.showFeedback ? 'bg-chess-green' : 'bg-gray-600'}`}
-                                                        onClick={() => setCoachSettings(s => ({...s, showFeedback: !s.showFeedback}))}
-                                                    >
-                                                        <div className={`w-3 h-3 bg-white rounded-full shadow-sm transition-transform ${coachSettings.showFeedback ? 'translate-x-4' : ''}`} />
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            <div className="mt-3 pt-2 border-t border-white/10 text-center">
-                                                <button
-                                                    className="text-xs text-gray-400 hover:text-white"
-                                                    onClick={() => setShowCoachSettings(false)}
-                                                >
-                                                    Close
-                                                </button>
-                                            </div>
-                                        </div>
-                                    )}
+                                     <CoachSettingsModal
+                                         isOpen={showCoachSettings}
+                                         onClose={() => setShowCoachSettings(false)}
+                                         settings={coachSettings}
+                                         onUpdateSettings={setCoachSettings}
+                                     />
                                  </div>
                              )}
 
