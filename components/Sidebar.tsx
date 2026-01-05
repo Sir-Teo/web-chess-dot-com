@@ -56,7 +56,6 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => {
         subItems: [
             { label: 'Play', icon: Gamepad2, action: 'play' },
             { label: 'Play Bots', icon: Cpu, action: 'play-bots' },
-            { label: 'Play Coach', icon: MessageCircle, action: 'play-coach' },
             { label: 'Tournaments', icon: Trophy, action: 'play' },
             { label: '4 Player & Variants', icon: Users, action: 'play' },
             { label: 'Leaderboard', icon: BarChart2, action: 'play' },
