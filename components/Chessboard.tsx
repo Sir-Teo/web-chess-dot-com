@@ -1,8 +1,9 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { Chessboard as ReactChessboard } from 'react-chessboard';
-import { Arrow } from '../hooks/useCoach';
+import { Arrow } from '../types';
 import { useSettings, BOARD_THEMES } from '../context/SettingsContext';
 import PromotionModal from './PromotionModal';
+import { Chess } from 'chess.js';
 
 interface ChessboardProps {
   interactable?: boolean;
@@ -25,7 +26,7 @@ const Chessboard: React.FC<ChessboardProps> = ({
   preMove,
   customSquareStyles: propCustomSquareStyles
 }) => {
-  const { boardTheme, showCoordinates, animationSpeed } = useSettings();
+  const { boardTheme, pieceTheme, showCoordinates, animationSpeed } = useSettings();
 
   const themeColors = useMemo(() => {
     return BOARD_THEMES.find(t => t.id === boardTheme) || BOARD_THEMES[0];
@@ -35,9 +36,13 @@ const Chessboard: React.FC<ChessboardProps> = ({
   const [userArrows, setUserArrows] = useState<Arrow[]>([]);
   const [rightClickStart, setRightClickStart] = useState<string | null>(null);
 
+  // Move highlighting state
+  const [moveFrom, setMoveFrom] = useState<string | null>(null);
+  const [optionSquares, setOptionSquares] = useState<Record<string, React.CSSProperties>>({});
+
   // Promotion State
   const [promotionMove, setPromotionMove] = useState<{ from: string, to: string } | null>(null);
-  
+
   // Custom styles for squares
   const customSquareStyles = useMemo(() => {
     const styles: Record<string, React.CSSProperties> = { ...propCustomSquareStyles };
@@ -54,8 +59,9 @@ const Chessboard: React.FC<ChessboardProps> = ({
         styles[preMove.to] = { backgroundColor: 'rgba(244, 67, 54, 0.6)', border: '2px solid rgba(244, 67, 54, 0.8)' };
     }
 
-    return styles;
-  }, [lastMove, preMove, propCustomSquareStyles]);
+    // Merge optionSquares (high priority)
+    return { ...styles, ...optionSquares };
+  }, [lastMove, preMove, propCustomSquareStyles, optionSquares]);
 
   // Combine prop arrows + user arrows
   const allArrows = useMemo(() => {
@@ -74,8 +80,99 @@ const Chessboard: React.FC<ChessboardProps> = ({
       });
   }, [customArrows, userArrows]);
 
+  // Reset highlights on FEN change (new move made externally)
+  useEffect(() => {
+      setMoveFrom(null);
+      setOptionSquares({});
+  }, [fen]);
+
+  // Handle Square Click for Move Highlighting and Click-to-Move
+  const onSquareClick = (square: string) => {
+      // Clear right-click arrows start if any
+      if (rightClickStart) setRightClickStart(null);
+
+      // We need a game instance to validate moves
+      const game = new Chess(fen || undefined);
+
+      // Case 1: Clicking a potential target square
+      if (moveFrom && optionSquares[square]) {
+          const move = { from: moveFrom, to: square, promotion: 'q' }; // Default promo
+
+          // Check for promotion
+          const piece = game.get(moveFrom as any);
+          if (
+              piece?.type === 'p' &&
+              ((piece.color === 'w' && square[1] === '8') || (piece.color === 'b' && square[1] === '1'))
+          ) {
+              setPromotionMove({ from: moveFrom, to: square });
+              setMoveFrom(null);
+              setOptionSquares({});
+              return;
+          }
+
+          if (interactable && onMove) {
+              onMove(moveFrom, square);
+          }
+
+          setMoveFrom(null);
+          setOptionSquares({});
+          return;
+      }
+
+      // Case 2: Clicking a piece to select it
+      const piece = game.get(square as any); // Cast because chess.js types might be strict
+      if (piece) {
+          // If we clicked the same piece, deselect
+          if (moveFrom === square) {
+              setMoveFrom(null);
+              setOptionSquares({});
+              return;
+          }
+
+          // Calculate valid moves
+          const moves = game.moves({ square: square as any, verbose: true });
+
+          // Only highlight if there are moves
+          if (moves.length === 0) {
+               setMoveFrom(null);
+               setOptionSquares({});
+               return;
+          }
+
+          const newOptionSquares: Record<string, React.CSSProperties> = {};
+
+          // Highlight the selected square slightly
+          newOptionSquares[square] = {
+              background: 'rgba(255, 255, 0, 0.4)'
+          };
+
+          moves.forEach((move) => {
+              const isCapture = move.flags.includes('c') || move.flags.includes('e'); // Capture or En Passant
+              newOptionSquares[move.to] = {
+                  background: isCapture
+                    ? 'radial-gradient(circle, transparent 55%, rgba(0,0,0,0.2) 60%)' // Ring for capture
+                    : 'radial-gradient(circle, rgba(0,0,0,0.2) 20%, transparent 25%)', // Dot for move
+                  borderRadius: '50%',
+                  cursor: 'pointer'
+              };
+          });
+
+          setMoveFrom(square);
+          setOptionSquares(newOptionSquares);
+          return;
+      }
+
+      // Case 3: Clicking empty square (deselect)
+      setMoveFrom(null);
+      setOptionSquares({});
+  };
+
   // Types for callback arguments based on react-chessboard documentation
   const onPieceDrop = (sourceSquare: string, targetSquare: string, piece: string) => {
+    // Clear highlights
+    setMoveFrom(null);
+    setOptionSquares({});
+
     // Logic for pre-move handled in parent or here?
     // Parent handles actual game logic.
     if (!interactable || !onMove || !targetSquare) return false;
@@ -108,6 +205,12 @@ const Chessboard: React.FC<ChessboardProps> = ({
   };
 
   const onSquareRightClick = (square: string) => {
+      // Clear selection on right click
+      if (moveFrom) {
+          setMoveFrom(null);
+          setOptionSquares({});
+      }
+
       if (!rightClickStart) {
           setRightClickStart(square);
       } else {
@@ -130,6 +233,30 @@ const Chessboard: React.FC<ChessboardProps> = ({
       }
   };
 
+  // Custom Pieces
+  const customPieces = useMemo(() => {
+      const pieces = ['wP', 'wN', 'wB', 'wR', 'wQ', 'wK', 'bP', 'bN', 'bB', 'bR', 'bQ', 'bK'];
+      const pieceComponents: Record<string, (args: { squareWidth: number }) => JSX.Element> = {};
+
+      pieces.forEach(p => {
+          const color = p[0];
+          const type = p[1].toLowerCase(); // react-chessboard uses capital for piece, but URL logic uses lower
+          // Chess.com standard: wP -> wp, wN -> wn
+          // image url: {color}{type}
+          pieceComponents[p] = ({ squareWidth }) => (
+              <div
+                  style={{
+                      width: squareWidth,
+                      height: squareWidth,
+                      backgroundImage: `url(https://images.chesscomfiles.com/chess-themes/pieces/${pieceTheme}/150/${color}${type}.png)`,
+                      backgroundSize: '100%',
+                  }}
+              />
+          );
+      });
+      return pieceComponents;
+  }, [pieceTheme]);
+
   return (
     <div
       id="chessboard-wrapper"
@@ -141,12 +268,14 @@ const Chessboard: React.FC<ChessboardProps> = ({
       <PromotionModal
         isOpen={!!promotionMove}
         color={boardOrientation === 'white' ? 'w' : 'b'} // Assuming player is playing bottom color usually
+        pieceTheme={pieceTheme}
         onSelect={handlePromotionSelect}
         onClose={() => setPromotionMove(null)}
       />
       <ReactChessboard
         position={fen}
         onPieceDrop={onPieceDrop}
+        onSquareClick={onSquareClick}
         onSquareRightClick={onSquareRightClick}
         boardOrientation={boardOrientation as 'white' | 'black'}
         arePiecesDraggable={interactable}
@@ -154,6 +283,7 @@ const Chessboard: React.FC<ChessboardProps> = ({
         customLightSquareStyle={{ backgroundColor: themeColors.light }}
         customSquareStyles={customSquareStyles}
         customArrows={allArrows as any}
+        customPieces={customPieces}
         animationDuration={animationSpeed === 'slow' ? 500 : animationSpeed === 'fast' ? 100 : 200}
         showBoardNotation={showCoordinates}
       />

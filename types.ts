@@ -29,3 +29,6 @@ export interface User {
   rating: number;
   title?: string; // GM, IM, etc.
 }
+
+// Visual Types
+export type Arrow = [string, string, string];
