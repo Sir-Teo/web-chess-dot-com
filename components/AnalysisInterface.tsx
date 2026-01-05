@@ -164,7 +164,8 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
   // Calculate Square Styles (for move classification)
   const squareStyles = useMemo(() => {
       if (retryState?.isRetrying) return {};
-      if (activeTab !== 'review' || !analysisData || currentMoveIndex <= 0) return {};
+      // Also show classifications in 'analysis' tab if data exists
+      if (!analysisData || currentMoveIndex <= 0) return {};
 
       const styles: Record<string, React.CSSProperties> = {};
       const moveData = analysisData.moves[currentMoveIndex - 1];
@@ -455,6 +456,7 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
                     onLast={handleLast}
                     currentMove={currentMoveIndex}
                     onMoveClick={(index) => setCurrentMoveIndex(index + 1)}
+                    analysisData={analysisData} // Pass analysis data
                     showThreats={showThreats}
                     onToggleThreats={() => setShowThreats(!showThreats)}
                     depth={depth}

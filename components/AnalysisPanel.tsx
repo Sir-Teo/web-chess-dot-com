@@ -18,6 +18,7 @@ import {
 import MoveList from './MoveList';
 import { Chess } from 'chess.js';
 import { AnalysisLine } from '../hooks/useStockfish';
+import { GameReviewData } from '../utils/gameAnalysis';
 
 interface AnalysisPanelProps {
   game: Chess;
@@ -31,6 +32,9 @@ interface AnalysisPanelProps {
   onLast?: () => void;
   currentMove?: number;
   onMoveClick?: (index: number) => void;
+
+  // Analysis Data
+  analysisData?: GameReviewData | null;
 
   // New props for improved Analysis UI
   showThreats?: boolean;
@@ -88,10 +92,12 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
     onLast,
     currentMove = 0,
     onMoveClick,
+    analysisData,
     showThreats,
     onToggleThreats,
     depth = 20,
-    onDepthChange
+    onDepthChange,
+    onPractice
 }) => {
 
   const turn = currentFen?.split(' ')[1] as 'w' | 'b' || 'w';
@@ -183,6 +189,7 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
             game={game}
             currentMoveIndex={currentMove === 0 ? -2 : currentMove - 1}
             onMoveClick={(_fen, index) => onMoveClick?.(index)}
+            analysisData={analysisData}
         />
       </div>
 
