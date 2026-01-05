@@ -3,7 +3,7 @@ import { Play } from 'lucide-react';
 import { ALL_BOTS } from '../utils/bots';
 
 interface PlayCoachPanelProps {
-  onStartGame: (settings: { botId: string, userColor: 'w' | 'b' | 'random' }) => void;
+  onStartGame: (settings: { botId: string, userColor: 'w' | 'b' | 'random', skillLevel?: number }) => void;
 }
 
 export const PlayCoachPanel: React.FC<PlayCoachPanelProps> = ({ onStartGame }) => {
@@ -104,22 +104,13 @@ export const PlayCoachPanel: React.FC<PlayCoachPanelProps> = ({ onStartGame }) =
        <div className="p-4 bg-[#211f1c] border-t border-white/5">
            <button
                 onClick={() => {
-                    // Find a bot close to the rating or construct a temporary one
-                    // We'll use a hack to pass level via botId or just pick a bot.
-                    // For now, let's use 'mittens' but we really want custom skill level.
-                    // GameInterface handles activeBot. We can create a temporary bot object.
-                    // But onStartGame expects an ID.
-                    // Let's pick 'stockfish' or a generic one.
-                    // Actually, GameInterface sets activeBot. We can pass a dummy ID that maps to a constructed bot?
-                    // Or we just modify ALL_BOTS? No.
-                    // Let's pass a bot ID, and maybe GameInterface should be updated to handle custom levels.
-                    // But for now, let's just pick 'monitor' (level 1) or 'stella' etc based on level.
-                    // To be simple, we'll just map level to an existing bot index roughly.
-
-                    const index = Math.min(Math.floor((level / 20) * ALL_BOTS.length), ALL_BOTS.length - 1);
-                    const bot = ALL_BOTS[index] || ALL_BOTS[0];
-
-                    onStartGame({ botId: bot.id, userColor: selectedColor });
+                    // Pass the selected level directly to GameInterface
+                    // We use 'stockfish' as the base bot ID, but override skill level
+                    onStartGame({
+                        botId: 'stockfish',
+                        userColor: selectedColor,
+                        skillLevel: level
+                    });
                 }}
                 className="w-full bg-chess-green hover:bg-chess-greenHover text-white font-black text-xl py-4 rounded-lg shadow-[0_4px_0_0_#537a32] active:shadow-none active:translate-y-[4px] transition-all flex items-center justify-center gap-3"
            >
