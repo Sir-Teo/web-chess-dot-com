@@ -219,20 +219,20 @@ export const analyzeGame = async (pgn: string, onProgress?: (progress: number) =
                 const isForcedMate = mateBefore !== undefined &&
                                      ((turnBefore === 'w' && mateBefore > 0) || (turnBefore === 'b' && mateBefore < 0));
 
+                // Identify capture/check context
+                const isCapture = move.captured || move.flags.includes('c') || move.flags.includes('e');
+                const isCheck = move.san.includes('+');
+
                 if (bestMove === playedMoveUci) {
                     classification = 'best';
                     if (isForcedMate) {
                         classification = 'great'; // Finding mate is great
                         reason = "You found the correct winning move!";
+                    } else if (isCapture) {
+                        reason = "Best move. You captured the right piece.";
                     } else {
                         reason = "This was the best move in the position.";
                     }
-
-                    // If best move, we can just assume eval stays roughly same (or improves if opponent made mistake before)
-                    // But technically we should eval after to be sure of the *resulting* position score for the graph
-                    // However, to save time, we can reuse scoreBefore as a proxy,
-                    // or do a quick check. Let's reuse scoreBefore for "best" to save 50% compute.
-                    // WAIT: Graph needs score of resulting position. If we played best, score is maintained.
                 } else {
                     // C. Evaluate RESULTING position
                     client.setPosition(fenAfter);
@@ -252,17 +252,6 @@ export const analyzeGame = async (pgn: string, onProgress?: (progress: number) =
                     evalMate = mateAfter; // Store for UI
 
                     const isWhite = move.color === 'w';
-                    // Loss calculation:
-                    // If White moved, loss = Before - After (e.g. 500 - 400 = 100 loss)
-                    // If Black moved, loss = After - Before (e.g. -400 - -500 = 100 loss)
-                    // Wait.
-                    // White Before: 500. White After: 400. Loss 100.
-                    // Black Before: 500 (White winning). Black moves. After: 600 (White winning more).
-                    // Black Before (from Black perspective): -500. After: -600. Loss 100.
-                    // Using normalized (White perspective) scores:
-                    // If White moved: Loss = scoreBefore - scoreAfter.
-                    // If Black moved: Loss = scoreAfter - scoreBefore.
-
                     const loss = isWhite ? (scoreBefore - scoreAfter) : (scoreAfter - scoreBefore);
 
                     // CLASSIFICATION LOGIC
@@ -274,7 +263,7 @@ export const analyzeGame = async (pgn: string, onProgress?: (progress: number) =
                          const stillHasMate = mateAfter !== undefined && ((isWhite && mateAfter > 0) || (!isWhite && mateAfter < 0));
                          if (!stillHasMate) {
                              classification = 'missed-win';
-                             reason = "You missed a forced checkmate.";
+                             reason = "You missed a forced checkmate sequence.";
                          } else {
                              // Still mate but maybe slower?
                              classification = 'good'; // or inaccuracy
@@ -284,14 +273,24 @@ export const analyzeGame = async (pgn: string, onProgress?: (progress: number) =
                     // 2. Blunder (High CP Loss or Losing winning position)
                     else if (loss > 200) {
                         classification = 'blunder';
-                        reason = "You gave away a significant advantage.";
-                        // Check for hung piece (approx 300+)
-                        if (loss > 250) reason = "You may have hung a piece or missed a tactic.";
+                        if (isCapture) {
+                            reason = "This capture was a blunder.";
+                        } else if (loss > 500) {
+                             reason = "A critical error that loses the game.";
+                        } else {
+                            reason = "You gave away a significant advantage.";
+                        }
                     }
                     // 3. Mistake
                     else if (loss > 100) {
                         classification = 'mistake';
-                        reason = "This move hurts your position.";
+                        if (isCapture) {
+                             reason = "This capture hurts your position.";
+                        } else if (isCheck) {
+                             reason = "This check was a mistake.";
+                        } else {
+                             reason = "This move hurts your position.";
+                        }
                     }
                     // 4. Inaccuracy
                     else if (loss > 50) {
