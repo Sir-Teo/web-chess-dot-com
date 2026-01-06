@@ -983,9 +983,9 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
                         )}
 
                         {/* Game Controls: Suggestion/Undo for Bots */}
-                        {(isBotMode || isCoachPanel || playMode === 'pass-and-play') && !isGameOver && (
+                        {((isBotMode || isCoachPanel || (!!activeBot && !onlineOpponent)) || playMode === 'pass-and-play') && !isGameOver && (
                              <div className="flex gap-1 mb-1">
-                                 {(isBotMode || isCoachPanel) && (
+                                 {((isBotMode || isCoachPanel || (!!activeBot && !onlineOpponent))) && (
                                      <button
                                          onClick={handleMoveSuggestion}
                                          className={`flex-1 ${hintStage > 0 ? 'bg-chess-green text-white' : 'bg-[#383531] text-gray-300'} hover:bg-[#45423e] rounded flex items-center justify-center py-2 hover:text-white transition-colors`}
