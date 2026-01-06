@@ -572,8 +572,8 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
       }
       setUserColor(finalColor);
 
-      // Enable Coach Mode if it's the Coach bot
-      if (bot.id === 'coach') {
+      // Enable Coach Mode if it's the Coach bot OR if we started from the Coach panel
+      if (bot.id === 'coach' || activePanel === 'coach') {
           setIsCoachMode(true);
       } else {
           // Optional: reset coach mode or keep previous preference?
