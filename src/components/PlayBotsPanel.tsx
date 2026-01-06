@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Bot, ChevronDown, Crown, HelpCircle, Settings } from 'lucide-react';
+import { Bot, ChevronDown, Crown, HelpCircle, Settings, Target } from 'lucide-react';
 import { BotProfile, ALL_BOTS, BEGINNER_BOTS, INTERMEDIATE_BOTS, ADVANCED_BOTS, MASTER_BOTS } from '../utils/bots';
 export type { BotProfile };
 
@@ -27,9 +27,10 @@ const BotCategory: React.FC<{ label: string; count: number; isOpen?: boolean; on
 
 interface PlayBotsPanelProps {
     onStartGame?: (bot: BotProfile, userColor: 'w' | 'b' | 'random') => void;
+    practiceTitle?: string;
 }
 
-const PlayBotsPanel: React.FC<PlayBotsPanelProps> = ({ onStartGame }) => {
+const PlayBotsPanel: React.FC<PlayBotsPanelProps> = ({ onStartGame, practiceTitle }) => {
   const [selectedBot, setSelectedBot] = useState<BotProfile>(ALL_BOTS[0]);
   const [expandedCategory, setExpandedCategory] = useState<string>('Beginner');
   const [selectedColor, setSelectedColor] = useState<'w' | 'b' | 'random'>('w');
@@ -44,9 +45,22 @@ const PlayBotsPanel: React.FC<PlayBotsPanelProps> = ({ onStartGame }) => {
   return (
     <div className="flex flex-col h-full bg-[#262522] text-[#c3c3c3]">
       {/* Header */}
-      <div className="flex items-center gap-2 px-4 py-3 bg-[#211f1c] border-b border-black/20 shadow-sm">
-        <Bot className="w-6 h-6 text-blue-400" />
-        <span className="font-bold text-white text-lg">Play Bots</span>
+      <div className="flex flex-col border-b border-black/20 shadow-sm bg-[#211f1c]">
+           <div className="flex items-center gap-2 px-4 py-3">
+               <Bot className="w-6 h-6 text-blue-400" />
+               <span className="font-bold text-white text-lg">Play Bots</span>
+           </div>
+
+           {/* Practice Mode Banner */}
+           {practiceTitle && (
+               <div className="bg-[#383531] px-4 py-2 flex items-center gap-2 border-t border-white/5">
+                   <Target className="w-4 h-4 text-chess-green" />
+                   <div className="flex flex-col">
+                       <span className="text-[10px] uppercase font-bold text-chess-green tracking-wider">Practice Position</span>
+                       <span className="text-xs text-white font-semibold truncate max-w-[250px]">{practiceTitle}</span>
+                   </div>
+               </div>
+           )}
       </div>
 
       <div className="flex-1 overflow-y-auto custom-scrollbar">
