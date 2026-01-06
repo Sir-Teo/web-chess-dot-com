@@ -31,5 +31,16 @@ export const PUZZLES: Puzzle[] = [
       rating: 800,
       theme: "Opening",
       color: 'b'
+  },
+  {
+      id: "004",
+      // White to move. Mate in 2.
+      // 1. Qe8+ Rxe8 2. Rxe8#
+      // Corrected FEN: Rooks on e1, e4. Black R on a8. Black K on g8.
+      fen: "r5k1/5ppp/8/8/4Q3/8/5PPP/4R1K1 w - - 0 1",
+      moves: ["e4e8", "a8e8", "e1e8"],
+      rating: 1200,
+      theme: "Back Rank Sacrifice",
+      color: 'w'
   }
 ];
