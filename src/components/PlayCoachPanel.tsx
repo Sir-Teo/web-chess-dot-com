@@ -9,6 +9,7 @@ interface PlayCoachPanelProps {
 const PlayCoachPanel: React.FC<PlayCoachPanelProps> = ({ onStartGame }) => {
   const [level, setLevel] = useState<number>(1);
   const [selectedColor, setSelectedColor] = useState<'w' | 'b' | 'random'>('w');
+  const [selectedCoachId, setSelectedCoachId] = useState<string>('marty');
 
   // Map level (1-20) to rating/description
   const getLevelInfo = (lvl: number) => {
@@ -16,22 +17,24 @@ const PlayCoachPanel: React.FC<PlayCoachPanelProps> = ({ onStartGame }) => {
       return { rating };
   };
 
-  const handleStart = () => {
-      // Find a bot or create a configuration that matches the level.
-      // Since we don't have infinite bots, we'll pick the closest bot from ALL_BOTS
-      // OR we can just use "Stockfish" with limited skill.
-      // The article says "virtual Chess.com Coach".
-      // Let's use a generic Coach profile but with skill level set.
+  const COACHES = [
+      { id: 'marty', name: 'Marty', image: 'https://www.chess.com/bundles/web/images/coach/marty.png', style: 'Balanced' },
+      { id: 'anna', name: 'Anna', image: 'https://images.chesscomfiles.com/uploads/v1/user/12345678.png', style: 'Attacking' }, // Mock image
+      { id: 'danny', name: 'Danny', image: 'https://images.chesscomfiles.com/uploads/v1/user/87654321.png', style: 'Positional' },
+      { id: 'fabiano', name: 'Fabiano', image: 'https://images.chesscomfiles.com/uploads/v1/user/13579246.png', style: 'Grandmaster' }
+  ];
 
+  const handleStart = () => {
       const info = getLevelInfo(level);
+      const selectedCoach = COACHES.find(c => c.id === selectedCoachId) || COACHES[0];
 
       const coachBot: BotProfile = {
-          id: 'coach',
-          name: 'Coach',
+          id: selectedCoachId,
+          name: selectedCoach.name,
           rating: info.rating,
-          avatar: 'https://www.chess.com/bundles/web/images/coach/marty.png', // Generic coach
-          flag: 'https://www.chess.com/bundles/web/images/user-image.svg', // None or generic
-          description: "I'm here to help you improve!",
+          avatar: selectedCoach.image,
+          flag: 'https://www.chess.com/bundles/web/images/user-image.svg',
+          description: `I'm ${selectedCoach.name}, let's improve your ${selectedCoach.style} chess!`,
           skillLevel: Math.min(20, Math.max(0, level)), // 0-20
           depth: Math.min(20, Math.max(1, level + 2))
       };
@@ -51,21 +54,30 @@ const PlayCoachPanel: React.FC<PlayCoachPanelProps> = ({ onStartGame }) => {
 
       <div className="flex-1 overflow-y-auto custom-scrollbar p-6 flex flex-col items-center">
 
-        {/* Coach Avatar */}
-        <div className="mb-6 flex flex-col items-center">
-            <div className="w-24 h-24 rounded-full border-4 border-chess-green p-1 bg-[#302e2b] mb-4 relative shadow-lg">
-                <img
-                    src="https://www.chess.com/bundles/web/images/coach/marty.png"
-                    alt="Coach"
-                    className="w-full h-full rounded-full object-cover"
-                    onError={(e) => (e.currentTarget.src = 'https://www.chess.com/bundles/web/images/user-image.svg')}
-                />
-                <div className="absolute bottom-0 right-0 bg-chess-green p-1.5 rounded-full border-2 border-[#262522]">
-                    <Check className="w-4 h-4 text-white" />
-                </div>
-            </div>
-            <h2 className="text-2xl font-bold text-white mb-1">Play Against Coach</h2>
-            <p className="text-gray-400 text-center text-sm max-w-xs">
+        {/* Coach Selection */}
+        <div className="flex gap-4 mb-6">
+            {COACHES.map(coach => (
+                <button
+                    key={coach.id}
+                    onClick={() => setSelectedCoachId(coach.id)}
+                    className={`flex flex-col items-center gap-2 p-2 rounded-lg transition-all ${selectedCoachId === coach.id ? 'bg-[#302e2b] ring-2 ring-chess-green' : 'hover:bg-[#302e2b]/50'}`}
+                >
+                    <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-white/10 relative">
+                        <img src={coach.image} alt={coach.name} className="w-full h-full object-cover" onError={(e) => (e.currentTarget.src = 'https://www.chess.com/bundles/web/images/user-image.svg')} />
+                        {selectedCoachId === coach.id && (
+                             <div className="absolute inset-0 bg-chess-green/20" />
+                        )}
+                    </div>
+                    <span className={`text-xs font-bold ${selectedCoachId === coach.id ? 'text-white' : 'text-gray-400'}`}>{coach.name}</span>
+                </button>
+            ))}
+        </div>
+
+        {/* Active Coach Display */}
+        <div className="mb-6 flex flex-col items-center text-center">
+            <h2 className="text-2xl font-bold text-white mb-1">Play Against Coach {COACHES.find(c => c.id === selectedCoachId)?.name}</h2>
+            <p className="text-gray-400 text-sm max-w-xs">
+                {COACHES.find(c => c.id === selectedCoachId)?.style} style coaching.
                 Get real-time feedback, detailed analysis, and improve your game move by move.
             </p>
         </div>
