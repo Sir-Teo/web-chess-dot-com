@@ -1,65 +1,80 @@
 import React from 'react';
 
 interface EvaluationBarProps {
-    score: number; // in centipawns (from white's perspective). +100 = +1.0
-    mate?: number; // moves to mate (positive for white, negative for black)
+  score: number; // Centipawns, always from White's perspective (+ = White winning)
+  mate?: number; // Moves to mate (positive = White mates, negative = Black mates)
+  orientation?: 'white' | 'black'; // To match board orientation (default white)
 }
 
-const EvaluationBar: React.FC<EvaluationBarProps> = ({ score, mate }) => {
-    // Calculate percentage for white bar height
-    let percentage = 50;
+const EvaluationBar: React.FC<EvaluationBarProps> = ({ score, mate, orientation = 'white' }) => {
+  // Cap the visual score to +/- 10.0 (1000 cp)
+  const CAP = 1000;
 
-    if (mate !== undefined) {
-        if (mate > 0) percentage = 100; // White mates
-        else percentage = 0;   // Black mates
-    } else {
-        // Use a sigmoid-like function or clamped linear
-        // Standard is often: 50 + (score / 10) clamped to 0-100? No, that's too sensitive. 1 pawn = 10%.
-        // Lichess uses: 50 + 50 * (2 / (1 + exp(-0.004 * score)) - 1)
-        // Let's use a simpler clamped linear for now or the Lichess formula.
-        // Let's use a simpler formula: 1 pawn (100cp) = ~10% shift?
-        // Let's try: 50 + (score / 10) limited to 5% and 95%.
-        // Actually, let's use the formula:
-        // p = 1 / (1 + 10^(-score/400)) which is standard ELO probability, but here we want visual advantage.
-        // Let's stick to a visual clamp.
-        // 500 cp (+5) should be near full bar (95%).
+  // Calculate percentage for White's bar (0 to 100)
+  let whitePercent = 50;
 
-        // Linear Clamped:
-        // score is cp.
-        // Max range: +/- 500 (5 pawns) -> 100% / 0%
-        const clampedScore = Math.max(-500, Math.min(500, score));
-        percentage = 50 + (clampedScore / 10);
-    }
+  if (mate !== undefined) {
+      if (mate > 0) whitePercent = 100; // White mates
+      else if (mate < 0) whitePercent = 0; // Black mates
+      else whitePercent = 50; // Should not happen if mate is set
+  } else {
+      const clampedScore = Math.max(-CAP, Math.min(CAP, score));
+      // Map -1000..1000 to 0..100
+      whitePercent = 50 + (clampedScore / CAP) * 50;
 
-    // Invert because height is from bottom? Yes, height: X% means X% from bottom is white.
-    // CSS height grows from bottom if we position absolute bottom 0.
+      // Clamp strictly between 2% and 98%
+      whitePercent = Math.max(2, Math.min(98, whitePercent));
+  }
 
-    // Display text
-    let text = "";
-    if (mate !== undefined) {
-        text = `M${Math.abs(mate)}`;
-    } else {
-        text = (Math.abs(score) / 100).toFixed(1);
-    }
+  // Format the text label
+  let label = "0.0";
+  if (mate !== undefined) {
+      label = `M${Math.abs(mate)}`;
+  } else {
+      const val = score / 100;
+      label = (score > 0 ? "+" : "") + val.toFixed(1);
+      if (score === 0) label = "0.0";
+  }
 
-    const isWhiteWinning = (mate !== undefined && mate > 0) || (mate === undefined && score > 0);
+  const isWhiteWinning = (mate !== undefined && mate > 0) || (mate === undefined && score > 0);
 
-    return (
-        <div className="w-full h-full bg-[#403d39] relative rounded overflow-hidden flex flex-col border border-black/20">
-            {/* Black Bar (Background is technically black/dark, White bar overlays) */}
-
+  return (
+    <div
+        className="w-full h-full bg-[#262421] rounded overflow-hidden border border-white/10 shadow-lg select-none"
+        data-testid="eval-bar"
+    >
+        {/* Inner container with Black background */}
+        <div className="relative w-full h-full bg-[#111]">
             {/* White Bar */}
             <div
-                className="w-full bg-white absolute bottom-0 left-0 transition-all duration-500 ease-in-out"
-                style={{ height: `${percentage}%` }}
+                className="absolute w-full bg-white transition-all duration-700 ease-in-out will-change-[height]"
+                style={{
+                    height: `${whitePercent}%`,
+                    bottom: orientation === 'white' ? 0 : 'auto',
+                    top: orientation === 'black' ? 0 : 'auto',
+                }}
             />
 
             {/* Score Label */}
-            <div className={`absolute left-0 right-0 text-[10px] font-bold text-center z-10 ${percentage > 90 ? 'top-1 text-[#403d39]' : percentage < 10 ? 'bottom-1 text-white' : isWhiteWinning ? 'bottom-1 text-[#403d39]' : 'top-1 text-white'}`}>
-                {text}
+            <div className={`
+                absolute left-0 w-full text-[10px] text-center font-bold font-mono py-0.5 z-10
+                ${isWhiteWinning ? 'text-[#312e2b]' : 'text-gray-200'}
+            `}
+            style={{
+                top: orientation === 'white'
+                    ? (isWhiteWinning ? 'auto' : '4px')
+                    : (isWhiteWinning ? '4px' : 'auto'),
+
+                bottom: orientation === 'white'
+                    ? (isWhiteWinning ? '4px' : 'auto')
+                    : (isWhiteWinning ? 'auto' : '4px'),
+            }}
+            >
+                {label}
             </div>
         </div>
-    );
+    </div>
+  );
 };
 
 export default EvaluationBar;

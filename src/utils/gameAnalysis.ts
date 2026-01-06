@@ -1,117 +1,365 @@
+import { Chess } from 'chess.js';
 
-// Real implementation of StockfishClient
+export interface MoveAnalysis {
+    moveNumber: number;
+    color: 'w' | 'b';
+    san: string;
+    from: string;
+    to: string;
+    fen: string;
+    eval?: number; // centipawns
+    mate?: number; // Mate in moves
+    bestMove?: string;
+    classification: 'brilliant' | 'great' | 'best' | 'excellent' | 'good' | 'inaccuracy' | 'mistake' | 'blunder' | 'book' | 'missed-win';
+    reason?: string; // Explanation for the classification
+}
+
+export interface GameReviewData {
+    accuracy: { w: number; b: number };
+    moves: MoveAnalysis[];
+}
+
 export interface EngineScore {
-  unit: 'cp' | 'mate';
-  value: number;
+    unit: 'cp' | 'mate';
+    value: number;
 }
 
-export interface AnalysisLine {
-  id: number;
-  score: EngineScore;
-  moves: string[];
-}
-
+// A simple promise-based wrapper for Stockfish commands
 export class StockfishClient {
-  private worker: Worker;
-  private isReady: boolean = false;
-  private onMessageCallback: ((msg: string) => void) | null = null;
+    private worker: Worker;
+    private resolveCurrent: ((value: { bestMove: string, score: EngineScore | null }) => void) | null = null;
+    private currentCommand: 'uci' | 'go' | null = null;
+    private bestMove: string | null = null;
+    private score: EngineScore | null = null;
 
-  private constructor(workerUrl: string) {
-    // Create blob from code to avoid cross-origin issues if URL is external
-    // Actually, for this environment, we might need a specific handling.
-    // The previous memory said: "Stockfish.js ... by fetching the script ... and creating a Blob URL"
-    // But since I don't have the fetch logic here, I will rely on the caller passing a valid URL
-    // or implement the fetch-blob logic if `workerUrl` is a CDN link.
-    // However, `new Worker(url)` works for same origin. For CDN, we need Blob.
+    // Make constructor private to force usage of async create
+    private constructor(worker: Worker) {
+        this.worker = worker;
+    }
 
-    // Let's assume the caller handles the Blob creation OR we do it here.
-    // The previous `useCoach` calls `StockfishClient.create(STOCKFISH_URL)`.
-    // We should implement the static create method to handle the fetch.
-    this.worker = new Worker(workerUrl); // Placeholder, will be replaced in create
-  }
+    static async create(url: string): Promise<StockfishClient> {
+        // Fetch script content to create a local Blob URL
+        // This bypasses Cross-Origin Worker restrictions (CORS) when using CDNs
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`Failed to fetch Stockfish from ${url}`);
 
-  static async create(url: string): Promise<StockfishClient> {
-      try {
-          const response = await fetch(url);
-          const script = await response.text();
-          const blob = new Blob([script], { type: 'application/javascript' });
-          const blobUrl = URL.createObjectURL(blob);
-          const client = new StockfishClient(blobUrl); // Use private constructor logic effectively
-          // We can't use private ctor easily with async create in TS strict, but we can cast or just make ctor public/internal
-          // Re-instantiate properly
-          client.worker = new Worker(blobUrl);
-          await client.init();
-          return client;
-      } catch (e) {
-          console.error("Failed to load Stockfish", e);
-          throw e;
-      }
-  }
+        const blob = await response.blob();
+        const objectURL = URL.createObjectURL(blob);
+        const worker = new Worker(objectURL);
 
-  async init(): Promise<void> {
-    this.worker.onmessage = (e) => {
-        const msg = e.data;
-        if (msg === 'uciok') {
-            this.isReady = true;
-        }
-        if (this.onMessageCallback) this.onMessageCallback(msg);
-    };
-    this.worker.postMessage('uci');
-    // Wait for uciok
-    return new Promise<void>((resolve) => {
-        const check = setInterval(() => {
-            if (this.isReady) {
-                clearInterval(check);
-                resolve();
+        const client = new StockfishClient(worker);
+        await client.init();
+
+        return client;
+    }
+
+    private init(): Promise<void> {
+        return new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => {
+                reject(new Error("Stockfish init timed out"));
+            }, 10000);
+
+            this.worker.onmessage = (e) => {
+                const line = e.data;
+                if (line === 'uciok') {
+                    clearTimeout(timeout);
+                    resolve();
+                }
+                this.handleMessage(line);
+            };
+            this.worker.postMessage('uci');
+        });
+    }
+
+    private handleMessage(line: string) {
+        if (this.currentCommand === 'go') {
+            // Handle CP score
+            if (line.startsWith('info') && line.includes('score cp')) {
+                const match = line.match(/score cp (-?\d+)/);
+                if (match) {
+                     this.score = { unit: 'cp', value: parseInt(match[1]) };
+                }
             }
-        }, 50);
-    });
-  }
+            // Handle Mate score
+            else if (line.startsWith('info') && line.includes('score mate')) {
+                const match = line.match(/score mate (-?\d+)/);
+                if (match) {
+                    this.score = { unit: 'mate', value: parseInt(match[1]) };
+                }
+            }
 
-  async setOption(name: string, value: string | number) {
-      this.worker.postMessage(`setoption name ${name} value ${value}`);
-  }
+            if (line.startsWith('bestmove')) {
+                this.bestMove = line.split(' ')[1];
+                if (this.resolveCurrent) {
+                    this.resolveCurrent({ bestMove: this.bestMove, score: this.score });
+                    this.resolveCurrent = null;
+                    this.currentCommand = null;
+                }
+            }
+        }
+    }
 
-  setPosition(fen: string) {
-      this.worker.postMessage(`position fen ${fen}`);
-  }
+    public setPosition(fen: string): void {
+        this.worker.postMessage(`position fen ${fen}`);
+    }
 
-  async go(depth: number): Promise<{ bestMove: string, score: EngineScore | null }> {
-      return new Promise((resolve) => {
-          let bestMove = '';
-          let score: EngineScore | null = null;
+    public async go(depth: number): Promise<{ bestMove: string, score: EngineScore | null }> {
+        return new Promise((resolve) => {
+            this.currentCommand = 'go';
+            this.score = null;
+            this.bestMove = null;
+            this.resolveCurrent = resolve;
+            this.worker.postMessage(`go depth ${depth}`);
+        });
+    }
 
-          const listener = (e: MessageEvent) => {
-              const msg = e.data;
-              if (msg.startsWith('info') && msg.includes('score')) {
-                  // Parse score
-                  // info depth 10 seldepth 14 multipv 1 score cp 45 ...
-                  const parts = msg.split(' ');
-                  const scoreIdx = parts.indexOf('score');
-                  if (scoreIdx !== -1) {
-                      const type = parts[scoreIdx + 1];
-                      const val = parseInt(parts[scoreIdx + 2]);
-                      if (type === 'cp' || type === 'mate') {
-                          score = { unit: type as 'cp' | 'mate', value: val };
-                      }
-                  }
-              }
-              if (msg.startsWith('bestmove')) {
-                  bestMove = msg.split(' ')[1];
-                  this.worker.removeEventListener('message', listener);
-                  resolve({ bestMove, score });
-              }
-          };
-          this.worker.addEventListener('message', listener);
-          this.worker.postMessage(`go depth ${depth}`);
-      });
-  }
+    public stop(): void {
+        if (this.currentCommand === 'go') {
+            this.worker.postMessage('stop');
+            // The worker will emit 'bestmove' which will resolve the promise in handleMessage
+        }
+    }
 
-  terminate() {
-      this.worker.terminate();
-  }
-
-  stop() {
-      this.worker.postMessage('stop');
-  }
+    public terminate() {
+        this.worker.terminate();
+    }
 }
+
+// Convert score to CP for comparison logic
+const getComparisonScore = (score: EngineScore, turn: 'w' | 'b'): number => {
+    let cp = 0;
+    if (score.unit === 'cp') {
+        cp = score.value;
+    } else {
+        // Mate
+        if (score.value > 0) cp = 10000 - score.value; // Positive Mate (e.g. M1 = 9999)
+        else cp = -10000 - score.value; // Negative Mate (e.g. -M1 = -9999)
+    }
+
+    // Engine returns score relative to side to move.
+    // If it's Black's turn, a positive score means Black is winning.
+    // We normalize to White perspective for consistent loss calculation.
+    if (turn === 'b') {
+        cp = -cp;
+    }
+    return cp;
+};
+
+export const analyzeGame = async (pgn: string, onProgress?: (progress: number) => void): Promise<GameReviewData> => {
+    // 1. Setup Engine
+    let client: StockfishClient | null = null;
+    try {
+        client = await StockfishClient.create('https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.0/stockfish.js');
+    } catch (e) {
+        console.warn("Analysis engine failed to load, proceeding with move parsing only.", e);
+    }
+
+    // 2. Parse Game
+    const game = new Chess();
+    try {
+        game.loadPgn(pgn);
+    } catch (e) {
+        console.error("Invalid PGN for analysis", e);
+        return { accuracy: { w: 0, b: 0 }, moves: [] };
+    }
+
+    const history = game.history({ verbose: true });
+
+    // Reconstruct game states
+    const tempGame = new Chess();
+    const movesToAnalyze: { fenBefore: string, fenAfter: string, move: any }[] = [];
+
+    for (const move of history) {
+        const fenBefore = tempGame.fen();
+        tempGame.move(move);
+        const fenAfter = tempGame.fen();
+        movesToAnalyze.push({ fenBefore, fenAfter, move });
+    }
+
+    const results: MoveAnalysis[] = [];
+
+    // 3. Analyze Loop
+    for (let i = 0; i < movesToAnalyze.length; i++) {
+        if (onProgress) onProgress((i / movesToAnalyze.length) * 100);
+
+        const { fenBefore, fenAfter, move } = movesToAnalyze[i];
+        const turnBefore = fenBefore.split(' ')[1] as 'w' | 'b';
+        const turnAfter = fenAfter.split(' ')[1] as 'w' | 'b';
+
+        let classification: MoveAnalysis['classification'] = 'book';
+        let evalCp = 0;
+        let evalMate: number | undefined = undefined;
+        let bestMove = '';
+        let reason = "";
+
+        if (client) {
+            try {
+                // A. Evaluate position BEFORE (to see what was expected)
+                client.setPosition(fenBefore);
+                const bestMoveResult = await client.go(15);
+                bestMove = bestMoveResult.bestMove;
+
+                let scoreBefore = 0;
+                let scoreBeforeObj = bestMoveResult.score;
+                let mateBefore: number | undefined = undefined;
+
+                if (scoreBeforeObj) {
+                    scoreBefore = getComparisonScore(scoreBeforeObj, turnBefore);
+                    if (scoreBeforeObj.unit === 'mate') {
+                        mateBefore = turnBefore === 'w' ? scoreBeforeObj.value : -scoreBeforeObj.value;
+                    }
+                }
+
+                // B. Check if played move matches best move
+                const playedMoveUci = move.from + move.to + (move.promotion || '');
+                classification = 'good';
+                evalCp = scoreBefore;
+
+                // Check for forced mate sequence
+                const isForcedMate = mateBefore !== undefined &&
+                                     ((turnBefore === 'w' && mateBefore > 0) || (turnBefore === 'b' && mateBefore < 0));
+
+                // Identify capture/check context
+                const isCapture = move.captured || move.flags.includes('c') || move.flags.includes('e');
+                const isCheck = move.san.includes('+');
+
+                if (bestMove === playedMoveUci) {
+                    classification = 'best';
+                    if (isForcedMate) {
+                        classification = 'great'; // Finding mate is great
+                        reason = "You found the correct winning move!";
+                    } else if (isCapture) {
+                        reason = "Best move. You captured the right piece.";
+                    } else {
+                        reason = "This was the best move in the position.";
+                    }
+                } else {
+                    // C. Evaluate RESULTING position
+                    client.setPosition(fenAfter);
+                    const afterResult = await client.go(15);
+
+                    let scoreAfter = 0;
+                    const scoreAfterObj = afterResult.score;
+                    let mateAfter: number | undefined = undefined;
+
+                    if (scoreAfterObj) {
+                        scoreAfter = getComparisonScore(scoreAfterObj, turnAfter);
+                        evalCp = scoreAfter; // This is the eval *after* the move
+                        if (scoreAfterObj.unit === 'mate') {
+                            mateAfter = turnAfter === 'w' ? scoreAfterObj.value : -scoreAfterObj.value;
+                        }
+                    }
+                    evalMate = mateAfter; // Store for UI
+
+                    const isWhite = move.color === 'w';
+                    const loss = isWhite ? (scoreBefore - scoreAfter) : (scoreAfter - scoreBefore);
+
+                    // CLASSIFICATION LOGIC
+
+                    // 1. Missed Win
+                    // If we had a mate (isForcedMate) and now we don't (or mate is much slower/lost)
+                    if (isForcedMate) {
+                         // Check if we still have mate
+                         const stillHasMate = mateAfter !== undefined && ((isWhite && mateAfter > 0) || (!isWhite && mateAfter < 0));
+                         if (!stillHasMate) {
+                             classification = 'missed-win';
+                             reason = "You missed a forced checkmate sequence.";
+                         } else {
+                             // Still mate but maybe slower?
+                             classification = 'good'; // or inaccuracy
+                             reason = "You still have a mate, but there was a faster way.";
+                         }
+                    }
+                    // 2. Blunder (High CP Loss or Losing winning position)
+                    else if (loss > 200) {
+                        classification = 'blunder';
+                        if (isCapture) {
+                            reason = "This capture was a blunder.";
+                        } else if (loss > 500) {
+                             reason = "A critical error that loses the game.";
+                        } else {
+                            reason = "You gave away a significant advantage.";
+                        }
+                    }
+                    // 3. Mistake
+                    else if (loss > 100) {
+                        classification = 'mistake';
+                        if (isCapture) {
+                             reason = "This capture hurts your position.";
+                        } else if (isCheck) {
+                             reason = "This check was a mistake.";
+                        } else {
+                             reason = "This move hurts your position.";
+                        }
+                    }
+                    // 4. Inaccuracy
+                    else if (loss > 50) {
+                        classification = 'inaccuracy';
+                        reason = "There was a slightly better move.";
+                    }
+                    // 5. Good/Excellent
+                    else if (loss > 20) {
+                        classification = 'good';
+                        reason = "A solid move.";
+                    } else {
+                        classification = 'excellent';
+                        reason = "An excellent move!";
+                    }
+                }
+            } catch (err) {
+                console.error("Error analyzing move", i, err);
+            }
+        }
+
+        results.push({
+            moveNumber: Math.floor(i / 2) + 1,
+            color: move.color,
+            san: move.san,
+            from: move.from,
+            to: move.to,
+            fen: fenAfter,
+            eval: evalCp,
+            mate: evalMate,
+            bestMove: bestMove,
+            classification: classification,
+            reason: reason
+        });
+    }
+
+    if (client) {
+        client.terminate();
+    }
+    return calculateAccuracy(results);
+};
+
+
+const calculateAccuracy = (moves: MoveAnalysis[]): GameReviewData => {
+    let wScore = 0, bScore = 0;
+    let wMoves = 0, bMoves = 0;
+
+    for (const m of moves) {
+        const score = m.classification === 'best' ? 100 :
+                      m.classification === 'great' ? 95 :
+                      m.classification === 'excellent' ? 90 :
+                      m.classification === 'good' ? 80 :
+                      m.classification === 'inaccuracy' ? 50 :
+                      m.classification === 'mistake' ? 20 :
+                      m.classification === 'missed-win' ? 0 : 0; // Missed win is like a blunder
+
+        if (m.color === 'w') {
+            wScore += score;
+            wMoves++;
+        } else {
+            bScore += score;
+            bMoves++;
+        }
+    }
+
+    return {
+        accuracy: {
+            w: wMoves ? Math.round(wScore / wMoves) : 0,
+            b: bMoves ? Math.round(bScore / bMoves) : 0
+        },
+        moves
+    };
+};

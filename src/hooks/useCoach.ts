@@ -1,13 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { StockfishClient, EngineScore } from '../utils/gameAnalysis';
 
-export interface CoachSettings {
-    showSuggestionArrows: boolean;
-    showThreatArrows: boolean;
-    showEvalBar: boolean;
-    showFeedback: boolean;
-}
-
 interface CoachFeedback {
     message: string;
     type: 'best' | 'good' | 'inaccuracy' | 'mistake' | 'blunder' | 'neutral' | 'excellent' | 'missed-win';
@@ -21,22 +14,17 @@ export type Arrow = [string, string, string];
 
 const STOCKFISH_URL = 'https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.0/stockfish.js';
 
-export const useCoach = (isEnabled: boolean, settings: CoachSettings) => {
+export const useCoach = (isEnabled: boolean) => {
     const clientRef = useRef<StockfishClient | null>(null);
     const [feedback, setFeedback] = useState<CoachFeedback | null>(null);
     const [arrows, setArrows] = useState<Arrow[]>([]);
-    const [threatArrows, setThreatArrows] = useState<Arrow[]>([]); // New: Threat arrows
     const [isThinking, setIsThinking] = useState(false);
 
     // Continuous Evaluation State
-    const [currentEval, setCurrentEval] = useState<{ fen?: string, score: number, mate?: number, bestMove?: string }>({ score: 0 });
+    const [currentEval, setCurrentEval] = useState<{ score: number, mate?: number, bestMove?: string }>({ score: 0 });
 
     // Cache the best move for the CURRENT position (before player moves)
     const currentPositionAnalysis = useRef<{ fen: string, bestMove: string, score: EngineScore | null } | null>(null);
-
-    // Track active search to prevent duplicates and allow awaiting results
-    const currentSearchPromise = useRef<Promise<{ bestMove: string, score: EngineScore | null }> | null>(null);
-    const currentSearchFen = useRef<string | null>(null);
 
     // Initialize Coach Engine
     useEffect(() => {
@@ -63,19 +51,8 @@ export const useCoach = (isEnabled: boolean, settings: CoachSettings) => {
         clientRef.current.stop();
         clientRef.current.setPosition(fen);
 
-        const promise = clientRef.current.go(15);
-        currentSearchPromise.current = promise;
-        currentSearchFen.current = fen;
-
         try {
-            // 1. Analyze Current Position (Normal)
-            const result = await promise;
-
-            // If the search was superseded, ignore result (basic check)
-            // But usually we want to cache it anyway if it finished?
-            // If `currentSearchFen` changed, it means another search started.
-            // But `await promise` returns the result of *this* search.
-
+            const result = await clientRef.current.go(15);
             const scoreObj = result.score;
 
             // Normalize Score to White Perspective for Eval Bar
@@ -87,86 +64,27 @@ export const useCoach = (isEnabled: boolean, settings: CoachSettings) => {
                     whiteScore = turn === 'w' ? scoreObj.value : -scoreObj.value;
                 } else {
                     // Mate
+                    // Score is relative to side to move
+                    // If turn is White and value is +1, White mates in 1.
+                    // If turn is Black and value is +1, Black mates in 1 (Bad for White).
                     const mateVal = scoreObj.value;
                     whiteMate = turn === 'w' ? mateVal : -mateVal;
+
+                    // For bar fill calculation, we also need a high CP value
                     whiteScore = whiteMate > 0 ? 10000 : -10000;
                 }
             }
 
-            setCurrentEval({ fen, score: whiteScore, mate: whiteMate, bestMove: result.bestMove });
+            setCurrentEval({ score: whiteScore, mate: whiteMate, bestMove: result.bestMove });
 
             currentPositionAnalysis.current = {
                 fen,
                 bestMove: result.bestMove,
                 score: scoreObj
             };
-
-            // 2. Threat Analysis (If enabled)
-            // Only if we are still on the same FEN (user hasn't moved yet)
-            if (settings.showThreatArrows && currentSearchFen.current === fen) {
-                 const parts = fen.split(' ');
-                 const activeColor = parts[1];
-                 const newColor = activeColor === 'w' ? 'b' : 'w';
-
-                 parts[1] = newColor;
-                 parts[3] = '-';
-                 const flippedFen = parts.join(' ');
-
-                 clientRef.current.setPosition(flippedFen);
-                 // We don't track this search in currentSearchPromise as it's secondary
-                 const threatResult = await clientRef.current.go(10);
-
-                 if (threatResult.bestMove) {
-                     const from = threatResult.bestMove.substring(0, 2);
-                     const to = threatResult.bestMove.substring(2, 4);
-                     setThreatArrows([[from, to, '#fa412d']]); // Red arrow for threat
-                 } else {
-                     setThreatArrows([]);
-                 }
-            } else {
-                setThreatArrows([]);
-            }
-
         } catch (e) {
             console.error("Coach analysis failed", e);
         }
-    }, [settings.showThreatArrows]);
-
-    // Retrieve best move for a specific FEN, waiting if necessary
-    const getBestMove = useCallback(async (fen: string): Promise<string | null> => {
-        // 1. Check cached analysis
-        if (currentPositionAnalysis.current && currentPositionAnalysis.current.fen === fen) {
-            return currentPositionAnalysis.current.bestMove;
-        }
-
-        // 2. Check ongoing search
-        if (currentSearchFen.current === fen && currentSearchPromise.current) {
-            try {
-                const result = await currentSearchPromise.current;
-                return result.bestMove;
-            } catch (e) {
-                return null;
-            }
-        }
-
-        // 3. Trigger new search if needed (and client exists)
-        if (clientRef.current) {
-             clientRef.current.stop();
-             clientRef.current.setPosition(fen);
-             const promise = clientRef.current.go(15);
-
-             // Update refs so subsequent calls join this search
-             currentSearchPromise.current = promise;
-             currentSearchFen.current = fen;
-
-             const res = await promise;
-
-             // Cache it
-             currentPositionAnalysis.current = { fen, bestMove: res.bestMove, score: res.score };
-             return res.bestMove;
-        }
-
-        return null;
     }, []);
 
     // Helper to get CP for comparison
@@ -200,9 +118,6 @@ export const useCoach = (isEnabled: boolean, settings: CoachSettings) => {
         setFeedback(null);
         setArrows([]);
 
-        // Clear threats on move
-        setThreatArrows([]);
-
         // 1. Did we have the "Before" analysis?
         let beforeAnalysis = currentPositionAnalysis.current;
 
@@ -219,26 +134,19 @@ export const useCoach = (isEnabled: boolean, settings: CoachSettings) => {
 
         const playedMoveUci = move.from + move.to + (move.promotion || '');
         const bestMove = beforeAnalysis.bestMove;
+
         const bestFrom = bestMove.substring(0, 2);
         const bestTo = bestMove.substring(2, 4);
 
-        // Prepare arrows array
-        const newArrows: Arrow[] = [];
-
         // 2. Check if best move
         if (bestMove === playedMoveUci) {
-             if (settings.showFeedback) {
-                 setFeedback({
-                     message: "Best move!",
-                     type: 'best',
-                     bestMove: beforeAnalysis.bestMove,
-                     reason: "You found the optimal continuation."
-                 });
-             }
-             if (settings.showSuggestionArrows) {
-                 newArrows.push([move.from, move.to, '#81b64c']); // Chess.com Green
-             }
-             setArrows(newArrows);
+             setFeedback({
+                 message: "Best move!",
+                 type: 'best',
+                 bestMove: beforeAnalysis.bestMove,
+                 reason: "You found the optimal continuation."
+             });
+             setArrows([[move.from, move.to, '#81b64c']]); // Chess.com Green
              setIsThinking(false);
              return;
         }
@@ -248,7 +156,11 @@ export const useCoach = (isEnabled: boolean, settings: CoachSettings) => {
         const afterResult = await clientRef.current.go(10);
 
         // Score Calculation (Side to Move Perspective)
+        // Before score (Player's turn)
         const scoreBeforeVal = getCp(beforeAnalysis.score);
+
+        // After score (Opponent's turn)
+        // If we want Player's advantage after move, it is -(Opponent Advantage)
         const scoreAfterValOpponent = getCp(afterResult.score);
         const scoreAfterValPlayer = -scoreAfterValOpponent;
 
@@ -286,42 +198,35 @@ export const useCoach = (isEnabled: boolean, settings: CoachSettings) => {
             arrowColor = '#fa412d'; // Red
         }
 
-        if (settings.showFeedback) {
-            const reason = getReason(type, loss);
-            setFeedback({
-                message,
-                type,
-                scoreDiff: loss,
-                bestMove: beforeAnalysis.bestMove,
-                reason
-            });
-        }
+        const reason = getReason(type, loss);
 
-        // Arrows logic
-        if (settings.showSuggestionArrows) {
-             // Show played move arrow (colored by quality)
-             newArrows.push([move.from, move.to, arrowColor]);
-             // Show best move arrow
-             newArrows.push([bestFrom, bestTo, '#81b64c']);
-        }
+        setFeedback({
+            message,
+            type,
+            scoreDiff: loss,
+            bestMove: beforeAnalysis.bestMove,
+            reason
+        });
 
-        setArrows(newArrows);
+        setArrows([
+            [move.from, move.to, arrowColor],       // Played
+            [bestFrom, bestTo, '#81b64c']  // Best
+        ]);
+
         setIsThinking(false);
 
-    }, [isEnabled, settings]);
+    }, [isEnabled]);
 
     const resetFeedback = () => {
         setFeedback(null);
         setArrows([]);
-        setThreatArrows([]);
     };
 
     return {
         onTurnStart,
         evaluateMove,
-        getBestMove, // Exposed method
         feedback,
-        arrows: [...arrows, ...threatArrows], // Combine standard arrows and threat arrows
+        arrows,
         isThinking,
         resetFeedback,
         currentEval // Expose evaluation
