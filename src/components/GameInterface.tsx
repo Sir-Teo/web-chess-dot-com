@@ -3,22 +3,21 @@ import Chessboard from './Chessboard';
 import { Settings, Flag, XCircle, Search, ChevronRight, RotateCcw, MessageCircle, AlertCircle, Copy, Check, Lightbulb, Undo2, RefreshCw, Trophy } from 'lucide-react';
 import GameReviewPanel from './GameReviewPanel';
 import PlayBotsPanel from './PlayBotsPanel';
-import { PlayCoachPanel } from './PlayCoachPanel';
+import PlayCoachPanel from './PlayCoachPanel';
 import MoveList from './MoveList';
 import CapturedPieces from './CapturedPieces';
 import CoachFeedback from './CoachFeedback';
-import CoachSettingsModal from './CoachSettingsModal';
 import EvaluationBar from './EvaluationBar';
-// Ensure imports are visible for diff
 import { Chess } from 'chess.js';
 import { useStockfish } from '../hooks/useStockfish';
-import { useCoach, CoachSettings } from '../hooks/useCoach';
+import { useCoach, CoachSettings as ICoachSettings } from '../hooks/useCoach';
 import { useGameTimer } from '../hooks/useGameTimer';
 import { useGameSound } from '../hooks/useGameSound';
 import { useBotChatter } from '../hooks/useBotChatter';
 import { useSettings } from '../context/SettingsContext';
 import { ALL_BOTS, BotProfile } from '../utils/bots';
 import { identifyOpening } from '../utils/openings';
+import CoachSettingsModal from './CoachSettingsModal';
 
 interface GameInterfaceProps {
   initialMode?: 'play' | 'bots' | 'review' | 'coach';
@@ -45,6 +44,8 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
       }
       return g;
   });
+  // Track the desired start position for "Rematch" or initial load
+  const [startPosition, setStartPosition] = useState<string | null>(initialFen || null);
   const [fen, setFen] = useState(game.fen());
   const [viewFen, setViewFen] = useState<string | null>(null); // For history navigation
   const [viewMoveIndex, setViewMoveIndex] = useState<number>(-1); // -1 = live
@@ -70,13 +71,13 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
 
   // Coach Mode State
   const [isCoachMode, setIsCoachMode] = useState(false);
-  const [coachSettings, setCoachSettings] = useState<CoachSettings>({
+  const [coachSettings, setCoachSettings] = useState<ICoachSettings>({
       showSuggestionArrows: true,
       showThreatArrows: true,
       showEvalBar: true,
       showFeedback: true
   });
-  const [showCoachSettings, setShowCoachSettings] = useState(false);
+  const [isCoachSettingsOpen, setIsCoachSettingsOpen] = useState(false);
 
   // Chat/Bot Messages
   const [openingName, setOpeningName] = useState<string>("");
@@ -107,16 +108,17 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
   const {
       onTurnStart,
       evaluateMove,
-      getBestMove,
       feedback,
       arrows: coachArrows,
       isThinking: isCoachThinking,
       resetFeedback,
       currentEval
-  } = useCoach(true, coachSettings); // Always enable for evaluation bar
+  } = useCoach(true, coachSettings); // Always enable for evaluation bar, settings determine feedback visibility
 
   // Move Suggestion State
   const [suggestionArrow, setSuggestionArrow] = useState<{ from: string, to: string } | null>(null);
+  // Hint State
+  const [hintStage, setHintStage] = useState<0 | 1 | 2>(0); // 0: None, 1: Suggestion, 2: Best Move
 
   // Pre-move State (Authenticity)
   const [preMove, setPreMove] = useState<{from: string, to: string, promotion?: string} | null>(null);
@@ -151,7 +153,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
     } catch(e) {}
 
     return styles;
-  }, [preMove, fen, viewFen, suggestionArrow]);
+  }, [preMove, fen, viewFen]);
 
   // Sync state if prop changes
   useEffect(() => {
@@ -164,6 +166,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
 
   // Handle initialFen change
   useEffect(() => {
+      setStartPosition(initialFen || null);
       if (initialFen) {
           const g = new Chess();
           try {
@@ -173,9 +176,6 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
               setIsGameOver(false);
               setGameResult('');
               setHasGameStarted(true); // If loading from FEN, assume we want to see/play it
-              // If it's a bot mode, we might need to trigger something?
-              // Usually practice is vs Computer, so we might want to ensure a bot is active or selected.
-              // For now, let user select bot if in bots mode.
           } catch (e) {
               console.error("Invalid initialFen update", e);
           }
@@ -183,10 +183,11 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
   }, [initialFen]);
 
   const isBotMode = activePanel === 'bots';
+  const isCoachPanel = activePanel === 'coach';
   const isReviewMode = activePanel === 'review';
   // Only consider it an engine opponent if there is an active bot or we are in bot mode
   // This allows sandbox play (empty board) when no game is active
-  const isEngineOpponent = isBotMode || (activePanel === 'play' && playMode === 'online' && !!activeBot);
+  const isEngineOpponent = isBotMode || isCoachPanel || (activePanel === 'play' && playMode === 'online' && !!activeBot);
 
   // Check Game Over
   useEffect(() => {
@@ -345,6 +346,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
 
           // Clear suggestion on move
           setSuggestionArrow(null);
+          setHintStage(0);
       } else {
           setPreMove(null); // Invalid move
       }
@@ -406,6 +408,14 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
 
   const handleNewGame = useCallback(() => {
       const newGame = new Chess();
+      // Use startPosition if available (e.g. Practice Mode)
+      if (startPosition) {
+          try {
+              newGame.load(startPosition);
+          } catch (e) {
+               console.error("Failed to load start position", e);
+          }
+      }
       setGame(newGame);
       setFen(newGame.fen());
       setViewFen(null);
@@ -423,7 +433,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
       setPreMove(null);
       playSound('gameStart');
 
-  }, [resetTimer, playSound, resetFeedback, activeBot]);
+  }, [resetTimer, playSound, resetFeedback, activeBot, startPosition]);
 
   // Automatic Engine Move (Start or Resume)
   // This handles cases where the bot is activated after the user has already moved (Sandbox -> Game transition)
@@ -446,19 +456,37 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
      }
   }, [game, isEngineOpponent, activeBot, userColor, isGameOver, sendCommand, resetBestMove]);
 
-  const handleMoveSuggestion = useCallback(async () => {
-      // Use getBestMove from useCoach which handles async waiting
-      const currentFen = game.fen();
-      const move = await getBestMove(currentFen);
+  const handleMoveSuggestion = useCallback(() => {
+      // Use best move from current coach evaluation
+      if (currentEval.bestMove) {
+          const from = currentEval.bestMove.substring(0, 2);
+          const to = currentEval.bestMove.substring(2, 4);
 
-      if (move) {
-          const from = move.substring(0, 2);
-          const to = move.substring(2, 4);
-          setSuggestionArrow({ from, to });
-          // Auto clear after 3 seconds
-          setTimeout(() => setSuggestionArrow(null), 3000);
+          // 2-Stage Hint Logic
+          if (hintStage === 0 || hintStage === 2) {
+              // Stage 1: Suggestion Arrow (Only Source Piece) or Generic Area?
+              // Actually, Chess.com usually highlights the piece to move first.
+              // Here we'll just show the move but maybe in a different color or partial?
+              // The article says "Receive a suggestion... Tap again to see the best move."
+              // Let's implement:
+              // Stage 1: Highlight the piece to move (Source square only)
+              // Stage 2: Show the full arrow (Source to Dest)
+
+              setSuggestionArrow({ from, to: from }); // Just highlight source
+              setHintStage(1);
+          } else {
+              // Stage 2: Full Arrow
+              setSuggestionArrow({ from, to });
+              setHintStage(2);
+          }
+
+          // Auto clear after 5 seconds
+          setTimeout(() => {
+              setSuggestionArrow(null);
+              setHintStage(0);
+          }, 5000);
       }
-  }, [game, getBestMove]);
+  }, [currentEval, hintStage]);
 
   const handleUndo = useCallback(() => {
       if (game.history().length === 0 || isGameOver) return;
@@ -504,6 +532,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
       resetFeedback();
       resetBestMove(); // Stop bot if it was thinking to prevent race condition
       setSuggestionArrow(null);
+      setHintStage(0);
   }, [game, isEngineOpponent, userColor, resetFeedback, resetBestMove]);
 
   const handleFlipBoard = useCallback(() => {
@@ -523,37 +552,19 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
       }
       setUserColor(finalColor);
 
+      // Enable Coach Mode if it's the Coach bot
+      if (bot.id === 'coach') {
+          setIsCoachMode(true);
+      } else {
+          // Optional: reset coach mode or keep previous preference?
+          // Usually separate mode implies default state.
+          // But here, Play Coach mode is basically "Play Bot + Coach On"
+      }
+
+      // If we are already in a practice session (custom start position) and it's the first game with this bot,
+      // we might want to respect the current board state?
+      // handleNewGame will use startPosition if set.
       handleNewGame();
-  };
-
-  const handleStartCoachGame = (settings: { botId: string, userColor: 'w' | 'b' | 'random', skillLevel?: number }) => {
-       // Find base bot
-       const baseBot = ALL_BOTS.find(b => b.id === settings.botId) || ALL_BOTS[ALL_BOTS.length - 1]; // Default to stockfish or last bot
-
-       // Create custom coach bot with overridden skill level
-       const coachBot: BotProfile = {
-           ...baseBot,
-           name: "The Coach",
-           avatar: "https://images.chesscomfiles.com/uploads/v1/user/57539420.f35d2592.200x200o.423977759dc2.jpeg", // Consistent with Panel
-           skillLevel: settings.skillLevel ?? baseBot.skillLevel,
-           depth: settings.skillLevel ? Math.min(20, settings.skillLevel + 2) : baseBot.depth, // Approximate depth
-           rating: settings.skillLevel ? settings.skillLevel * 150 : baseBot.rating
-       };
-
-       setActiveBot(coachBot);
-       setOnlineOpponent(null);
-       setPlayMode('online');
-       setIsCoachMode(true); // Activate Coach
-
-       let finalColor: 'w' | 'b' = 'w';
-       if (settings.userColor === 'random') {
-           finalColor = Math.random() > 0.5 ? 'w' : 'b';
-       } else {
-           finalColor = settings.userColor;
-       }
-       setUserColor(finalColor);
-
-       handleNewGame();
   };
 
   const handleExit = useCallback(() => {
@@ -639,11 +650,19 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
   return (
     <div className="flex flex-col lg:flex-row h-full md:h-screen w-full overflow-hidden bg-chess-dark">
 
+      {/* Coach Settings Modal */}
+      <CoachSettingsModal
+          isOpen={isCoachSettingsOpen}
+          onClose={() => setIsCoachSettingsOpen(false)}
+          settings={coachSettings}
+          onSettingsChange={setCoachSettings}
+      />
+
       {/* Left Area (Board) */}
       <div className="flex-none lg:flex-1 flex flex-col items-center justify-center p-2 lg:p-4 bg-[#312e2b] relative">
 
         {/* Evaluation Bar Desktop */}
-        {!isGameOver && (isCoachMode ? coachSettings.showEvalBar : true) && (
+        {!isGameOver && coachSettings.showEvalBar && (
              <div className="hidden lg:block absolute left-4 top-1/2 -translate-y-1/2 h-[80vh] w-6 z-0">
                 <EvaluationBar score={currentEval.score} mate={currentEval.mate} />
             </div>
@@ -652,11 +671,13 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
         <div className="w-full max-w-[400px] lg:max-w-[calc(100vh_-_10rem)] relative flex flex-col justify-center">
 
             {/* Coach Feedback Overlay (Inside Container) */}
-            <CoachFeedback
-                feedback={feedback}
-                isThinking={isCoachThinking}
-                onClose={resetFeedback}
-            />
+            {coachSettings.showFeedback && (
+                <CoachFeedback
+                    feedback={feedback}
+                    isThinking={isCoachThinking}
+                    onClose={resetFeedback}
+                />
+            )}
 
             {/* Opponent Info (Top) */}
             <div className="flex justify-between items-end mb-1 px-1 relative">
@@ -700,7 +721,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
                      </div>
                 )}
 
-                {(activePanel === 'play' || isBotMode) && (
+                {(activePanel === 'play' || isBotMode || isCoachPanel) && (
                     <div className={`
                         px-3 py-1.5 md:px-4 md:py-2 rounded-[4px] font-mono font-bold text-2xl shadow-[0_4px_0_0_rgba(0,0,0,0.1)] cursor-default min-w-[100px] text-center
                         ${game.turn() === (userColor === 'w' ? 'b' : 'w') && !isGameOver ? 'bg-white text-black shadow-[0_4px_0_0_#a0a0a0]' : 'bg-[#211f1c] text-[#706c66]'}
@@ -832,7 +853,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
                         </div>
                     </div>
                 </div>
-                {(activePanel === 'play' || isBotMode) && (
+                {(activePanel === 'play' || isBotMode || isCoachPanel) && (
                     <div className={`
                         px-3 py-1.5 md:px-4 md:py-2 rounded-[4px] font-mono font-bold text-2xl shadow-[0_4px_0_0_rgba(0,0,0,0.1)] cursor-default min-w-[100px] text-center
                         ${game.turn() === userColor && !isGameOver ? 'bg-white text-black shadow-[0_4px_0_0_#a0a0a0]' : 'bg-[#211f1c] text-[#706c66]'}
@@ -849,7 +870,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
 
           {/* Mock Tab Switcher */}
           <div className="absolute top-0 left-[-40px] flex flex-col gap-2 p-2 z-0 pointer-events-none md:pointer-events-auto opacity-0 md:opacity-100">
-             {activePanel !== 'bots' && (
+             {activePanel !== 'bots' && activePanel !== 'coach' && (
                  <button
                     onClick={() => setActivePanel(activePanel === 'play' ? 'review' : 'play')}
                     className="bg-[#262522] p-2 rounded-l-md text-gray-400 hover:text-white shadow-lg border-y border-l border-white/10 pointer-events-auto"
@@ -869,9 +890,9 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
               />
           ) : activePanel === 'bots' && !activeBot ? (
               <PlayBotsPanel onStartGame={handleStartBotGame} />
-          ) : activePanel === 'coach' && !hasGameStarted ? (
-              <PlayCoachPanel onStartGame={handleStartCoachGame} />
-          ) : (activePanel === 'bots' && activeBot) || hasGameStarted ? (
+          ) : activePanel === 'coach' && !activeBot ? (
+              <PlayCoachPanel onStartGame={handleStartBotGame} />
+          ) : (activeBot || hasGameStarted) ? (
                // Active Game View (Move List)
                <div className="flex flex-col h-full bg-[#262522]">
                    <div className="flex items-center justify-between px-4 py-2 bg-[#211f1c] border-b border-white/5">
@@ -890,25 +911,6 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
                                  <span className="text-xs font-bold">Coach</span>
                              </button>
 
-                             {/* Coach Settings Cog */}
-                             {isCoachMode && (
-                                 <div className="relative">
-                                    <button
-                                        title="Coach Settings"
-                                        onClick={() => setShowCoachSettings(!showCoachSettings)}
-                                        className="text-gray-400 hover:text-white p-1 rounded"
-                                    >
-                                        <Settings className="w-4 h-4" />
-                                    </button>
-                                     <CoachSettingsModal
-                                         isOpen={showCoachSettings}
-                                         onClose={() => setShowCoachSettings(false)}
-                                         settings={coachSettings}
-                                         onUpdateSettings={setCoachSettings}
-                                     />
-                                 </div>
-                             )}
-
                              <div className="w-px bg-white/10 mx-1"></div>
 
                              <button className="text-gray-400 hover:text-white" title="Resign" onClick={() => { setIsGameOver(true); setGameResult('Aborted'); }}>
@@ -917,6 +919,17 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
                              <button className="text-gray-400 hover:text-white" title="Abort" onClick={handleNewGame}>
                                  <XCircle className="w-4 h-4" />
                              </button>
+
+                             {/* Coach Settings Cog (Visible only in Coach Mode as per article, or generally) */}
+                             {isCoachMode && (
+                                 <button
+                                     onClick={() => setIsCoachSettingsOpen(true)}
+                                     className="text-gray-400 hover:text-white"
+                                     title="Coach Settings"
+                                 >
+                                     <Settings className="w-4 h-4" />
+                                 </button>
+                             )}
                         </div>
                    </div>
                    <MoveList
@@ -970,13 +983,13 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
                         )}
 
                         {/* Game Controls: Suggestion/Undo for Bots */}
-                        {(isBotMode || playMode === 'pass-and-play') && !isGameOver && (
+                        {((isBotMode || isCoachPanel || (!!activeBot && !onlineOpponent)) || playMode === 'pass-and-play') && !isGameOver && (
                              <div className="flex gap-1 mb-1">
-                                 {isBotMode && (
+                                 {((isBotMode || isCoachPanel || (!!activeBot && !onlineOpponent))) && (
                                      <button
                                          onClick={handleMoveSuggestion}
-                                         className="flex-1 bg-[#383531] hover:bg-[#45423e] rounded flex items-center justify-center py-2 text-gray-300 hover:text-white transition-colors"
-                                         title="Move Suggestion"
+                                         className={`flex-1 ${hintStage > 0 ? 'bg-chess-green text-white' : 'bg-[#383531] text-gray-300'} hover:bg-[#45423e] rounded flex items-center justify-center py-2 hover:text-white transition-colors`}
+                                         title="Move Suggestion (Hint)"
                                      >
                                          <Lightbulb className="w-5 h-5" />
                                      </button>
