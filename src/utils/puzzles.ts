@@ -26,49 +26,21 @@ export const PUZZLES: Puzzle[] = [
   },
   {
       id: "003",
-      // Smothered Mate Pattern (Corrected 2)
-      // White Knight on h6. Black King on h8. Black Rook on g8.
-      // Square f7 must be empty for N to land on it.
-      // Rook on g8 is pinned by Bishop on a2.
-      // FEN: 6rk/7p/7N/8/8/8/B7/7K w - - 0 1
-      // Removed p on f7.
-      fen: "6rk/7p/7N/8/8/8/B7/7K w - - 0 1",
-      moves: ["h6f7"],
+      fen: "r1bqk1nr/pppp1ppp/2n5/2b1p3/2B1P1Q1/8/PPPP1PPP/RNB1K1NR b KQkq - 3 4",
+      moves: ["d8f6"], // Defending f7/g7? No, random puzzle.
       rating: 800,
-      theme: "Smothered Mate",
-      color: 'w'
+      theme: "Opening",
+      color: 'b'
   },
   {
       id: "004",
       // White to move. Mate in 2.
       // 1. Qe8+ Rxe8 2. Rxe8#
+      // Corrected FEN: Rooks on e1, e4. Black R on a8. Black K on g8.
       fen: "r5k1/5ppp/8/8/4Q3/8/5PPP/4R1K1 w - - 0 1",
       moves: ["e4e8", "a8e8", "e1e8"],
-      rating: 1000,
+      rating: 1200,
       theme: "Back Rank Sacrifice",
       color: 'w'
-  },
-  {
-      id: "005",
-      // Arabian Mate Pattern
-      // White R on a7, N on f6. Black K on h8.
-      // 1. Rh7#
-      fen: "7k/R7/5N2/8/8/8/8/7K w - - 0 1",
-      moves: ["a7h7"],
-      rating: 900,
-      theme: "Arabian Mate",
-      color: 'w'
-  },
-  {
-      id: "006",
-      // Back Rank Mate for Black
-      // Black Rook on a8. White K on g1. White pawns f2,g2,h2.
-      // 1... Ra1#
-      // FEN: r5k1/5ppp/8/8/8/8/5PPP/6K1 b - - 0 1
-      fen: "r5k1/5ppp/8/8/8/8/5PPP/6K1 b - - 0 1",
-      moves: ["a8a1"],
-      rating: 300,
-      theme: "Back Rank Mate",
-      color: 'b'
   }
 ];

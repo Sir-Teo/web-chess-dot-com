@@ -75,7 +75,7 @@ const AppContent: React.FC = () => {
             />
         );
       case 'learn-openings':
-        return <OpeningsInterface onAnalyze={handleAnalyze} onNavigate={handleNavigate} />;
+        return <OpeningsInterface onAnalyze={handleAnalyze} />;
       case 'learn-lessons':
         return <LessonsInterface onNavigate={handleNavigate} />;
       case 'dashboard':

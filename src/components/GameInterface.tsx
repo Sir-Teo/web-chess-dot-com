@@ -175,27 +175,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
               setFen(g.fen());
               setIsGameOver(false);
               setGameResult('');
-
-              // Identify opening immediately for display
-              // We need PGN but we only have FEN. identifyOpening works on PGN usually?
-              // `identifyOpening` function takes PGN string.
-              // But g.pgn() is empty if loaded from FEN.
-              // However, usually we can't identify opening from FEN easily without history.
-              // For OpeningsInterface, the user knows what it is.
-              // We can rely on `GameInterface` detecting it later on move?
-              // No, we want it NOW.
-              // If `initialFen` comes from `OpeningsInterface`, we don't have the name here unless we re-detect.
-              // `identifyOpening` uses `new Chess()` and `loadPgn`.
-              // We can try to match FEN to known openings in our list?
-              // Or just accept we might need to pass opening name as prop?
-              // For now, let's leave as "Custom Position" if undetected.
-              // Wait, identifyOpening works on PGN.
-              // If we load FEN, PGN is empty.
-              // We can try to use `onMove` to set it later.
-              // BUT we want it in the panel BEFORE game starts.
-
-              // Don't auto-start. Let user select bot/mode first.
-              // setHasGameStarted(true);
+              setHasGameStarted(true); // If loading from FEN, assume we want to see/play it
           } catch (e) {
               console.error("Invalid initialFen update", e);
           }
@@ -572,8 +552,8 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
       }
       setUserColor(finalColor);
 
-      // Enable Coach Mode if it's the Coach bot OR if we started from the Coach panel
-      if (bot.id === 'coach' || activePanel === 'coach') {
+      // Enable Coach Mode if it's the Coach bot
+      if (bot.id === 'coach') {
           setIsCoachMode(true);
       } else {
           // Optional: reset coach mode or keep previous preference?
@@ -909,10 +889,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
                   }}
               />
           ) : activePanel === 'bots' && !activeBot ? (
-              <PlayBotsPanel
-                onStartGame={handleStartBotGame}
-                practiceTitle={startPosition ? (openingName || "Custom Position") : undefined}
-              />
+              <PlayBotsPanel onStartGame={handleStartBotGame} />
           ) : activePanel === 'coach' && !activeBot ? (
               <PlayCoachPanel onStartGame={handleStartBotGame} />
           ) : (activeBot || hasGameStarted) ? (

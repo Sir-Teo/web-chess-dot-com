@@ -1,13 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { StockfishClient, EngineScore } from '../utils/gameAnalysis';
-import { Chess } from 'chess.js';
-
-export interface CoachSettings {
-    showSuggestionArrows: boolean;
-    showThreatArrows: boolean;
-    showEvalBar: boolean;
-    showFeedback: boolean;
-}
 
 interface CoachFeedback {
     message: string;
@@ -22,10 +14,8 @@ export type Arrow = [string, string, string];
 
 const STOCKFISH_URL = 'https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.0/stockfish.js';
 
-export const useCoach = (isEnabled: boolean, settings: CoachSettings) => {
+export const useCoach = (isEnabled: boolean) => {
     const clientRef = useRef<StockfishClient | null>(null);
-    const threatClientRef = useRef<StockfishClient | null>(null); // Separate client for threats to avoid blocking main analysis
-
     const [feedback, setFeedback] = useState<CoachFeedback | null>(null);
     const [arrows, setArrows] = useState<Arrow[]>([]);
     const [isThinking, setIsThinking] = useState(false);
@@ -36,27 +26,17 @@ export const useCoach = (isEnabled: boolean, settings: CoachSettings) => {
     // Cache the best move for the CURRENT position (before player moves)
     const currentPositionAnalysis = useRef<{ fen: string, bestMove: string, score: EngineScore | null } | null>(null);
 
-    // Initialize Coach Engine and Threat Engine
+    // Initialize Coach Engine
     useEffect(() => {
         if (!clientRef.current) {
             StockfishClient.create(STOCKFISH_URL).then(client => {
                 clientRef.current = client;
-                // Set lower skill? No, coach should be smart.
-            });
-        }
-        if (!threatClientRef.current) {
-             StockfishClient.create(STOCKFISH_URL).then(client => {
-                threatClientRef.current = client;
             });
         }
         return () => {
             if (clientRef.current) {
                 clientRef.current.terminate();
                 clientRef.current = null;
-            }
-            if (threatClientRef.current) {
-                threatClientRef.current.terminate();
-                threatClientRef.current = null;
             }
         };
     }, []);
@@ -67,12 +47,12 @@ export const useCoach = (isEnabled: boolean, settings: CoachSettings) => {
 
         const turn = fen.split(' ')[1] as 'w' | 'b';
 
-        // 1. Main Analysis (Best Move & Score)
+        // Stop any pending
         clientRef.current.stop();
         clientRef.current.setPosition(fen);
 
         try {
-            const result = await clientRef.current.go(15); // Good depth for fast response
+            const result = await clientRef.current.go(15);
             const scoreObj = result.score;
 
             // Normalize Score to White Perspective for Eval Bar
@@ -84,8 +64,13 @@ export const useCoach = (isEnabled: boolean, settings: CoachSettings) => {
                     whiteScore = turn === 'w' ? scoreObj.value : -scoreObj.value;
                 } else {
                     // Mate
+                    // Score is relative to side to move
+                    // If turn is White and value is +1, White mates in 1.
+                    // If turn is Black and value is +1, Black mates in 1 (Bad for White).
                     const mateVal = scoreObj.value;
                     whiteMate = turn === 'w' ? mateVal : -mateVal;
+
+                    // For bar fill calculation, we also need a high CP value
                     whiteScore = whiteMate > 0 ? 10000 : -10000;
                 }
             }
@@ -97,56 +82,10 @@ export const useCoach = (isEnabled: boolean, settings: CoachSettings) => {
                 bestMove: result.bestMove,
                 score: scoreObj
             };
-
-            // 2. Threat Analysis (If enabled)
-            if (settings.showThreatArrows && threatClientRef.current) {
-                 // Calculate Null Move Threat
-                 // Flip side to move
-                 const tokens = fen.split(' ');
-                 const sideToMove = tokens[1];
-                 const nextSide = sideToMove === 'w' ? 'b' : 'w';
-                 tokens[1] = nextSide;
-                 tokens[3] = '-'; // Clear EP to avoid invalid moves? Usually safer.
-                 const nullFen = tokens.join(' ');
-
-                 threatClientRef.current.stop();
-                 threatClientRef.current.setPosition(nullFen);
-                 const threatResult = await threatClientRef.current.go(10); // Quick check
-
-                 if (threatResult.bestMove) {
-                     const from = threatResult.bestMove.substring(0, 2);
-                     const to = threatResult.bestMove.substring(2, 4);
-                     // Add threat arrow (Red)
-                     // We merge this into arrows or keep separate?
-                     // Let's store it in arrows but we need to clear it on next move.
-                     // Actually, we usually want to show it ONLY if requested or always?
-                     // "Toggle 'Show Threats' to see what your opponent is threatening."
-                     // If toggled ON, we show it.
-                     setArrows(prev => {
-                         // Remove existing threat arrows (color #fa412d)
-                         const clean = prev.filter(a => a[2] !== '#fa412d');
-                         return [...clean, [from, to, '#fa412d']];
-                     });
-                 }
-            } else {
-                 // Clear threats if disabled
-                 setArrows(prev => prev.filter(a => a[2] !== '#fa412d'));
-            }
-
         } catch (e) {
             console.error("Coach analysis failed", e);
         }
-    }, [settings.showThreatArrows]);
-
-    // Re-run threat analysis if settings change but FEN hasn't (optional, but good for toggle)
-    useEffect(() => {
-        if (settings.showThreatArrows && currentPositionAnalysis.current) {
-            onTurnStart(currentPositionAnalysis.current.fen);
-        } else if (!settings.showThreatArrows) {
-             setArrows(prev => prev.filter(a => a[2] !== '#fa412d'));
-        }
-    }, [settings.showThreatArrows, onTurnStart]);
-
+    }, []);
 
     // Helper to get CP for comparison
     const getCp = (score: EngineScore | null): number => {
@@ -201,17 +140,13 @@ export const useCoach = (isEnabled: boolean, settings: CoachSettings) => {
 
         // 2. Check if best move
         if (bestMove === playedMoveUci) {
-             if (settings.showFeedback) {
-                 setFeedback({
-                     message: "Best move!",
-                     type: 'best',
-                     bestMove: beforeAnalysis.bestMove,
-                     reason: "You found the optimal continuation."
-                 });
-             }
-             if (settings.showSuggestionArrows) {
-                setArrows([[move.from, move.to, '#81b64c']]); // Chess.com Green
-             }
+             setFeedback({
+                 message: "Best move!",
+                 type: 'best',
+                 bestMove: beforeAnalysis.bestMove,
+                 reason: "You found the optimal continuation."
+             });
+             setArrows([[move.from, move.to, '#81b64c']]); // Chess.com Green
              setIsThinking(false);
              return;
         }
@@ -265,27 +200,22 @@ export const useCoach = (isEnabled: boolean, settings: CoachSettings) => {
 
         const reason = getReason(type, loss);
 
-        if (settings.showFeedback) {
-            setFeedback({
-                message,
-                type,
-                scoreDiff: loss,
-                bestMove: beforeAnalysis.bestMove,
-                reason
-            });
-        }
+        setFeedback({
+            message,
+            type,
+            scoreDiff: loss,
+            bestMove: beforeAnalysis.bestMove,
+            reason
+        });
 
-        // Show arrows for Played Move and Best Move if settings allow
-        const newArrows: Arrow[] = [];
-        if (settings.showSuggestionArrows) {
-             newArrows.push([move.from, move.to, arrowColor]); // Played
-             newArrows.push([bestFrom, bestTo, '#81b64c']);  // Best
-        }
-        setArrows(newArrows);
+        setArrows([
+            [move.from, move.to, arrowColor],       // Played
+            [bestFrom, bestTo, '#81b64c']  // Best
+        ]);
 
         setIsThinking(false);
 
-    }, [isEnabled, settings]); // Re-create if settings change
+    }, [isEnabled]);
 
     const resetFeedback = () => {
         setFeedback(null);

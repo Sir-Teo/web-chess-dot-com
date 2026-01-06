@@ -1,110 +1,114 @@
 import React from 'react';
-import { X, Settings } from 'lucide-react';
+import { X, Check } from 'lucide-react';
 import { CoachSettings } from '../hooks/useCoach';
 
 interface CoachSettingsModalProps {
     isOpen: boolean;
     onClose: () => void;
     settings: CoachSettings;
-    onSettingsChange: (settings: CoachSettings) => void;
+    onSettingsChange: (newSettings: CoachSettings) => void;
 }
 
 const CoachSettingsModal: React.FC<CoachSettingsModalProps> = ({ isOpen, onClose, settings, onSettingsChange }) => {
-  if (!isOpen) return null;
+    if (!isOpen) return null;
 
-  const handleChange = (key: keyof CoachSettings, value: boolean) => {
-      onSettingsChange({ ...settings, [key]: value });
-  };
+    const toggleSetting = (key: keyof CoachSettings) => {
+        onSettingsChange({
+            ...settings,
+            [key]: !settings[key]
+        });
+    };
 
-  return (
-    <>
-      <style>{`
-        @keyframes animate-in {
-          from { opacity: 0; transform: scale(0.95); }
-          to { opacity: 1; transform: scale(1); }
-        }
-        .animate-in {
-          animation: animate-in 0.2s ease-out;
-        }
-      `}</style>
-      <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 animate-in">
-        <div className="bg-[#262522] w-full max-w-md rounded-lg shadow-xl border border-white/10 overflow-hidden flex flex-col max-h-[90vh]">
-          <div className="flex items-center justify-between p-4 border-b border-white/10 bg-[#211f1c]">
-            <div className="flex items-center gap-2">
-              <Settings className="w-5 h-5 text-chess-green" />
-              <h2 className="text-white font-bold text-lg">Coach Settings</h2>
-            </div>
-            <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
-              <X className="w-6 h-6" />
-            </button>
-          </div>
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+            <div className="bg-[#262522] w-full max-w-[400px] rounded-lg shadow-2xl flex flex-col overflow-hidden border border-white/10 relative">
 
-          <div className="p-6 overflow-y-auto">
-            <div className="space-y-6">
-                {/* Visual Aids */}
-                <div>
-                    <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Visual Aids</h3>
-                    <div className="space-y-3">
-                        <Toggle
-                            label="Move Suggestions"
-                            description="Show arrows for best moves"
-                            checked={settings.showSuggestionArrows}
-                            onChange={(v) => handleChange('showSuggestionArrows', v)}
-                        />
-                        <Toggle
-                            label="Show Threats"
-                            description="Highlight opponent's threats"
-                            checked={settings.showThreatArrows}
-                            onChange={(v) => handleChange('showThreatArrows', v)}
-                        />
-                        <Toggle
-                            label="Evaluation Bar"
-                            description="Show advantage graph"
-                            checked={settings.showEvalBar}
-                            onChange={(v) => handleChange('showEvalBar', v)}
-                        />
+                <button
+                    onClick={onClose}
+                    className="absolute top-3 right-3 text-gray-400 hover:text-white transition-colors"
+                >
+                    <X className="w-5 h-5" />
+                </button>
+
+                <div className="p-4 border-b border-white/5">
+                    <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                        Coach Settings
+                    </h2>
+                </div>
+
+                <div className="p-4 space-y-4">
+
+                    {/* Suggestion Arrows */}
+                    <div className="flex items-center justify-between">
+                        <div className="flex flex-col">
+                            <span className="text-white font-semibold">Suggestion Arrows</span>
+                            <span className="text-xs text-gray-400">Green arrows for recommended moves</span>
+                        </div>
+                         <button
+                            onClick={() => toggleSetting('showSuggestionArrows')}
+                            className={`w-12 h-6 rounded-full p-1 transition-colors ${settings.showSuggestionArrows ? 'bg-chess-green' : 'bg-gray-600'}`}
+                        >
+                            <div className={`w-4 h-4 rounded-full bg-white transition-transform ${settings.showSuggestionArrows ? 'translate-x-6' : 'translate-x-0'}`} />
+                        </button>
                     </div>
+
+                    {/* Threat Arrows */}
+                    <div className="flex items-center justify-between">
+                        <div className="flex flex-col">
+                            <span className="text-white font-semibold">Threat Arrows</span>
+                            <span className="text-xs text-gray-400">Red arrows for potential threats</span>
+                        </div>
+                         <button
+                            onClick={() => toggleSetting('showThreatArrows')}
+                            className={`w-12 h-6 rounded-full p-1 transition-colors ${settings.showThreatArrows ? 'bg-chess-green' : 'bg-gray-600'}`}
+                        >
+                            <div className={`w-4 h-4 rounded-full bg-white transition-transform ${settings.showThreatArrows ? 'translate-x-6' : 'translate-x-0'}`} />
+                        </button>
+                    </div>
+
+                    {/* Evaluation Bar */}
+                    <div className="flex items-center justify-between">
+                         <div className="flex flex-col">
+                            <span className="text-white font-semibold">Evaluation Bar</span>
+                            <span className="text-xs text-gray-400">Shows current game balance</span>
+                        </div>
+                         <button
+                            onClick={() => toggleSetting('showEvalBar')}
+                            className={`w-12 h-6 rounded-full p-1 transition-colors ${settings.showEvalBar ? 'bg-chess-green' : 'bg-gray-600'}`}
+                        >
+                            <div className={`w-4 h-4 rounded-full bg-white transition-transform ${settings.showEvalBar ? 'translate-x-6' : 'translate-x-0'}`} />
+                        </button>
+                    </div>
+
+                    {/* Move Feedback */}
+                    <div className="flex items-center justify-between">
+                         <div className="flex flex-col">
+                            <span className="text-white font-semibold">Move Feedback</span>
+                            <span className="text-xs text-gray-400">Insight into move classification</span>
+                        </div>
+                         <button
+                            onClick={() => toggleSetting('showFeedback')}
+                            className={`w-12 h-6 rounded-full p-1 transition-colors ${settings.showFeedback ? 'bg-chess-green' : 'bg-gray-600'}`}
+                        >
+                            <div className={`w-4 h-4 rounded-full bg-white transition-transform ${settings.showFeedback ? 'translate-x-6' : 'translate-x-0'}`} />
+                        </button>
+                    </div>
+
                 </div>
 
-                {/* Feedback */}
-                <div>
-                    <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Feedback</h3>
-                     <div className="space-y-3">
-                        <Toggle
-                            label="Coach Feedback"
-                            description="Show text explanations for moves"
-                            checked={settings.showFeedback}
-                            onChange={(v) => handleChange('showFeedback', v)}
-                        />
-                     </div>
+                <div className="p-4 bg-[#211f1c] border-t border-white/5 flex justify-end">
+                    <button
+                        onClick={onClose}
+                        className="bg-chess-green hover:bg-chess-greenHover text-white font-bold py-2 px-6 rounded shadow-lg transition-colors flex items-center gap-2"
+                    >
+                        <Check className="w-4 h-4" />
+                        Done
+                    </button>
                 </div>
+
             </div>
-          </div>
-
-          <div className="p-4 bg-[#211f1c] border-t border-white/10 flex justify-end">
-            <button
-                onClick={onClose}
-                className="bg-chess-green hover:bg-chess-greenHover text-white font-bold py-2 px-6 rounded shadow transition-colors"
-            >
-                Done
-            </button>
-          </div>
         </div>
-      </div>
-    </>
-  );
+    );
 };
-
-const Toggle = ({ label, description, checked, onChange }: { label: string, description: string, checked: boolean, onChange: (v: boolean) => void }) => (
-    <div className="flex items-center justify-between group cursor-pointer" onClick={() => onChange(!checked)}>
-        <div>
-            <div className="text-white font-bold text-sm">{label}</div>
-            <div className="text-xs text-gray-400">{description}</div>
-        </div>
-        <div className={`w-12 h-6 rounded-full relative transition-colors ${checked ? 'bg-chess-green' : 'bg-[#383531]'}`}>
-            <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${checked ? 'left-7' : 'left-1'}`} />
-        </div>
-    </div>
-);
 
 export default CoachSettingsModal;

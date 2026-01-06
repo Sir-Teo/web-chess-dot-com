@@ -71,18 +71,9 @@ const CoachFeedback: React.FC<CoachFeedbackProps> = ({ feedback, isThinking, onC
                                 <p className="text-xs md:text-sm font-medium leading-snug">{feedback.message}</p>
 
                                 {feedback.reason && (
-                                    <div className="mt-2 pt-2 border-t border-gray-100">
-                                         <p className="text-[10px] md:text-xs text-gray-500 italic">
-                                            "{feedback.reason}"
-                                        </p>
-                                        <div className="flex gap-2 mt-2">
-                                            {/* Explain Button (Mock functionality as per request) */}
-                                            <button className="text-[10px] font-bold text-chess-green hover:underline flex items-center gap-1">
-                                                <Lightbulb className="w-3 h-3" />
-                                                Why?
-                                            </button>
-                                        </div>
-                                    </div>
+                                    <p className="text-[10px] md:text-xs text-gray-500 italic mt-1 border-t border-gray-100 pt-1">
+                                        "{feedback.reason}"
+                                    </p>
                                 )}
                              </div>
                          ) : null}

@@ -55,8 +55,6 @@ export class StockfishClient {
 
     private init(): Promise<void> {
         return new Promise((resolve, reject) => {
-            let uciOk = false;
-
             const timeout = setTimeout(() => {
                 reject(new Error("Stockfish init timed out"));
             }, 10000);
@@ -64,25 +62,13 @@ export class StockfishClient {
             this.worker.onmessage = (e) => {
                 const line = e.data;
                 if (line === 'uciok') {
-                    uciOk = true;
-                    // Send isready to confirm
-                    this.worker.postMessage('isready');
-                }
-                if (line === 'readyok' && uciOk) {
                     clearTimeout(timeout);
-                    // Configure defaults
-                    this.setOption('Hash', '32');
-                    this.setOption('Threads', '1');
                     resolve();
                 }
                 this.handleMessage(line);
             };
             this.worker.postMessage('uci');
         });
-    }
-
-    public setOption(name: string, value: string) {
-        this.worker.postMessage(`setoption name ${name} value ${value}`);
     }
 
     private handleMessage(line: string) {
@@ -118,25 +104,6 @@ export class StockfishClient {
     }
 
     public async go(depth: number): Promise<{ bestMove: string, score: EngineScore | null }> {
-        // If there's an existing search, stop it or reject it
-        if (this.resolveCurrent) {
-             // In a real generic client we might want to reject, but for linear analysis,
-             // we just want to ensure we don't leak listeners.
-             // Actually, if we call go again, we probably want to stop the previous one.
-             this.worker.postMessage('stop');
-             // Wait for the previous one to resolve (it will get 'bestmove' from stop)
-             // However, to keep it simple and robust, we just overwrite the resolver
-             // and the previous caller will hang forever? No, that's bad.
-             // We should reject the previous one.
-             // But 'stop' causes 'bestmove', which triggers resolveCurrent.
-             // So calling stop() is the correct way to flush the previous command.
-
-             // BUT, we want to start a NEW command.
-             // Let's assume the caller awaits one at a time for analyzeGame.
-             // For robustness:
-             // this.resolveCurrent(null or error);
-        }
-
         return new Promise((resolve) => {
             this.currentCommand = 'go';
             this.score = null;
