@@ -3,15 +3,19 @@ import { Chess } from 'chess.js';
 import Chessboard from './Chessboard';
 import PuzzlesPanel from './PuzzlesPanel';
 import { PUZZLES, Puzzle } from '../utils/puzzles';
+import { useGameSound } from '../hooks/useGameSound';
 
 const PuzzlesInterface: React.FC = () => {
   const [currentPuzzleIndex, setCurrentPuzzleIndex] = useState(0);
   const [chess, setChess] = useState(new Chess());
   const [fen, setFen] = useState(PUZZLES[0].fen);
+  const [currentMoveIndex, setCurrentMoveIndex] = useState(0);
   const [rating, setRating] = useState(400);
   const [streak, setStreak] = useState(0);
   const [feedback, setFeedback] = useState<'correct' | 'incorrect' | 'none'>('none');
   const [showNextButton, setShowNextButton] = useState(false);
+  const [isOpponentMoving, setIsOpponentMoving] = useState(false);
+  const { playSound } = useGameSound();
 
   const currentPuzzle = PUZZLES[currentPuzzleIndex % PUZZLES.length];
 
@@ -22,68 +26,83 @@ const PuzzlesInterface: React.FC = () => {
     setFen(currentPuzzle.fen);
     setFeedback('none');
     setShowNextButton(false);
+    setCurrentMoveIndex(0);
+    setIsOpponentMoving(false);
   }, [currentPuzzleIndex, currentPuzzle]);
 
   const handleMove = useCallback((from: string, to: string, promotion: string = 'q') => {
-    if (feedback === 'correct') return; // Already solved
+    if (feedback === 'correct' || showNextButton || isOpponentMoving) return;
 
     try {
-      // Check legality first without moving state yet if we want to be strict,
-      // but chess.move validates legality.
-      // We need to clone to check valid move?
-      // Actually we just attempt move on `chess` instance.
-
-      // Note: Authentic puzzles usually just highlight red and snap back if wrong,
-      // or highlight green and stay if right.
-
+      // 1. Attempt the move on the local chess instance
       const move = chess.move({
         from,
         to,
         promotion,
       });
 
-      if (!move) return;
+      if (!move) return; // Invalid move logic handled by chessboard drag usually, but good safeguard
 
-      const expectedMove = currentPuzzle.moves[0];
-      // Normalize comparison (handle promotion in UCI string if present in puzzle)
-      // Usually puzzle.moves is ["e2e4"] or ["a7a8q"]
-      // move.from + move.to is "e2e4"
-      // move.promotion is 'q' -> "a7a8q" (if promotion happened)
-
+      // 2. Validate against expected move
+      const expectedMove = currentPuzzle.moves[currentMoveIndex];
       const playedUci = move.from + move.to + (move.promotion || '');
-
-      // Flexible match (if puzzle doesn't specify promo, assume q is fine?)
-      // Strict match is better.
 
       const isCorrect = playedUci === expectedMove;
 
       if (isCorrect) {
          setFen(chess.fen());
-         setFeedback('correct');
-         // Authentic calculation logic (mock)
-         const bonus = 5 + Math.min(streak, 10);
-         setRating(r => r + 8 + bonus);
-         setStreak(s => s + 1);
-         setShowNextButton(true);
+         playSound('move');
+
+         // Check if this was the last move in the sequence
+         const nextMoveIndex = currentMoveIndex + 1;
+
+         if (nextMoveIndex >= currentPuzzle.moves.length) {
+             // Puzzle Complete!
+             setFeedback('correct');
+             playSound('notify');
+             const bonus = 5 + Math.min(streak, 10);
+             setRating(r => r + 8 + bonus);
+             setStreak(s => s + 1);
+             setShowNextButton(true);
+         } else {
+             // Puzzle continues. Opponent must move.
+             setIsOpponentMoving(true);
+             setCurrentMoveIndex(nextMoveIndex + 1); // User will need to make the move AFTER the opponent
+
+             // Trigger opponent move after short delay
+             setTimeout(() => {
+                 const opponentMoveUci = currentPuzzle.moves[nextMoveIndex];
+                 const from = opponentMoveUci.substring(0, 2);
+                 const to = opponentMoveUci.substring(2, 4);
+                 const promotion = opponentMoveUci.length > 4 ? opponentMoveUci.substring(4, 5) : undefined;
+
+                 chess.move({ from, to, promotion: promotion as any });
+                 setFen(chess.fen());
+                 playSound('move');
+                 setIsOpponentMoving(false);
+             }, 500);
+         }
+
       } else {
         // Wrong move - feedback
         setFeedback('incorrect');
         setStreak(0);
         setRating(r => Math.max(100, r - 12)); // Lose points
+        playSound('illegal');
 
         // Show the wrong move briefly then undo
         setFen(chess.fen());
         setTimeout(() => {
-            chess.undo();
+            chess.undo(); // Undo the wrong move
             setFen(chess.fen());
             setFeedback('none'); // Reset feedback to allow trying again
-        }, 1000); // 1s delay before reset
+        }, 800);
       }
 
     } catch (e) {
       console.error(e);
     }
-  }, [chess, feedback, currentPuzzle, streak]);
+  }, [chess, feedback, currentPuzzle, streak, currentMoveIndex, showNextButton, playSound, isOpponentMoving]);
 
   const handleNextPuzzle = () => {
     setCurrentPuzzleIndex(prev => prev + 1);
@@ -110,7 +129,7 @@ const PuzzlesInterface: React.FC = () => {
                     fen={fen}
                     onMove={handleMove}
                     boardOrientation={currentPuzzle.color === 'w' ? 'white' : 'black'}
-                    interactable={feedback !== 'correct'}
+                    interactable={feedback !== 'correct' && !showNextButton && !isOpponentMoving}
                  />
             </div>
             
