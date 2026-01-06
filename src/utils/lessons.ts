@@ -55,6 +55,12 @@ export const LESSONS: Lesson[] = [
                 moves: ['h5f7'],
                 instruction: 'Execute the Scholar\'s Mate.',
                 explanation: 'You got it! This is a classic trap in the opening.'
+            },
+            {
+                fen: '8/8/8/4k3/R7/1R6/8/7K w - - 0 1',
+                moves: ['a4a5', 'e5d6', 'b3b6'],
+                instruction: 'Perform a Ladder Mate. Start by checking the King with the lower rook.',
+                explanation: 'Well done! The two rooks work together to force the King to the edge and deliver checkmate.'
             }
         ]
     }

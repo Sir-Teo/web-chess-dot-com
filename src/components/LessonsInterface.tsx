@@ -12,9 +12,11 @@ interface LessonsInterfaceProps {
 const LessonsInterface: React.FC<LessonsInterfaceProps> = ({ onNavigate }) => {
     const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
     const [currentChallengeIndex, setCurrentChallengeIndex] = useState(0);
+    const [moveSequenceIndex, setMoveSequenceIndex] = useState(0);
     const [game, setGame] = useState(new Chess());
     const [fen, setFen] = useState('');
     const [showSuccess, setShowSuccess] = useState(false);
+    const [isOpponentMoving, setIsOpponentMoving] = useState(false);
     const { playSound } = useGameSound();
 
     // Derived state
@@ -25,9 +27,11 @@ const LessonsInterface: React.FC<LessonsInterfaceProps> = ({ onNavigate }) => {
             const newGame = new Chess(currentChallenge.fen);
             setGame(newGame);
             setFen(currentChallenge.fen);
+            setMoveSequenceIndex(0);
             setShowSuccess(false);
+            setIsOpponentMoving(false);
         }
-    }, [currentChallengeIndex]); // Only update on index change, select handles initial
+    }, [currentChallengeIndex, selectedLesson]);
 
     const handleLessonSelect = (lesson: Lesson) => {
         // Initialize state synchronously to prevent FOUC (Flash of Unstyled Content / Wrong Board)
@@ -36,9 +40,11 @@ const LessonsInterface: React.FC<LessonsInterfaceProps> = ({ onNavigate }) => {
 
         setSelectedLesson(lesson);
         setCurrentChallengeIndex(0);
+        setMoveSequenceIndex(0);
         setGame(newGame);
         setFen(firstChallenge.fen);
         setShowSuccess(false);
+        setIsOpponentMoving(false);
     };
 
     const handleBack = () => {
@@ -46,7 +52,7 @@ const LessonsInterface: React.FC<LessonsInterfaceProps> = ({ onNavigate }) => {
     };
 
     const handleMove = (from: string, to: string) => {
-        if (!currentChallenge || showSuccess) return;
+        if (!currentChallenge || showSuccess || isOpponentMoving) return;
 
         try {
             const tempGame = new Chess(game.fen());
@@ -54,26 +60,46 @@ const LessonsInterface: React.FC<LessonsInterfaceProps> = ({ onNavigate }) => {
 
             if (!move) return;
 
-            const expectedMove = currentChallenge.moves[0]; // Currently only supporting 1-move challenges for simplicity, or sequence start
+            const expectedMove = currentChallenge.moves[moveSequenceIndex];
             const userMoveUci = from + to;
 
-            // Check if move matches expected (simplified for now, full sequence logic would need state)
-            // For now, let's assume challenges are single moves or we just validate the first move.
-            // If the challenge has multiple moves, we'd need a sub-index.
-
-            // Let's implement simple exact match for now.
+            // Check if move matches expected
             if (userMoveUci === expectedMove || (userMoveUci + 'q') === expectedMove) {
                 setGame(tempGame);
                 setFen(tempGame.fen());
                 playSound('move');
-                setShowSuccess(true);
-                playSound('notify');
+
+                const nextMoveIndex = moveSequenceIndex + 1;
+
+                if (nextMoveIndex >= currentChallenge.moves.length) {
+                    // Challenge Complete
+                    setShowSuccess(true);
+                    playSound('notify');
+                } else {
+                    // Opponent turn
+                    setIsOpponentMoving(true);
+                    setMoveSequenceIndex(nextMoveIndex + 1); // Skip opponent move for user index
+
+                    setTimeout(() => {
+                        const opponentMoveUci = currentChallenge.moves[nextMoveIndex];
+                        const fromOp = opponentMoveUci.substring(0, 2);
+                        const toOp = opponentMoveUci.substring(2, 4);
+                        const promoOp = opponentMoveUci.length > 4 ? opponentMoveUci.substring(4, 5) : undefined;
+
+                        tempGame.move({ from: fromOp, to: toOp, promotion: promoOp as any });
+                        setGame(tempGame);
+                        setFen(tempGame.fen());
+                        playSound('move');
+                        setIsOpponentMoving(false);
+                    }, 500);
+                }
             } else {
                  // Invalid for this lesson
                  const originalFen = game.fen();
                  setGame(tempGame);
                  setFen(tempGame.fen());
                  playSound('move'); // Play move sound first
+                 playSound('illegal');
 
                  // Snap back
                  setTimeout(() => {
