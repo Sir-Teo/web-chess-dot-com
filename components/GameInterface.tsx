@@ -739,7 +739,12 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
                     onMove={onMove}
                     lastMove={lastMove}
                     boardOrientation={userColor === 'w' ? 'white' : 'black'}
-                    customArrows={(isCoachMode && !viewFen) ? coachArrows : (suggestionArrow && !viewFen) ? [[suggestionArrow.from, suggestionArrow.to, '#f1c40f']] : undefined}
+                    customArrows={
+                        [
+                            ...((isCoachMode && !viewFen) ? coachArrows : []),
+                            ...((suggestionArrow && !viewFen) ? [[suggestionArrow.from, suggestionArrow.to, '#f1c40f']] : [])
+                        ] as any
+                    }
                     customSquareStyles={customSquareStyles}
                  />
 
