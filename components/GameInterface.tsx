@@ -477,21 +477,16 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
       const from = move.substring(0, 2);
       const to = move.substring(2, 4);
 
-      // 2-Stage Hint Logic
-      if (hintStage === 0 || hintStage === 2) {
-          setSuggestionArrow({ from, to: from }); // Just highlight source
-          setHintStage(1);
-      } else {
-          setSuggestionArrow({ from, to });
-          setHintStage(2);
-      }
+      // Show full move arrow immediately
+      setSuggestionArrow({ from, to });
+      setHintStage(2);
 
       // Auto clear after 5 seconds
       setTimeout(() => {
           setSuggestionArrow(null);
           setHintStage(0);
       }, 5000);
-  }, [hintStage]);
+  }, []);
 
   const handleMoveSuggestion = useCallback(() => {
       // Check if we have a valid eval for the CURRENT position
