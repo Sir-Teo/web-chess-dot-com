@@ -108,6 +108,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
   const {
       onTurnStart,
       evaluateMove,
+      getBestMove,
       feedback,
       arrows: coachArrows,
       isThinking: isCoachThinking,
@@ -129,13 +130,18 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
   const customSquareStyles = useMemo(() => {
     const styles: Record<string, React.CSSProperties> = {};
 
-    // Hint highlight for stage 1 (source square only)
-    // Arrow with same start/end doesn't render, so we use square styles instead
-    if (hintStage === 1 && suggestionArrow) {
+    // Hint highlight
+    if (hintStage > 0 && suggestionArrow) {
         styles[suggestionArrow.from] = {
             backgroundColor: 'rgba(241, 196, 15, 0.6)', // Yellow hint color matching arrow
             boxShadow: 'inset 0 0 12px rgba(241, 196, 15, 0.9)'
         };
+        if (hintStage > 1) {
+            styles[suggestionArrow.to] = {
+                backgroundColor: 'rgba(241, 196, 15, 0.35)',
+                boxShadow: 'inset 0 0 10px rgba(241, 196, 15, 0.7)'
+            };
+        }
     }
 
     if (preMove) {
@@ -488,26 +494,18 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
       }, 5000);
   }, []);
 
-  const handleMoveSuggestion = useCallback(() => {
-      // Check if we have a valid eval for the CURRENT position
-      const isEvalFresh = currentEval.fen === game.fen() && currentEval.bestMove;
-
-      if (isEvalFresh && currentEval.bestMove) {
-          showHint(currentEval.bestMove);
-          setWaitingForHint(false);
-      } else {
-          // Eval is stale or missing, wait for it
-          setWaitingForHint(true);
-      }
-  }, [currentEval, game, showHint]);
-
-  // Effect to trigger hint once ready
-  useEffect(() => {
-      if (waitingForHint && currentEval.fen === game.fen() && currentEval.bestMove) {
-          showHint(currentEval.bestMove);
+  const handleMoveSuggestion = useCallback(async () => {
+      if (waitingForHint) return;
+      setWaitingForHint(true);
+      try {
+          const move = await getBestMove(game.fen());
+          if (move && move.length >= 4 && move !== '(none)' && move !== '0000') {
+              showHint(move);
+          }
+      } finally {
           setWaitingForHint(false);
       }
-  }, [waitingForHint, currentEval, game.fen(), showHint]);
+  }, [game, getBestMove, waitingForHint, showHint]);
 
   const handleUndo = useCallback(() => {
       if (game.history().length === 0 || isGameOver) return;

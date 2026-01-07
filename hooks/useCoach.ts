@@ -1,6 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { StockfishClient, EngineScore } from '../utils/gameAnalysis';
 
+export interface CoachSettings {
+    showSuggestionArrows: boolean;
+    showThreatArrows: boolean;
+    showEvalBar: boolean;
+    showFeedback: boolean;
+}
+
 interface CoachFeedback {
     message: string;
     type: 'best' | 'good' | 'inaccuracy' | 'mistake' | 'blunder' | 'neutral' | 'excellent' | 'missed-win';
@@ -14,19 +21,27 @@ export type Arrow = [string, string, string];
 
 const STOCKFISH_URL = 'https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.0/stockfish.js';
 
-export const useCoach = (isEnabled: boolean, settings?: any) => {
+export const useCoach = (isEnabled: boolean, settings?: CoachSettings) => {
+    const showSuggestionArrows = settings?.showSuggestionArrows ?? true;
+    const showThreatArrows = settings?.showThreatArrows ?? true;
+    const showFeedback = settings?.showFeedback ?? true;
+
     const clientRef = useRef<StockfishClient | null>(null);
     const [feedback, setFeedback] = useState<CoachFeedback | null>(null);
     const [arrows, setArrows] = useState<Arrow[]>([]);
+    const [threatArrows, setThreatArrows] = useState<Arrow[]>([]);
     const [isThinking, setIsThinking] = useState(false);
     const [isReady, setIsReady] = useState(false);
 
     // Continuous Evaluation State
-    // Includes FEN to verify the evaluation matches the current board state
-    const [currentEval, setCurrentEval] = useState<{ score: number, mate?: number, bestMove?: string, fen?: string }>({ score: 0 });
+    const [currentEval, setCurrentEval] = useState<{ fen?: string, score: number, mate?: number, bestMove?: string }>({ score: 0 });
 
     // Cache the best move for the CURRENT position (before player moves)
     const currentPositionAnalysis = useRef<{ fen: string, bestMove: string, score: EngineScore | null } | null>(null);
+
+    // Track active search to prevent duplicates and allow awaiting results
+    const currentSearchPromise = useRef<Promise<{ bestMove: string, score: EngineScore | null }> | null>(null);
+    const currentSearchFen = useRef<string | null>(null);
 
     // Initialize Coach Engine
     useEffect(() => {
@@ -34,6 +49,8 @@ export const useCoach = (isEnabled: boolean, settings?: any) => {
             StockfishClient.create(STOCKFISH_URL).then(client => {
                 clientRef.current = client;
                 setIsReady(true);
+            }).catch((e) => {
+                console.error("Coach engine failed to load", e);
             });
         }
         return () => {
@@ -54,12 +71,12 @@ export const useCoach = (isEnabled: boolean, settings?: any) => {
         clientRef.current.stop();
         clientRef.current.setPosition(fen);
 
-        // Mark as thinking (for the continuous analysis part)
-        // We don't expose this "isThinking" generally for the UI (except for specific feedback requests),
-        // but we might want to know if eval is stale.
+        const promise = clientRef.current.go(15);
+        currentSearchPromise.current = promise;
+        currentSearchFen.current = fen;
 
         try {
-            const result = await clientRef.current.go(15);
+            const result = await promise;
             const scoreObj = result.score;
 
             // Normalize Score to White Perspective for Eval Bar
@@ -70,35 +87,82 @@ export const useCoach = (isEnabled: boolean, settings?: any) => {
                 if (scoreObj.unit === 'cp') {
                     whiteScore = turn === 'w' ? scoreObj.value : -scoreObj.value;
                 } else {
-                    // Mate
-                    // Score is relative to side to move
-                    // If turn is White and value is +1, White mates in 1.
-                    // If turn is Black and value is +1, Black mates in 1 (Bad for White).
                     const mateVal = scoreObj.value;
                     whiteMate = turn === 'w' ? mateVal : -mateVal;
-
-                    // For bar fill calculation, we also need a high CP value
                     whiteScore = whiteMate > 0 ? 10000 : -10000;
                 }
             }
 
-            setCurrentEval({ score: whiteScore, mate: whiteMate, bestMove: result.bestMove, fen });
+            setCurrentEval({ fen, score: whiteScore, mate: whiteMate, bestMove: result.bestMove });
 
             currentPositionAnalysis.current = {
                 fen,
                 bestMove: result.bestMove,
                 score: scoreObj
             };
+
+            if (showThreatArrows && currentSearchFen.current === fen && clientRef.current) {
+                const parts = fen.split(' ');
+                const activeColor = parts[1];
+                const newColor = activeColor === 'w' ? 'b' : 'w';
+
+                parts[1] = newColor;
+                parts[3] = '-';
+                const flippedFen = parts.join(' ');
+
+                clientRef.current.setPosition(flippedFen);
+                const threatResult = await clientRef.current.go(10);
+
+                if (threatResult.bestMove) {
+                    const from = threatResult.bestMove.substring(0, 2);
+                    const to = threatResult.bestMove.substring(2, 4);
+                    setThreatArrows([[from, to, '#fa412d']]);
+                } else {
+                    setThreatArrows([]);
+                }
+            } else {
+                setThreatArrows([]);
+            }
         } catch (e) {
             console.error("Coach analysis failed", e);
         }
+    }, [showThreatArrows]);
+
+    // Retrieve best move for a specific FEN, waiting if necessary
+    const getBestMove = useCallback(async (fen: string): Promise<string | null> => {
+        if (currentPositionAnalysis.current && currentPositionAnalysis.current.fen === fen) {
+            return currentPositionAnalysis.current.bestMove;
+        }
+
+        if (currentSearchFen.current === fen && currentSearchPromise.current) {
+            try {
+                const result = await currentSearchPromise.current;
+                return result.bestMove;
+            } catch (e) {
+                return null;
+            }
+        }
+
+        if (clientRef.current) {
+            clientRef.current.stop();
+            clientRef.current.setPosition(fen);
+            const promise = clientRef.current.go(15);
+
+            currentSearchPromise.current = promise;
+            currentSearchFen.current = fen;
+
+            const res = await promise;
+            currentPositionAnalysis.current = { fen, bestMove: res.bestMove, score: res.score };
+            return res.bestMove;
+        }
+
+        return null;
     }, []);
 
     // Helper to get CP for comparison
     const getCp = (score: EngineScore | null): number => {
         if (!score) return 0;
         if (score.unit === 'cp') return score.value;
-        // Mate scores are extremely high value
         return score.value > 0 ? 20000 - (score.value * 100) : -20000 - (score.value * 100);
     };
 
@@ -124,12 +188,11 @@ export const useCoach = (isEnabled: boolean, settings?: any) => {
         setIsThinking(true);
         setFeedback(null);
         setArrows([]);
+        setThreatArrows([]);
 
-        // 1. Did we have the "Before" analysis?
         let beforeAnalysis = currentPositionAnalysis.current;
 
         if (!beforeAnalysis || beforeAnalysis.fen !== fenBefore) {
-            // We missed the pre-analysis, do it now.
             clientRef.current.setPosition(fenBefore);
             const result = await clientRef.current.go(10);
             beforeAnalysis = {
@@ -145,29 +208,29 @@ export const useCoach = (isEnabled: boolean, settings?: any) => {
         const bestFrom = bestMove.substring(0, 2);
         const bestTo = bestMove.substring(2, 4);
 
-        // 2. Check if best move
+        const newArrows: Arrow[] = [];
+
         if (bestMove === playedMoveUci) {
-             setFeedback({
-                 message: "Best move!",
-                 type: 'best',
-                 bestMove: beforeAnalysis.bestMove,
-                 reason: "You found the optimal continuation."
-             });
-             setArrows([[move.from, move.to, '#81b64c']]); // Chess.com Green
-             setIsThinking(false);
-             return;
+            if (showFeedback) {
+                setFeedback({
+                    message: "Best move!",
+                    type: 'best',
+                    bestMove: beforeAnalysis.bestMove,
+                    reason: "You found the optimal continuation."
+                });
+            }
+            if (showSuggestionArrows) {
+                newArrows.push([move.from, move.to, '#81b64c']);
+            }
+            setArrows(newArrows);
+            setIsThinking(false);
+            return;
         }
 
-        // 3. If not best, check how bad it is
         clientRef.current.setPosition(fenAfter);
         const afterResult = await clientRef.current.go(10);
 
-        // Score Calculation (Side to Move Perspective)
-        // Before score (Player's turn)
         const scoreBeforeVal = getCp(beforeAnalysis.score);
-
-        // After score (Opponent's turn)
-        // If we want Player's advantage after move, it is -(Opponent Advantage)
         const scoreAfterValOpponent = getCp(afterResult.score);
         const scoreAfterValPlayer = -scoreAfterValOpponent;
 
@@ -175,68 +238,71 @@ export const useCoach = (isEnabled: boolean, settings?: any) => {
 
         let type: CoachFeedback['type'] = 'good';
         let message = "Good move.";
-        let arrowColor = '#f1c40f'; // Default yellow/orange
+        let arrowColor = '#f1c40f';
 
-        // Check for missed mate
         if (beforeAnalysis.score?.unit === 'mate' && beforeAnalysis.score.value > 0 &&
            (afterResult.score?.unit !== 'mate' || (afterResult.score?.unit === 'mate' && afterResult.score.value < 0))) {
-               type = 'missed-win';
-               message = "Missed Win";
-               arrowColor = '#fa412d';
+            type = 'missed-win';
+            message = "Missed Win";
+            arrowColor = '#fa412d';
         } else if (loss <= 20) {
             type = 'excellent';
             message = "Excellent";
-            arrowColor = '#96bc4b'; // Light green
+            arrowColor = '#96bc4b';
         } else if (loss <= 50) {
             type = 'good';
             message = "Good";
-             arrowColor = '#96bc4b';
+            arrowColor = '#96bc4b';
         } else if (loss <= 150) {
             type = 'inaccuracy';
             message = "Inaccuracy";
-            arrowColor = '#f7c045'; // Yellow
+            arrowColor = '#f7c045';
         } else if (loss <= 300) {
             type = 'mistake';
             message = "Mistake";
-            arrowColor = '#ffa459'; // Orange
+            arrowColor = '#ffa459';
         } else {
             type = 'blunder';
             message = "Blunder";
-            arrowColor = '#fa412d'; // Red
+            arrowColor = '#fa412d';
         }
 
-        const reason = getReason(type, loss);
+        if (showFeedback) {
+            const reason = getReason(type, loss);
 
-        setFeedback({
-            message,
-            type,
-            scoreDiff: loss,
-            bestMove: beforeAnalysis.bestMove,
-            reason
-        });
+            setFeedback({
+                message,
+                type,
+                scoreDiff: loss,
+                bestMove: beforeAnalysis.bestMove,
+                reason
+            });
+        }
 
-        setArrows([
-            [move.from, move.to, arrowColor],       // Played
-            [bestFrom, bestTo, '#81b64c']  // Best
-        ]);
+        if (showSuggestionArrows) {
+            newArrows.push([move.from, move.to, arrowColor]);
+            newArrows.push([bestFrom, bestTo, '#81b64c']);
+        }
 
+        setArrows(newArrows);
         setIsThinking(false);
-
-    }, [isEnabled]);
+    }, [isEnabled, showFeedback, showSuggestionArrows]);
 
     const resetFeedback = () => {
         setFeedback(null);
         setArrows([]);
+        setThreatArrows([]);
     };
 
     return {
         onTurnStart,
         evaluateMove,
+        getBestMove,
         feedback,
-        arrows,
+        arrows: [...arrows, ...threatArrows],
         isThinking,
         resetFeedback,
-        currentEval, // Expose evaluation
-        isReady // <--- Expose readiness
+        currentEval,
+        isReady
     };
 };
