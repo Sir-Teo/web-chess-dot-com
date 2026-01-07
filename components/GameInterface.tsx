@@ -128,6 +128,16 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
 
   const customSquareStyles = useMemo(() => {
     const styles: Record<string, React.CSSProperties> = {};
+
+    // Hint highlight for stage 1 (source square only)
+    // Arrow with same start/end doesn't render, so we use square styles instead
+    if (hintStage === 1 && suggestionArrow) {
+        styles[suggestionArrow.from] = {
+            backgroundColor: 'rgba(241, 196, 15, 0.6)', // Yellow hint color matching arrow
+            boxShadow: 'inset 0 0 12px rgba(241, 196, 15, 0.9)'
+        };
+    }
+
     if (preMove) {
         styles[preMove.from] = { backgroundColor: 'rgba(244, 67, 54, 0.4)' }; // Softer red for pre-move source
         styles[preMove.to] = { backgroundColor: 'rgba(244, 67, 54, 0.4)' }; // Softer red for pre-move dest
@@ -156,7 +166,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
     } catch(e) {}
 
     return styles;
-  }, [preMove, fen, viewFen]);
+  }, [preMove, fen, viewFen, hintStage, suggestionArrow]);
 
   // Sync state if prop changes
   useEffect(() => {
