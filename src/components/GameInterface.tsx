@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import Chessboard from './Chessboard';
-import { Settings, Flag, XCircle, Search, ChevronRight, RotateCcw, MessageCircle, AlertCircle, Copy, Check, Lightbulb, Undo2, RefreshCw, Trophy } from 'lucide-react';
+import { Settings, Flag, XCircle, Search, ChevronRight, RotateCcw, MessageCircle, AlertCircle, Copy, Check, Lightbulb, Undo2, RefreshCw, Trophy, Loader } from 'lucide-react';
 import GameReviewPanel from './GameReviewPanel';
 import PlayBotsPanel from './PlayBotsPanel';
 import { PlayCoachPanel } from './PlayCoachPanel';
@@ -117,6 +117,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
 
   // Move Suggestion State
   const [suggestionArrow, setSuggestionArrow] = useState<{ from: string, to: string } | null>(null);
+  const [waitingForHint, setWaitingForHint] = useState(false);
 
   // Pre-move State (Authenticity)
   const [preMove, setPreMove] = useState<{from: string, to: string, promotion?: string} | null>(null);
@@ -126,6 +127,10 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
     if (preMove) {
         styles[preMove.from] = { backgroundColor: 'rgba(244, 67, 54, 0.4)' }; // Softer red for pre-move source
         styles[preMove.to] = { backgroundColor: 'rgba(244, 67, 54, 0.4)' }; // Softer red for pre-move dest
+    }
+
+    if (suggestionArrow) {
+        styles[suggestionArrow.from] = { backgroundColor: 'rgba(255, 206, 86, 0.6)' };
     }
 
     // Check Highlight
@@ -447,18 +452,24 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
   }, [game, isEngineOpponent, activeBot, userColor, isGameOver, sendCommand, resetBestMove]);
 
   const handleMoveSuggestion = useCallback(async () => {
-      // Use getBestMove from useCoach which handles async waiting
-      const currentFen = game.fen();
-      const move = await getBestMove(currentFen);
+      if (waitingForHint) return;
+      setWaitingForHint(true);
+      try {
+          // Use getBestMove from useCoach which handles async waiting
+          const currentFen = game.fen();
+          const move = await getBestMove(currentFen);
 
-      if (move) {
-          const from = move.substring(0, 2);
-          const to = move.substring(2, 4);
-          setSuggestionArrow({ from, to });
-          // Auto clear after 3 seconds
-          setTimeout(() => setSuggestionArrow(null), 3000);
+          if (move) {
+              const from = move.substring(0, 2);
+              const to = move.substring(2, 4);
+              setSuggestionArrow({ from, to });
+              // Auto clear after 3 seconds
+              setTimeout(() => setSuggestionArrow(null), 3000);
+          }
+      } finally {
+          setWaitingForHint(false);
       }
-  }, [game, getBestMove]);
+  }, [game, getBestMove, waitingForHint]);
 
   const handleUndo = useCallback(() => {
       if (game.history().length === 0 || isGameOver) return;
@@ -960,15 +971,16 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
                         )}
 
                         {/* Game Controls: Suggestion/Undo for Bots */}
-                        {(isBotMode || playMode === 'pass-and-play') && !isGameOver && (
+                        {((isBotMode || activePanel === 'coach' || (!!activeBot && !onlineOpponent)) || playMode === 'pass-and-play') && !isGameOver && (
                              <div className="flex gap-1 mb-1">
-                                 {isBotMode && (
+                                 {(isBotMode || activePanel === 'coach' || (!!activeBot && !onlineOpponent)) && (
                                      <button
                                          onClick={handleMoveSuggestion}
                                          className="flex-1 bg-[#383531] hover:bg-[#45423e] rounded flex items-center justify-center py-2 text-gray-300 hover:text-white transition-colors"
-                                         title="Move Suggestion"
+                                         title="Move Suggestion (Hint)"
+                                         disabled={waitingForHint}
                                      >
-                                         <Lightbulb className="w-5 h-5" />
+                                         {waitingForHint ? <Loader className="w-5 h-5 animate-spin" /> : <Lightbulb className="w-5 h-5" />}
                                      </button>
                                  )}
                                  <button
