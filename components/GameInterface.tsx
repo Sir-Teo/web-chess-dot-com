@@ -504,6 +504,17 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
       }
   }, [waitingForHint, currentEval, game.fen(), showHint]);
 
+  // Timeout for hint waiting (fallback safety)
+  useEffect(() => {
+      if (waitingForHint) {
+          const timeout = setTimeout(() => {
+              console.warn("Hint request timed out after 15 seconds");
+              setWaitingForHint(false);
+          }, 15000); // 15 second timeout
+          return () => clearTimeout(timeout);
+      }
+  }, [waitingForHint]);
+
   const handleUndo = useCallback(() => {
       if (game.history().length === 0 || isGameOver) return;
 

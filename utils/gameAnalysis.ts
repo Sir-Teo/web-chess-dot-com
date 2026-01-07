@@ -103,12 +103,29 @@ export class StockfishClient {
         this.worker.postMessage(`position fen ${fen}`);
     }
 
-    public async go(depth: number): Promise<{ bestMove: string, score: EngineScore | null }> {
-        return new Promise((resolve) => {
+    public async go(depth: number, timeoutMs: number = 30000): Promise<{ bestMove: string, score: EngineScore | null }> {
+        return new Promise((resolve, reject) => {
             this.currentCommand = 'go';
             this.score = null;
             this.bestMove = null;
             this.resolveCurrent = resolve;
+
+            // Set a timeout to prevent infinite waiting
+            const timeout = setTimeout(() => {
+                if (this.resolveCurrent) {
+                    this.resolveCurrent = null;
+                    this.currentCommand = null;
+                    reject(new Error(`Stockfish go command timed out after ${timeoutMs}ms`));
+                }
+            }, timeoutMs);
+
+            // Store original resolve to clear timeout when bestmove arrives
+            const originalResolve = resolve;
+            this.resolveCurrent = (value) => {
+                clearTimeout(timeout);
+                originalResolve(value);
+            };
+
             this.worker.postMessage(`go depth ${depth}`);
         });
     }

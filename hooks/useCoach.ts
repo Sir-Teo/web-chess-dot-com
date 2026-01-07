@@ -59,7 +59,7 @@ export const useCoach = (isEnabled: boolean, settings?: any) => {
         // but we might want to know if eval is stale.
 
         try {
-            const result = await clientRef.current.go(15);
+            const result = await clientRef.current.go(15, 10000); // 10 second timeout
             const scoreObj = result.score;
 
             // Normalize Score to White Perspective for Eval Bar
@@ -90,7 +90,9 @@ export const useCoach = (isEnabled: boolean, settings?: any) => {
                 score: scoreObj
             };
         } catch (e) {
-            console.error("Coach analysis failed", e);
+            console.error("Coach analysis failed for position", fen, e);
+            // Set a minimal eval to unblock hint button if it's waiting
+            setCurrentEval({ score: 0, fen });
         }
     }, []);
 
