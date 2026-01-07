@@ -14,14 +14,16 @@ export type Arrow = [string, string, string];
 
 const STOCKFISH_URL = 'https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.0/stockfish.js';
 
-export const useCoach = (isEnabled: boolean) => {
+export const useCoach = (isEnabled: boolean, settings?: any) => {
     const clientRef = useRef<StockfishClient | null>(null);
     const [feedback, setFeedback] = useState<CoachFeedback | null>(null);
     const [arrows, setArrows] = useState<Arrow[]>([]);
     const [isThinking, setIsThinking] = useState(false);
+    const [isReady, setIsReady] = useState(false);
 
     // Continuous Evaluation State
-    const [currentEval, setCurrentEval] = useState<{ score: number, mate?: number, bestMove?: string }>({ score: 0 });
+    // Includes FEN to verify the evaluation matches the current board state
+    const [currentEval, setCurrentEval] = useState<{ score: number, mate?: number, bestMove?: string, fen?: string }>({ score: 0 });
 
     // Cache the best move for the CURRENT position (before player moves)
     const currentPositionAnalysis = useRef<{ fen: string, bestMove: string, score: EngineScore | null } | null>(null);
@@ -31,6 +33,7 @@ export const useCoach = (isEnabled: boolean) => {
         if (!clientRef.current) {
             StockfishClient.create(STOCKFISH_URL).then(client => {
                 clientRef.current = client;
+                setIsReady(true);
             });
         }
         return () => {
@@ -50,6 +53,10 @@ export const useCoach = (isEnabled: boolean) => {
         // Stop any pending
         clientRef.current.stop();
         clientRef.current.setPosition(fen);
+
+        // Mark as thinking (for the continuous analysis part)
+        // We don't expose this "isThinking" generally for the UI (except for specific feedback requests),
+        // but we might want to know if eval is stale.
 
         try {
             const result = await clientRef.current.go(15);
@@ -75,7 +82,7 @@ export const useCoach = (isEnabled: boolean) => {
                 }
             }
 
-            setCurrentEval({ score: whiteScore, mate: whiteMate, bestMove: result.bestMove });
+            setCurrentEval({ score: whiteScore, mate: whiteMate, bestMove: result.bestMove, fen });
 
             currentPositionAnalysis.current = {
                 fen,
@@ -229,6 +236,7 @@ export const useCoach = (isEnabled: boolean) => {
         arrows,
         isThinking,
         resetFeedback,
-        currentEval // Expose evaluation
+        currentEval, // Expose evaluation
+        isReady // <--- Expose readiness
     };
 };

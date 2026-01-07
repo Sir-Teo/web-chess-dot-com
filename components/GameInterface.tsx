@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import Chessboard from './Chessboard';
-import { Settings, Flag, XCircle, Search, ChevronRight, RotateCcw, MessageCircle, AlertCircle, Copy, Check, Lightbulb, Undo2, RefreshCw, Trophy } from 'lucide-react';
+import { Settings, Flag, XCircle, Search, ChevronRight, RotateCcw, MessageCircle, AlertCircle, Copy, Check, Lightbulb, Undo2, RefreshCw, Trophy, Loader2 } from 'lucide-react';
 import GameReviewPanel from './GameReviewPanel';
 import PlayBotsPanel from './PlayBotsPanel';
 import PlayCoachPanel from './PlayCoachPanel';
@@ -112,13 +112,16 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
       arrows: coachArrows,
       isThinking: isCoachThinking,
       resetFeedback,
-      currentEval
+      currentEval,
+      isReady: isCoachReady // Get readiness state
   } = useCoach(true, coachSettings); // Always enable for evaluation bar, settings determine feedback visibility
 
   // Move Suggestion State
   const [suggestionArrow, setSuggestionArrow] = useState<{ from: string, to: string } | null>(null);
   // Hint State
   const [hintStage, setHintStage] = useState<0 | 1 | 2>(0); // 0: None, 1: Suggestion, 2: Best Move
+  // New: Loading state for hint
+  const [waitingForHint, setWaitingForHint] = useState(false);
 
   // Pre-move State (Authenticity)
   const [preMove, setPreMove] = useState<{from: string, to: string, promotion?: string} | null>(null);
@@ -207,10 +210,10 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
 
   // Coach: On turn start (Continuous Analysis)
   useEffect(() => {
-      if (!isGameOver) {
+      if (!isGameOver && isCoachReady) { // Check readiness
            onTurnStart(game.fen());
       }
-  }, [game.fen(), isGameOver, onTurnStart]);
+  }, [game.fen(), isGameOver, onTurnStart, isCoachReady]);
 
   // Keyboard Navigation
   useEffect(() => {
@@ -347,6 +350,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
           // Clear suggestion on move
           setSuggestionArrow(null);
           setHintStage(0);
+          setWaitingForHint(false);
       } else {
           setPreMove(null); // Invalid move
       }
@@ -431,6 +435,9 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
       setIsPlayFriendMode(false);
       setOpeningName("");
       setPreMove(null);
+      setSuggestionArrow(null);
+      setHintStage(0);
+      setWaitingForHint(false);
       playSound('gameStart');
 
   }, [resetTimer, playSound, resetFeedback, activeBot, startPosition]);
@@ -456,37 +463,46 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
      }
   }, [game, isEngineOpponent, activeBot, userColor, isGameOver, sendCommand, resetBestMove]);
 
-  const handleMoveSuggestion = useCallback(() => {
-      // Use best move from current coach evaluation
-      if (currentEval.bestMove) {
-          const from = currentEval.bestMove.substring(0, 2);
-          const to = currentEval.bestMove.substring(2, 4);
+  const showHint = useCallback((move: string) => {
+      const from = move.substring(0, 2);
+      const to = move.substring(2, 4);
 
-          // 2-Stage Hint Logic
-          if (hintStage === 0 || hintStage === 2) {
-              // Stage 1: Suggestion Arrow (Only Source Piece) or Generic Area?
-              // Actually, Chess.com usually highlights the piece to move first.
-              // Here we'll just show the move but maybe in a different color or partial?
-              // The article says "Receive a suggestion... Tap again to see the best move."
-              // Let's implement:
-              // Stage 1: Highlight the piece to move (Source square only)
-              // Stage 2: Show the full arrow (Source to Dest)
-
-              setSuggestionArrow({ from, to: from }); // Just highlight source
-              setHintStage(1);
-          } else {
-              // Stage 2: Full Arrow
-              setSuggestionArrow({ from, to });
-              setHintStage(2);
-          }
-
-          // Auto clear after 5 seconds
-          setTimeout(() => {
-              setSuggestionArrow(null);
-              setHintStage(0);
-          }, 5000);
+      // 2-Stage Hint Logic
+      if (hintStage === 0 || hintStage === 2) {
+          setSuggestionArrow({ from, to: from }); // Just highlight source
+          setHintStage(1);
+      } else {
+          setSuggestionArrow({ from, to });
+          setHintStage(2);
       }
-  }, [currentEval, hintStage]);
+
+      // Auto clear after 5 seconds
+      setTimeout(() => {
+          setSuggestionArrow(null);
+          setHintStage(0);
+      }, 5000);
+  }, [hintStage]);
+
+  const handleMoveSuggestion = useCallback(() => {
+      // Check if we have a valid eval for the CURRENT position
+      const isEvalFresh = currentEval.fen === game.fen() && currentEval.bestMove;
+
+      if (isEvalFresh && currentEval.bestMove) {
+          showHint(currentEval.bestMove);
+          setWaitingForHint(false);
+      } else {
+          // Eval is stale or missing, wait for it
+          setWaitingForHint(true);
+      }
+  }, [currentEval, game, showHint]);
+
+  // Effect to trigger hint once ready
+  useEffect(() => {
+      if (waitingForHint && currentEval.fen === game.fen() && currentEval.bestMove) {
+          showHint(currentEval.bestMove);
+          setWaitingForHint(false);
+      }
+  }, [waitingForHint, currentEval, game.fen(), showHint]);
 
   const handleUndo = useCallback(() => {
       if (game.history().length === 0 || isGameOver) return;
@@ -533,6 +549,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
       resetBestMove(); // Stop bot if it was thinking to prevent race condition
       setSuggestionArrow(null);
       setHintStage(0);
+      setWaitingForHint(false);
   }, [game, isEngineOpponent, userColor, resetFeedback, resetBestMove]);
 
   const handleFlipBoard = useCallback(() => {
@@ -978,10 +995,11 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
                                  {(isBotMode || isCoachPanel) && (
                                      <button
                                          onClick={handleMoveSuggestion}
-                                         className={`flex-1 ${hintStage > 0 ? 'bg-chess-green text-white' : 'bg-[#383531] text-gray-300'} hover:bg-[#45423e] rounded flex items-center justify-center py-2 hover:text-white transition-colors`}
+                                         className={`flex-1 ${hintStage > 0 ? 'bg-chess-green text-white' : 'bg-[#383531] text-gray-300'} hover:bg-[#45423e] rounded flex items-center justify-center py-2 hover:text-white transition-colors disabled:opacity-50`}
                                          title="Move Suggestion (Hint)"
+                                         disabled={waitingForHint}
                                      >
-                                         <Lightbulb className="w-5 h-5" />
+                                         {waitingForHint ? <Loader2 className="w-5 h-5 animate-spin" /> : <Lightbulb className="w-5 h-5" />}
                                      </button>
                                  )}
                                  <button
