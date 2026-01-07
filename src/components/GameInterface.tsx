@@ -880,16 +880,6 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
                         </span>
                         <div className="flex gap-2">
 
-                             {/* Coach Toggle */}
-                             <button
-                                onClick={() => setIsCoachMode(!isCoachMode)}
-                                className={`flex items-center gap-1 px-2 py-1 rounded transition-colors ${isCoachMode ? 'bg-chess-green text-white' : 'text-gray-400 hover:text-white'}`}
-                                title="Toggle Coach Mode"
-                             >
-                                 <MessageCircle className="w-4 h-4" />
-                                 <span className="text-xs font-bold">Coach</span>
-                             </button>
-
                              {/* Coach Settings Cog */}
                              {isCoachMode && (
                                  <div className="relative">
