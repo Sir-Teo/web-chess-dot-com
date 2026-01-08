@@ -4,6 +4,7 @@ import Dashboard from './components/Dashboard';
 import GameInterface from './components/GameInterface';
 import PuzzlesInterface from './components/PuzzlesInterface';
 import PuzzleRushInterface from './components/PuzzleRushInterface';
+import DailyPuzzleInterface from './components/DailyPuzzleInterface';
 import AnalysisInterface from './components/AnalysisInterface';
 import OpeningsInterface from './components/OpeningsInterface';
 import LessonsInterface from './components/LessonsInterface';
@@ -43,7 +44,7 @@ const AppContent: React.FC = () => {
          // Check if the hash path corresponds to a valid tab
          // e.g., #puzzles -> activeTab = 'puzzles'
          const cleanHash = hash.split('?')[0];
-         const validTabs = ['dashboard', 'play', 'puzzles', 'learn-lessons', 'learn-openings', 'profile', 'puzzle-rush', 'analysis'];
+         const validTabs = ['dashboard', 'play', 'puzzles', 'learn-lessons', 'learn-openings', 'profile', 'puzzle-rush', 'daily-puzzle', 'analysis'];
 
          if (validTabs.includes(cleanHash)) {
              setActiveTab(cleanHash);
@@ -111,6 +112,8 @@ const AppContent: React.FC = () => {
         return <PuzzlesInterface onNavigate={handleNavigate} />;
       case 'puzzle-rush':
         return <PuzzleRushInterface onNavigate={handleNavigate} />;
+      case 'daily-puzzle':
+        return <DailyPuzzleInterface onNavigate={handleNavigate} />;
       case 'analysis':
         return (
             <AnalysisInterface
