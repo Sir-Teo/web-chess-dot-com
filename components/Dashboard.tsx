@@ -13,6 +13,7 @@ import {
 import Chessboard from './Chessboard';
 import { useLessonProgress } from '../hooks/useLessonProgress';
 import { LESSONS } from '../utils/lessons';
+import { useUser } from '../context/UserContext';
 
 interface DashboardProps {
   onNavigate: (view: string, params?: any) => void;
@@ -20,6 +21,7 @@ interface DashboardProps {
 
 const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
   const { isLessonComplete } = useLessonProgress();
+  const { user } = useUser();
 
   const nextLesson = React.useMemo(() => {
     return LESSONS.find(l => !isLessonComplete(l.id)) || LESSONS[0];
@@ -32,12 +34,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-8 gap-4">
         <div className="flex items-center gap-4">
           <div className="w-16 h-16 rounded-md bg-gray-600 overflow-hidden border-2 border-white/10">
-            <img src="https://picsum.photos/200" alt="Avatar" className="w-full h-full object-cover" />
+            <img src={user.avatar} alt="Avatar" className="w-full h-full object-cover" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-white text-2xl font-bold">MasterTeo1205</span>
-              <span className="text-xl">🇺🇸</span>
+              <span className="text-white text-2xl font-bold">{user.username}</span>
+              <span className="text-xl">{user.country}</span>
             </div>
             <div className="flex items-center gap-4 text-gray-400 text-sm mt-1">
               <div className="flex items-center gap-1">
@@ -45,13 +47,16 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
                  <span>Online</span>
               </div>
               <span>•</span>
-              <span>Free Member</span>
+              <span>{user.isPremium ? 'Diamond Member' : 'Free Member'}</span>
             </div>
           </div>
         </div>
         
         <div className="flex gap-2">
-            <button className="bg-[#383531] hover:bg-[#4a4743] text-gray-300 px-3 py-1.5 rounded text-sm font-semibold transition-colors">
+            <button
+                onClick={() => onNavigate('profile')}
+                className="bg-[#383531] hover:bg-[#4a4743] text-gray-300 px-3 py-1.5 rounded text-sm font-semibold transition-colors"
+            >
                 Edit Profile
             </button>
         </div>

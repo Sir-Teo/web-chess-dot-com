@@ -15,6 +15,7 @@ import { useGameTimer } from '../hooks/useGameTimer';
 import { useGameSound } from '../hooks/useGameSound';
 import { useBotChatter } from '../hooks/useBotChatter';
 import { useSettings } from '../context/SettingsContext';
+import { useUser } from '../context/UserContext';
 import { ALL_BOTS, BotProfile } from '../utils/bots';
 import { identifyOpening } from '../utils/openings';
 import CoachSettingsModal from './CoachSettingsModal';
@@ -31,6 +32,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
   const [activeBot, setActiveBot] = useState<BotProfile | null>(null);
 
   const { openSettings } = useSettings();
+  const { user } = useUser();
 
   // Game State
   const [game, setGame] = useState(() => {
@@ -806,7 +808,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
                              <div className="flex justify-between items-center gap-2 mb-8 bg-[#211f1c] p-3 rounded-lg border border-white/5">
                                  <div className="flex flex-col items-center flex-1">
                                       <div className="w-12 h-12 rounded-lg bg-gray-500 overflow-hidden border border-white/10 mb-2">
-                                          <img src="https://picsum.photos/200" alt="Me" className="w-full h-full object-cover" />
+                                          <img src={user.avatar} alt="Me" className="w-full h-full object-cover" />
                                       </div>
                                       <span className="text-xs font-bold text-gray-300">You</span>
                                       <span className="text-[10px] text-[#81b64c] font-bold bg-[#81b64c]/10 px-1.5 py-0.5 rounded mt-0.5">+8</span>
@@ -868,15 +870,15 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
             <div className="flex justify-between items-start mt-1 px-1">
                 <div className="flex items-center gap-2 md:gap-3">
                     <div className="w-8 h-8 md:w-10 md:h-10 rounded bg-gray-500 overflow-hidden border border-white/20 relative group">
-                        <img src="https://picsum.photos/200" alt="Me" className="w-full h-full object-cover" />
+                        <img src={user.avatar} alt="Me" className="w-full h-full object-cover" />
                     </div>
                     <div className="flex flex-col justify-center">
                         <div className="flex items-center gap-1.5">
-                            <span className="text-white font-bold text-sm leading-none tracking-wide">MasterTeo1205</span>
-                            <span className="text-lg md:text-xl leading-none">🇺🇸</span>
+                            <span className="text-white font-bold text-sm leading-none tracking-wide">{user.username}</span>
+                            <span className="text-lg md:text-xl leading-none">{user.country}</span>
                         </div>
                          <div className="flex items-center gap-2 mt-1 h-5">
-                             <span className="text-xs text-[#a0a0a0] font-semibold">850</span>
+                             <span className="text-xs text-[#a0a0a0] font-semibold">{user.rating}</span>
                              <CapturedPieces game={game} color={userColor} />
                              {openingName && (
                                  <span className="text-[10px] text-[#a0a0a0] font-semibold ml-1 bg-[#262421] px-1.5 py-0.5 rounded border border-white/10 hidden sm:inline-block truncate max-w-[150px]" title={openingName}>
