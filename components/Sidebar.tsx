@@ -68,9 +68,9 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => {
         icon: Puzzle,
         subItems: [
             { label: 'Solve Puzzles', icon: Puzzle, action: 'puzzles' },
-            { label: 'Puzzle Rush', icon: Zap, action: 'puzzles' },
+            { label: 'Puzzle Rush', icon: Zap, action: 'puzzle-rush' },
             { label: 'Puzzle Battle', icon: Shield, action: 'puzzles' },
-            { label: 'Daily Puzzle', icon: Calendar, action: 'puzzles' },
+            { label: 'Daily Puzzle', icon: Calendar, action: 'daily-puzzle' },
             { label: 'Custom Puzzles', icon: BookOpen, action: 'puzzles' },
         ]
     },
