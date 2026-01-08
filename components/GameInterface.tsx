@@ -572,13 +572,12 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
       }
       setUserColor(finalColor);
 
-      // Enable Coach Mode if it's the Coach bot
-      if (bot.id === 'coach') {
+      // Enable Coach Mode if it's the Coach bot OR if we are coming from the coach panel
+      if (bot.id === 'coach' || activePanel === 'coach') {
           setIsCoachMode(true);
       } else {
-          // Optional: reset coach mode or keep previous preference?
-          // Usually separate mode implies default state.
-          // But here, Play Coach mode is basically "Play Bot + Coach On"
+          // If we play a normal bot via "Play Computer", ensure coach mode is off by default
+          setIsCoachMode(false);
       }
 
       // If we are already in a practice session (custom start position) and it's the first game with this bot,
@@ -639,7 +638,21 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
   };
 
   const handleCopyLink = () => {
-      navigator.clipboard.writeText(window.location.href);
+      // Encode game params into URL hash if available, or just copy base URL
+      let url = window.location.href;
+      // If we are in Play Friend mode, maybe append a hash representing the mode or initial FEN if set
+      if (isPlayFriendMode) {
+          const params = new URLSearchParams();
+          params.set('mode', 'friend');
+          if (timeControl) params.set('tc', timeControl.toString());
+          if (initialFen) params.set('fen', initialFen);
+          // We can't easily change the URL without reloading or using History API which might conflict with Router if any.
+          // But here we are just copying to clipboard.
+          const baseUrl = window.location.origin + window.location.pathname;
+          url = `${baseUrl}#${params.toString()}`;
+      }
+
+      navigator.clipboard.writeText(url);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
   };
