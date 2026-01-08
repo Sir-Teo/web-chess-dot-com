@@ -1,6 +1,6 @@
 export interface LessonChallenge {
     fen: string;
-    moves: string[]; // Expected sequence
+    moves: string[]; // Expected sequence (User, Opponent, User, Opponent...)
     instruction: string;
     explanation: string; // Shown after success
 }
@@ -23,24 +23,54 @@ export const LESSONS: Lesson[] = [
         image: 'https://images.chesscomfiles.com/uploads/v1/article/25780.0e0176b6.668x375o.5042614b1497.jpeg',
         challenges: [
             {
-                // Added Kings to avoid invalid FEN error from chess.js
                 fen: '8/8/8/3R4/8/8/8/4K2k w - - 0 1',
                 moves: ['d5d8'],
-                instruction: 'The Rook moves in straight lines. Move the rook to the top rank.',
+                instruction: 'The Rook moves in straight lines. Move the rook to the top rank to check the King.',
                 explanation: 'Great! Rooks can move as far as they want up, down, left, or right.'
             },
             {
                 fen: '8/8/8/4B3/8/8/8/4K2k w - - 0 1',
                 moves: ['e5h8'],
-                instruction: 'The Bishop moves diagonally. Move the bishop to the corner (h8).',
+                instruction: 'The Bishop moves diagonally. Move the bishop to the corner (h8) to attack.',
                 explanation: 'Excellent! Bishops always stay on the same color square.'
+            },
+            {
+                fen: '8/8/8/8/3Q4/8/8/4K2k w - - 0 1',
+                moves: ['d4h8'],
+                instruction: 'The Queen is powerful! She combines the moves of Rook and Bishop. Move to h8.',
+                explanation: 'Perfect! The Queen is the most valuable piece.'
+            }
+        ]
+    },
+    {
+        id: 'basic-tactics',
+        title: 'Basic Tactics',
+        category: 'Beginner',
+        description: 'Learn fundamental tactical patterns like Forks and Pins.',
+        image: 'https://images.chesscomfiles.com/uploads/v1/article/25838.45564887.668x375o.1d0115016550.jpeg',
+        challenges: [
+            {
+                // Knight Fork
+                // White Knight e5. Black King h8, Queen d8.
+                fen: '3q3k/8/8/4N3/8/8/8/6K1 w - - 0 1',
+                moves: ['e5f7', 'h8g8', 'f7d8'],
+                instruction: 'Perform a Knight Fork! Attack both the King and the Queen simultaneously.',
+                explanation: 'You got it! The Knight forked the King and Queen, winning the Queen on the next move.'
+            },
+            {
+                // Pin
+                // White Bishop c4. Black Queen f7, King g8.
+                fen: '6k1/5q2/8/8/2B5/8/8/6K1 w - - 0 1',
+                moves: ['c4f7', 'g8f8', 'f7e8'],
+                instruction: 'The Black Queen is pinned to the King! Capture it.',
+                explanation: 'Well done. The Queen could not escape because it was pinned by your Bishop.'
             }
         ]
     },
     {
         id: 'checkmate-patterns',
         title: 'Checkmate Patterns',
-        category: 'Beginner',
+        category: 'Intermediate',
         description: 'Learn the most common checkmate patterns to win games.',
         image: 'https://images.chesscomfiles.com/uploads/v1/article/25838.45564887.668x375o.1d0115016550.jpeg',
         challenges: [
@@ -55,6 +85,21 @@ export const LESSONS: Lesson[] = [
                 moves: ['h5f7'],
                 instruction: 'Execute the Scholar\'s Mate.',
                 explanation: 'You got it! This is a classic trap in the opening.'
+            }
+        ]
+    },
+    {
+        id: 'italian-game',
+        title: 'The Italian Game',
+        category: 'Beginner',
+        description: 'Master the first moves of this classic opening.',
+        image: 'https://images.chesscomfiles.com/uploads/v1/article/25838.45564887.668x375o.1d0115016550.jpeg',
+        challenges: [
+            {
+                fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
+                moves: ['e2e4', 'e7e5', 'g1f3', 'b8c6', 'f1c4'],
+                instruction: 'Play the first 3 moves of the Italian Game (e4, Nf3, Bc4) for White.',
+                explanation: 'Excellent! You have controlled the center, developed your knight, and placed your bishop on an active diagonal.'
             }
         ]
     }
