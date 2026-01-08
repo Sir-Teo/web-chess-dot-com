@@ -21,14 +21,14 @@ import { identifyOpening } from '../utils/openings';
 import CoachSettingsModal from './CoachSettingsModal';
 
 interface GameInterfaceProps {
-  initialMode?: 'play' | 'bots' | 'review' | 'coach';
+  initialMode?: 'play' | 'bots' | 'review' | 'coach' | 'friend';
   initialTimeControl?: number;
   initialFen?: string;
   onAnalyze?: (pgn: string, tab?: 'analysis' | 'review') => void;
 }
 
 const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', initialTimeControl = 600, initialFen, onAnalyze }) => {
-  const [activePanel, setActivePanel] = useState<'play' | 'review' | 'bots' | 'coach'>(initialMode);
+  const [activePanel, setActivePanel] = useState<'play' | 'review' | 'bots' | 'coach'>((initialMode === 'friend' ? 'play' : initialMode) as any);
   const [activeBot, setActiveBot] = useState<BotProfile | null>(null);
 
   const { openSettings } = useSettings();
@@ -61,11 +61,11 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
   // New: Simulated Matching State
   const [isSearching, setIsSearching] = useState(false);
   const [searchState, setSearchState] = useState<'searching' | 'found' | null>(null);
-  const [isPlayFriendMode, setIsPlayFriendMode] = useState(false);
+  const [isPlayFriendMode, setIsPlayFriendMode] = useState(initialMode === 'friend');
   const [copied, setCopied] = useState(false);
 
   // New: Play Mode (online vs local)
-  const [playMode, setPlayMode] = useState<'online' | 'pass-and-play'>('online');
+  const [playMode, setPlayMode] = useState<'online' | 'pass-and-play'>(initialMode === 'friend' ? 'pass-and-play' : 'online');
   const [onlineOpponent, setOnlineOpponent] = useState<{name: string, rating: number, avatar: string, flag: string} | null>(null);
 
   // User Color (default 'w')
@@ -178,7 +178,12 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
 
   // Sync state if prop changes
   useEffect(() => {
-    if (initialMode) setActivePanel(initialMode);
+    if (initialMode) {
+        // If initialMode is 'friend', we want to keep the activePanel as 'play'
+        // which was set during initialization.
+        // We only update if it is NOT friend, or map friend to play.
+        setActivePanel(initialMode === 'friend' ? 'play' : initialMode);
+    }
   }, [initialMode]);
 
   useEffect(() => {
