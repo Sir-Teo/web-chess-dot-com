@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
 import GameInterface from './components/GameInterface';
@@ -16,6 +16,32 @@ const AppContent: React.FC = () => {
   const [analysisData, setAnalysisData] = useState<{ pgn?: string, fen?: string }>({});
   const [analysisTab, setAnalysisTab] = useState<'analysis' | 'review'>('analysis');
   const [gameParams, setGameParams] = useState<any>({});
+
+  // Parse URL Hash on Mount
+  useEffect(() => {
+    const hash = window.location.hash.substring(1); // Remove '#'
+    if (hash) {
+      const params = new URLSearchParams(hash);
+      const mode = params.get('mode');
+      const tc = params.get('tc');
+      const fen = params.get('fen');
+
+      if (mode === 'friend') {
+        // "Play a Friend" Link
+        setGameParams({
+          timeControl: tc ? parseInt(tc, 10) : 600,
+          fen: fen || undefined
+        });
+        setActiveTab('play-friend'); // Special internal tab for friend link handling
+      } else if (mode === 'analysis') {
+         // Link to analysis?
+         if (fen) {
+             setAnalysisData({ fen });
+             setActiveTab('analysis');
+         }
+      }
+    }
+  }, []);
 
   const handleAnalyze = (data: string, tab: 'analysis' | 'review' = 'analysis') => {
     // Detect if data is FEN or PGN
@@ -48,6 +74,16 @@ const AppContent: React.FC = () => {
             initialFen={gameParams.fen}
             onAnalyze={handleAnalyze}
           />
+        );
+      case 'play-friend':
+        // Special case: Render GameInterface but force it into "Friend" mode
+        return (
+           <GameInterface
+             initialMode="friend" // We need to support this in GameInterface
+             initialTimeControl={gameParams.timeControl}
+             initialFen={gameParams.fen}
+             onAnalyze={handleAnalyze}
+           />
         );
       case 'play-bots':
         return (
@@ -90,7 +126,7 @@ const AppContent: React.FC = () => {
 
   return (
     <div className="flex min-h-screen bg-chess-dark font-sans antialiased text-chess-text selection:bg-chess-green selection:text-white">
-      <Sidebar activeTab={activeTab} setActiveTab={handleNavigate} />
+      <Sidebar activeTab={activeTab === 'play-friend' ? 'play' : activeTab} setActiveTab={handleNavigate} />
       
       <main className="flex-1 flex flex-col overflow-hidden relative pb-[60px] md:pb-0">
         {renderContent()}
