@@ -75,7 +75,7 @@ def verify_puzzles():
         # Sequence:
         # 1. e2e8 (User)
         # 2. d8e8 (Opponent Auto)
-        # 3. d1e8 (User)
+        # 3. e1e8 (User) - Adjusted for corrected FEN
 
         print("Executing Move 1: e2-e8")
         page.locator("[data-square='e2']").click()
@@ -92,9 +92,9 @@ def verify_puzzles():
 
         time.sleep(1.0) # Extra buffer
 
-        print("Executing Move 2: d1-e8")
+        print("Executing Move 2: e1-e8")
 
-        page.locator("[data-square='d1']").click()
+        page.locator("[data-square='e1']").click()
         time.sleep(0.5) # Wait for selection
         page.locator("[data-square='e8']").click()
 
