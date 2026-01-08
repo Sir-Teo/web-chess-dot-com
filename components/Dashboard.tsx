@@ -11,12 +11,20 @@ import {
   MessageCircle
 } from 'lucide-react';
 import Chessboard from './Chessboard';
+import { useLessonProgress } from '../hooks/useLessonProgress';
+import { LESSONS } from '../utils/lessons';
 
 interface DashboardProps {
   onNavigate: (view: string, params?: any) => void;
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
+  const { isLessonComplete } = useLessonProgress();
+
+  const nextLesson = React.useMemo(() => {
+    return LESSONS.find(l => !isLessonComplete(l.id)) || LESSONS[0];
+  }, [isLessonComplete]);
+
   return (
     <div className="p-6 md:p-8 max-w-7xl mx-auto w-full">
       
@@ -83,13 +91,16 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
             </div>
           </div>
 
-          <div className="bg-[#262421] rounded-lg p-4 cursor-pointer hover:bg-[#2a2926] transition-colors group">
+          <div
+             onClick={() => onNavigate('learn-lessons')}
+             className="bg-[#262421] rounded-lg p-4 cursor-pointer hover:bg-[#2a2926] transition-colors group"
+          >
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-3">
                  <GraduationCap className="w-8 h-8 text-blue-400" />
                  <div>
                     <h3 className="text-white font-bold text-lg">Next Lesson</h3>
-                    <p className="text-sm text-gray-400">Opening Principles</p>
+                    <p className="text-sm text-gray-400">{nextLesson.title}</p>
                  </div>
               </div>
               <img src="https://www.chess.com/bundles/web/images/color-icons/lessons.svg" className="w-10 h-10 opacity-80" alt="Lessons" />
@@ -179,7 +190,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
                   <Chessboard interactable={false} />
                 </div>
                 <p className="text-gray-400 text-sm mb-4">No Daily games yet</p>
-                <button className="bg-chess-green hover:bg-chess-greenHover text-white font-bold py-2 px-6 rounded shadow-md transition-colors">
+                <button
+                  onClick={() => onNavigate('play', { timeControl: 86400 })}
+                  className="bg-chess-green hover:bg-chess-greenHover text-white font-bold py-2 px-6 rounded shadow-md transition-colors"
+                >
                   Start New Game
                 </button>
              </div>

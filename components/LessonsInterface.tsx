@@ -4,6 +4,7 @@ import { Chess } from 'chess.js';
 import Chessboard from './Chessboard';
 import { LESSONS, Lesson, LessonChallenge } from '../utils/lessons';
 import { useGameSound } from '../hooks/useGameSound';
+import { useLessonProgress } from '../hooks/useLessonProgress';
 
 interface LessonsInterfaceProps {
     onNavigate?: (view: string) => void;
@@ -22,6 +23,7 @@ const LessonsInterface: React.FC<LessonsInterfaceProps> = ({ onNavigate }) => {
     const [wrongMove, setWrongMove] = useState(false);
 
     const { playSound } = useGameSound();
+    const { markLessonComplete, isLessonComplete } = useLessonProgress();
 
     // Derived state
     const currentChallenge = selectedLesson?.challenges[currentChallengeIndex];
@@ -157,6 +159,7 @@ const LessonsInterface: React.FC<LessonsInterfaceProps> = ({ onNavigate }) => {
             setCurrentChallengeIndex(prev => prev + 1);
         } else {
             // Lesson Complete
+            markLessonComplete(selectedLesson.id);
             handleBack();
         }
     };
@@ -255,6 +258,11 @@ const LessonsInterface: React.FC<LessonsInterfaceProps> = ({ onNavigate }) => {
                                 <div className="absolute top-2 left-2 bg-black/60 backdrop-blur-sm px-2 py-1 rounded text-xs font-bold text-white uppercase">
                                     {lesson.category}
                                 </div>
+                                {isLessonComplete(lesson.id) && (
+                                     <div className="absolute top-2 right-2 bg-chess-green shadow-lg w-6 h-6 rounded-full flex items-center justify-center z-10">
+                                         <CheckCircle className="w-4 h-4 text-white" />
+                                     </div>
+                                )}
                                 <div className="absolute inset-0 bg-black/20 group-hover:bg-black/0 transition-colors" />
                             </div>
 
