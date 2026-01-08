@@ -7,15 +7,20 @@ interface PuzzlesPanelProps {
     feedback: 'correct' | 'incorrect' | 'none';
     onNextPuzzle: () => void;
     showNextButton: boolean;
+    onNavigate?: (view: string) => void;
 }
 
 const PuzzleModeButton: React.FC<{ 
   icon: React.ReactNode; 
   title: string; 
   subtitle?: string; 
-  iconBg: string 
-}> = ({ icon, title, subtitle, iconBg }) => (
-  <button className="w-full bg-[#2a2926] hover:bg-[#32312e] p-3 rounded-lg flex items-center gap-4 group transition-all border-b-4 border-black/10 active:border-b-0 active:translate-y-1">
+  iconBg: string;
+  onClick?: () => void;
+}> = ({ icon, title, subtitle, iconBg, onClick }) => (
+  <button
+    onClick={onClick}
+    className="w-full bg-[#2a2926] hover:bg-[#32312e] p-3 rounded-lg flex items-center gap-4 group transition-all border-b-4 border-black/10 active:border-b-0 active:translate-y-1"
+  >
     <div className={`w-10 h-10 ${iconBg} rounded flex items-center justify-center`}>
        {icon}
     </div>
@@ -26,7 +31,7 @@ const PuzzleModeButton: React.FC<{
   </button>
 );
 
-const PuzzlesPanel: React.FC<PuzzlesPanelProps> = ({ rating, streak, feedback, onNextPuzzle, showNextButton }) => {
+const PuzzlesPanel: React.FC<PuzzlesPanelProps> = ({ rating, streak, feedback, onNextPuzzle, showNextButton, onNavigate }) => {
   return (
     <div className="flex flex-col h-full bg-[#262522] text-[#c3c3c3]">
       {/* Header */}
@@ -102,17 +107,20 @@ const PuzzlesPanel: React.FC<PuzzlesPanelProps> = ({ rating, streak, feedback, o
         )}
 
         {/* Secondary Actions */}
-        <div className="space-y-3 opacity-50 pointer-events-none filter grayscale">
+        <div className="space-y-3">
              <PuzzleModeButton 
                 title="Puzzle Rush" 
                 icon={<Zap className="w-6 h-6 text-white" fill="currentColor" />} 
                 iconBg="bg-orange-500" 
+                onClick={() => onNavigate && onNavigate('puzzle-rush')}
              />
-             <PuzzleModeButton 
-                title="Daily Puzzle" 
-                icon={<Calendar className="w-6 h-6 text-white" />} 
-                iconBg="bg-green-500" 
-             />
+             <div className="opacity-50 pointer-events-none filter grayscale">
+                 <PuzzleModeButton
+                    title="Daily Puzzle"
+                    icon={<Calendar className="w-6 h-6 text-white" />}
+                    iconBg="bg-green-500"
+                 />
+             </div>
         </div>
 
       </div>
