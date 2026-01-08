@@ -26,10 +26,10 @@ export const PUZZLES: Puzzle[] = [
   },
   {
       id: "003",
-      fen: "r1bqk1nr/pppp1ppp/2n5/2b1p3/2B1P1Q1/8/PPPP1PPP/RNB1K1NR b KQkq - 3 4",
-      moves: ["d8f6"], // Defending f7/g7? No, random puzzle.
-      rating: 800,
-      theme: "Opening",
-      color: 'b'
+      fen: "3r2k1/5ppp/8/8/8/8/4QPPP/3R2K1 w - - 0 1",
+      moves: ["e2e8", "d8e8", "d1e8"],
+      rating: 1200,
+      theme: "Mate in 2 (Sacrifice)",
+      color: 'w'
   }
 ];
