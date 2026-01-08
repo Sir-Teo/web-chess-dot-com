@@ -182,6 +182,19 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
                  <div className="text-xs text-gray-500">Invite someone to play</div>
                </div>
            </button>
+
+           <button
+                onClick={() => onNavigate('multiplayer')}
+                className="w-full bg-[#383531] hover:bg-[#45423e] p-3 rounded-lg flex items-center gap-3 group transition-all"
+            >
+               <div className="w-10 h-10 flex items-center justify-center">
+                 <Users className="text-green-400 w-7 h-7" />
+               </div>
+               <div className="text-left">
+                 <div className="text-white font-bold">Multiplayer (P2P)</div>
+                 <div className="text-xs text-gray-500">Real-time online</div>
+               </div>
+           </button>
         </div>
 
         {/* Right Col: Daily Preview */}
