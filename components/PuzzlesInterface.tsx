@@ -6,7 +6,11 @@ import { PUZZLES, Puzzle } from '../utils/puzzles';
 import { useGameSound } from '../hooks/useGameSound';
 import { useUser } from '../context/UserContext';
 
-const PuzzlesInterface: React.FC = () => {
+interface PuzzlesInterfaceProps {
+    onNavigate?: (view: string) => void;
+}
+
+const PuzzlesInterface: React.FC<PuzzlesInterfaceProps> = ({ onNavigate }) => {
   const { user } = useUser();
   const [currentPuzzleIndex, setCurrentPuzzleIndex] = useState(0);
   const [chess, setChess] = useState(new Chess());
@@ -214,6 +218,7 @@ const PuzzlesInterface: React.FC = () => {
             feedback={feedback}
             onNextPuzzle={handleNextPuzzle}
             showNextButton={showNextButton}
+            onNavigate={onNavigate}
           />
       </div>
     </div>

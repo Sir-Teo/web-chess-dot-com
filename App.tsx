@@ -3,6 +3,7 @@ import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
 import GameInterface from './components/GameInterface';
 import PuzzlesInterface from './components/PuzzlesInterface';
+import PuzzleRushInterface from './components/PuzzleRushInterface';
 import AnalysisInterface from './components/AnalysisInterface';
 import OpeningsInterface from './components/OpeningsInterface';
 import LessonsInterface from './components/LessonsInterface';
@@ -17,27 +18,35 @@ const AppContent: React.FC = () => {
   const [analysisTab, setAnalysisTab] = useState<'analysis' | 'review'>('analysis');
   const [gameParams, setGameParams] = useState<any>({});
 
-  // Parse URL Hash on Mount
+  // Parse URL Hash on Mount to determine initial view
   useEffect(() => {
     const hash = window.location.hash.substring(1); // Remove '#'
     if (hash) {
+      // Check for mode-specific params first (e.g., ?mode=friend)
       const params = new URLSearchParams(hash);
       const mode = params.get('mode');
       const tc = params.get('tc');
       const fen = params.get('fen');
 
       if (mode === 'friend') {
-        // "Play a Friend" Link
         setGameParams({
           timeControl: tc ? parseInt(tc, 10) : 600,
           fen: fen || undefined
         });
-        setActiveTab('play-friend'); // Special internal tab for friend link handling
+        setActiveTab('play-friend');
       } else if (mode === 'analysis') {
-         // Link to analysis?
          if (fen) {
              setAnalysisData({ fen });
              setActiveTab('analysis');
+         }
+      } else {
+         // Check if the hash path corresponds to a valid tab
+         // e.g., #puzzles -> activeTab = 'puzzles'
+         const cleanHash = hash.split('?')[0];
+         const validTabs = ['dashboard', 'play', 'puzzles', 'learn-lessons', 'learn-openings', 'profile', 'puzzle-rush', 'analysis'];
+
+         if (validTabs.includes(cleanHash)) {
+             setActiveTab(cleanHash);
          }
       }
     }
@@ -45,8 +54,6 @@ const AppContent: React.FC = () => {
 
   const handleAnalyze = (data: string, tab: 'analysis' | 'review' = 'analysis') => {
     // Detect if data is FEN or PGN
-    // FEN usually has slashes and no brackets or move numbers starting with 1.
-    // PGN usually has headers [Event ...] or moves 1. e4
     const isFen = data.includes('/') && !data.includes('[') && !data.includes('1.');
 
     if (isFen) {
@@ -76,10 +83,9 @@ const AppContent: React.FC = () => {
           />
         );
       case 'play-friend':
-        // Special case: Render GameInterface but force it into "Friend" mode
         return (
            <GameInterface
-             initialMode="friend" // We need to support this in GameInterface
+             initialMode="friend"
              initialTimeControl={gameParams.timeControl}
              initialFen={gameParams.fen}
              onAnalyze={handleAnalyze}
@@ -102,7 +108,9 @@ const AppContent: React.FC = () => {
             />
         );
       case 'puzzles':
-        return <PuzzlesInterface />;
+        return <PuzzlesInterface onNavigate={handleNavigate} />;
+      case 'puzzle-rush':
+        return <PuzzleRushInterface onNavigate={handleNavigate} />;
       case 'analysis':
         return (
             <AnalysisInterface

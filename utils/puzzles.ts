@@ -55,5 +55,85 @@ export const PUZZLES: Puzzle[] = [
       rating: 1500,
       theme: "Fork / Discovery",
       color: 'b'
+  },
+  {
+      id: "007",
+      fen: "r1b1k2r/pppp1ppp/2n2n2/4p3/1b2P3/2N2N2/PPPP1PPP/R1BQKB1R w KQkq - 4 5",
+      moves: ["c3d5", "f6d5", "e4d5"],
+      rating: 1000,
+      theme: "Center Control",
+      color: 'w'
+  },
+  {
+      id: "008",
+      fen: "6k1/5ppp/8/8/8/8/4QPPP/6K1 w - - 0 1",
+      moves: ["e2e8"],
+      rating: 400,
+      theme: "Mate in 1",
+      color: 'w'
+  },
+  {
+      id: "009",
+      fen: "rnbqkb1r/pppp1ppp/5n2/4p3/4P3/2N5/PPPP1PPP/R1BQKBNR w KQkq - 2 3",
+      moves: ["f2f4"],
+      rating: 800,
+      theme: "Vienna Gambit",
+      color: 'w'
+  },
+  {
+      id: "010",
+      fen: "r2qk2r/ppp2ppp/2np1n2/2b1p1B1/2B1P1b1/2NP1N2/PPP2PPP/R2QK2R w KQkq - 1 7",
+      moves: ["c3d5"],
+      rating: 1100,
+      theme: "Pin Pressure",
+      color: 'w'
+  },
+  {
+      id: "011",
+      fen: "r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3",
+      moves: ["f1b5"],
+      rating: 500,
+      theme: "Ruy Lopez",
+      color: 'w'
+  },
+  {
+      id: "012",
+      fen: "rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2",
+      moves: ["g1f3"],
+      rating: 600,
+      theme: "Sicilian Defense",
+      color: 'w'
+  },
+  {
+      id: "013",
+      fen: "rn1qkbnr/ppp1pppp/8/3p4/4P1b1/5N2/PPPP1PPP/RNBQKB1R w KQkq - 1 3",
+      moves: ["e4d5", "d8d5", "b1c3"],
+      rating: 900,
+      theme: "Development",
+      color: 'w'
+  },
+  {
+      id: "014",
+      fen: "r1bqk2r/pppp1ppp/2n2n2/2b1p3/2B1P3/2P2N2/PP1P1PPP/RNBQ1RK1 b kq - 0 5",
+      moves: ["f6e4", "d2d4", "e5d4", "c3d4", "c5b6"],
+      rating: 1300,
+      theme: "Center Attack",
+      color: 'b'
+  },
+  {
+      id: "015",
+      fen: "2r3k1/1b3ppp/p3p3/1p6/1P1P4/P1n1P1P1/5P1P/2R2BK1 w - - 0 25",
+      moves: ["f1g2", "c3e2", "g1f1", "c8c1", "f1e2", "b7g2"],
+      rating: 1600,
+      theme: "Fork / Hanging Piece",
+      color: 'w'
+  },
+  {
+      id: "016",
+      fen: "4r1k1/pp3ppp/8/8/3P4/2P2Q2/PP3KPP/4r3 w - - 0 25",
+      moves: ["f3b7", "e1e7", "f2f3"],
+      rating: 1200,
+      theme: "Queen Ending",
+      color: 'w'
   }
 ];
