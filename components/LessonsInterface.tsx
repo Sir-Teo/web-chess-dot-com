@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { ChevronLeft, CheckCircle, Award } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { ChevronLeft, CheckCircle, Award, RotateCcw } from 'lucide-react';
 import { Chess } from 'chess.js';
 import Chessboard from './Chessboard';
 import { LESSONS, Lesson, LessonChallenge } from '../utils/lessons';
@@ -15,77 +15,141 @@ const LessonsInterface: React.FC<LessonsInterfaceProps> = ({ onNavigate }) => {
     const [game, setGame] = useState(new Chess());
     const [fen, setFen] = useState('');
     const [showSuccess, setShowSuccess] = useState(false);
+
+    // Multi-move support state
+    const [moveIndex, setMoveIndex] = useState(0);
+    const [isOpponentMoving, setIsOpponentMoving] = useState(false);
+    const [wrongMove, setWrongMove] = useState(false);
+
     const { playSound } = useGameSound();
 
     // Derived state
     const currentChallenge = selectedLesson?.challenges[currentChallengeIndex];
 
+    // Initialize or Reset Challenge
     useEffect(() => {
         if (selectedLesson && currentChallenge) {
             const newGame = new Chess(currentChallenge.fen);
             setGame(newGame);
             setFen(currentChallenge.fen);
             setShowSuccess(false);
+            setMoveIndex(0);
+            setIsOpponentMoving(false);
+            setWrongMove(false);
         }
-    }, [currentChallengeIndex]); // Only update on index change, select handles initial
+    }, [currentChallengeIndex, selectedLesson]);
 
     const handleLessonSelect = (lesson: Lesson) => {
-        // Initialize state synchronously to prevent FOUC (Flash of Unstyled Content / Wrong Board)
-        const firstChallenge = lesson.challenges[0];
-        const newGame = new Chess(firstChallenge.fen);
-
         setSelectedLesson(lesson);
         setCurrentChallengeIndex(0);
-        setGame(newGame);
-        setFen(firstChallenge.fen);
-        setShowSuccess(false);
     };
 
     const handleBack = () => {
         setSelectedLesson(null);
     };
 
-    const handleMove = (from: string, to: string) => {
-        if (!currentChallenge || showSuccess) return;
+    const handleRetry = () => {
+        if (currentChallenge) {
+            const newGame = new Chess(currentChallenge.fen);
+            setGame(newGame);
+            setFen(currentChallenge.fen);
+            setMoveIndex(0);
+            setIsOpponentMoving(false);
+            setWrongMove(false);
+            setShowSuccess(false);
+        }
+    };
+
+    const handleMove = useCallback((from: string, to: string, promotion: string = 'q') => {
+        if (!currentChallenge || showSuccess || isOpponentMoving) return;
 
         try {
             const tempGame = new Chess(game.fen());
-            const move = tempGame.move({ from, to, promotion: 'q' });
 
+            // Check for promotion logic if needed, though usually standard in chess.js
+            // But we need to ensure the move object includes promotion if strictly required
+            // For UI simplicity, we default to 'q' in callback, but let's check pawn rank
+            const piece = tempGame.get(from as any);
+            const isPromotion = piece?.type === 'p' && (
+                (piece.color === 'w' && to[1] === '8') ||
+                (piece.color === 'b' && to[1] === '1')
+            );
+
+            const moveConfig: { from: string, to: string, promotion?: string } = { from, to };
+            if (isPromotion) moveConfig.promotion = promotion;
+
+            const move = tempGame.move(moveConfig);
             if (!move) return;
 
-            const expectedMove = currentChallenge.moves[0]; // Currently only supporting 1-move challenges for simplicity, or sequence start
-            const userMoveUci = from + to;
+            const expectedMove = currentChallenge.moves[moveIndex];
+            const userMoveUci = move.from + move.to + (move.promotion || '');
 
-            // Check if move matches expected (simplified for now, full sequence logic would need state)
-            // For now, let's assume challenges are single moves or we just validate the first move.
-            // If the challenge has multiple moves, we'd need a sub-index.
+            // Flexible match (ignore promotion if expected doesn't specify it, or handle "e7e8q")
+            const isCorrect = userMoveUci === expectedMove ||
+                              (expectedMove.length === 4 && userMoveUci.startsWith(expectedMove));
 
-            // Let's implement simple exact match for now.
-            if (userMoveUci === expectedMove || (userMoveUci + 'q') === expectedMove) {
+            if (isCorrect) {
                 setGame(tempGame);
                 setFen(tempGame.fen());
                 playSound('move');
-                setShowSuccess(true);
-                playSound('notify');
+                setWrongMove(false);
+
+                const nextIndex = moveIndex + 1;
+
+                if (nextIndex >= currentChallenge.moves.length) {
+                    // Challenge Complete
+                    setShowSuccess(true);
+                    playSound('notify');
+                } else {
+                    // Continue Sequence -> Opponent Turn
+                    setMoveIndex(nextIndex);
+                    setIsOpponentMoving(true);
+
+                    // Opponent Reply
+                    setTimeout(() => {
+                        try {
+                             const opponentMoveUci = currentChallenge.moves[nextIndex];
+                             const opFrom = opponentMoveUci.substring(0, 2);
+                             const opTo = opponentMoveUci.substring(2, 4);
+                             const opProm = opponentMoveUci.length > 4 ? opponentMoveUci.substring(4, 5) : undefined;
+
+                             const opMoveConfig = { from: opFrom, to: opTo, promotion: opProm || 'q' };
+                             const reply = tempGame.move(opMoveConfig);
+
+                             if (reply) {
+                                 setGame(tempGame);
+                                 setFen(tempGame.fen());
+                                 playSound('move');
+                                 setMoveIndex(nextIndex + 1); // Ready for next user move
+                             }
+                        } catch (err) {
+                            console.error("Opponent move error", err);
+                        } finally {
+                            setIsOpponentMoving(false);
+                        }
+                    }, 600);
+                }
+
             } else {
                  // Invalid for this lesson
                  const originalFen = game.fen();
-                 setGame(tempGame);
+                 setGame(tempGame); // Show the wrong move briefly
                  setFen(tempGame.fen());
-                 playSound('move'); // Play move sound first
+                 playSound('move'); // Play move sound
 
+                 setWrongMove(true);
                  // Snap back
                  setTimeout(() => {
                      const resetGame = new Chess(originalFen);
                      setGame(resetGame);
                      setFen(originalFen);
-                 }, 500);
+                     setWrongMove(false);
+                 }, 800);
             }
         } catch (e) {
             console.error(e);
         }
-    };
+    }, [game, currentChallenge, moveIndex, showSuccess, isOpponentMoving, playSound]);
 
     const handleNextChallenge = () => {
         if (!selectedLesson) return;
@@ -106,8 +170,11 @@ const LessonsInterface: React.FC<LessonsInterfaceProps> = ({ onNavigate }) => {
                         <Chessboard
                             fen={fen}
                             onMove={handleMove}
-                            interactable={!showSuccess}
+                            interactable={!showSuccess && !isOpponentMoving}
                         />
+                         {isOpponentMoving && (
+                             <div className="absolute inset-0 z-10 bg-transparent cursor-wait"></div>
+                         )}
                     </div>
                 </div>
 
@@ -121,7 +188,7 @@ const LessonsInterface: React.FC<LessonsInterfaceProps> = ({ onNavigate }) => {
                      </div>
 
                      <div className="flex-1 p-6 flex flex-col items-center text-center overflow-y-auto">
-                         <div className="mb-6">
+                         <div className="mb-6 flex items-center gap-2">
                             <span className="text-chess-green font-bold uppercase text-xs tracking-wider">
                                 Challenge {currentChallengeIndex + 1} of {selectedLesson.challenges.length}
                             </span>
@@ -132,12 +199,18 @@ const LessonsInterface: React.FC<LessonsInterfaceProps> = ({ onNavigate }) => {
                                 <h3 className="text-white text-2xl font-bold mb-4">
                                     {currentChallenge?.instruction}
                                 </h3>
-                                <p className="text-gray-400">
-                                    Make the correct move on the board to continue.
+                                <p className="text-gray-400 mb-6">
+                                    {wrongMove ? "That's not the right move. Try again!" : "Make the correct move on the board to continue."}
                                 </p>
+                                <button
+                                    onClick={handleRetry}
+                                    className="flex items-center gap-2 text-gray-500 hover:text-white transition-colors text-sm font-semibold"
+                                >
+                                    <RotateCcw className="w-4 h-4" /> Reset Position
+                                </button>
                              </>
                          ) : (
-                             <div className="animate-in fade-in zoom-in duration-300">
+                             <div className="animate-in fade-in zoom-in duration-300 w-full">
                                 <div className="w-16 h-16 bg-chess-green rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
                                     <CheckCircle className="w-10 h-10 text-white" />
                                 </div>
