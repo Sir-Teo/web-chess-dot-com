@@ -141,6 +141,19 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
                </div>
            </button>
 
+           <button
+                onClick={() => onNavigate('play-coach')}
+                className="w-full bg-[#383531] hover:bg-[#45423e] p-3 rounded-lg flex items-center gap-3 group transition-all"
+            >
+               <div className="w-10 h-10 flex items-center justify-center">
+                 <MessageCircle className="text-chess-green w-7 h-7" />
+               </div>
+               <div className="text-left">
+                 <div className="text-white font-bold">Play Coach</div>
+                 <div className="text-xs text-gray-500">Practice with feedback</div>
+               </div>
+           </button>
+
             <button
                 onClick={() => onNavigate('play', { timeControl: 600 })}
                 className="w-full bg-[#383531] hover:bg-[#45423e] p-3 rounded-lg flex items-center gap-3 group transition-all"
