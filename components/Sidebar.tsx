@@ -74,6 +74,14 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => {
             { label: 'Custom Puzzles', icon: BookOpen, action: 'puzzles' },
         ]
     },
+    {
+        id: 'multiplayer',
+        label: 'Multiplayer',
+        icon: Users,
+        subItems: [
+            { label: 'Lobby', icon: Users, action: 'multiplayer' },
+        ]
+    },
     { 
         id: 'learn', 
         label: 'Learn', 

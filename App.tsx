@@ -10,6 +10,7 @@ import OpeningsInterface from './components/OpeningsInterface';
 import LessonsInterface from './components/LessonsInterface';
 import SettingsModal from './components/SettingsModal';
 import ProfileInterface from './components/ProfileInterface';
+import MultiplayerInterface from './components/MultiplayerInterface';
 import { SettingsProvider } from './context/SettingsContext';
 import { UserProvider } from './context/UserContext';
 
@@ -44,7 +45,7 @@ const AppContent: React.FC = () => {
          // Check if the hash path corresponds to a valid tab
          // e.g., #puzzles -> activeTab = 'puzzles'
          const cleanHash = hash.split('?')[0];
-         const validTabs = ['dashboard', 'play', 'puzzles', 'learn-lessons', 'learn-openings', 'profile', 'puzzle-rush', 'daily-puzzle', 'analysis'];
+         const validTabs = ['dashboard', 'play', 'puzzles', 'learn-lessons', 'learn-openings', 'profile', 'puzzle-rush', 'daily-puzzle', 'analysis', 'multiplayer'];
 
          if (validTabs.includes(cleanHash)) {
              setActiveTab(cleanHash);
@@ -129,6 +130,8 @@ const AppContent: React.FC = () => {
         return <LessonsInterface onNavigate={handleNavigate} />;
       case 'profile':
         return <ProfileInterface onNavigate={handleNavigate} />;
+      case 'multiplayer':
+        return <MultiplayerInterface onNavigate={handleNavigate} />;
       case 'dashboard':
       default:
         return <Dashboard onNavigate={handleNavigate} />;
