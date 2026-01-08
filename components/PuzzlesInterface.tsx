@@ -58,13 +58,13 @@ const PuzzlesInterface: React.FC = () => {
       const expectedMove = currentPuzzle.moves[moveIndex];
       const playedUci = move.from + move.to + (move.promotion || '');
 
-      console.log(`User Move: ${playedUci}, Expected: ${expectedMove}, Index: ${moveIndex}`);
-
       // Allow flexible promotion match if puzzle doesn't specify it explicitly (though it should)
       const isCorrect = playedUci === expectedMove || (expectedMove.length === 4 && playedUci.startsWith(expectedMove));
 
       if (isCorrect) {
-         setChess(tempGame);
+         // Create a new instance for state to ensure immutability and correct re-renders
+         const newChessUser = new Chess(tempGame.fen());
+         setChess(newChessUser);
          setFen(tempGame.fen());
          playSound('move');
 
@@ -103,11 +103,11 @@ const PuzzlesInterface: React.FC = () => {
                          moveConfig.promotion = promotionChar;
                      }
 
-                     console.log(`Opponent attempting move: ${from}-${to} (${moveConfig.promotion || 'none'}) on FEN: ${tempGame.fen()}`);
-
                      const replyMove = tempGame.move(moveConfig);
                      if (replyMove) {
-                         setChess(tempGame);
+                         // Create a new instance for state
+                         const newChessOpponent = new Chess(tempGame.fen());
+                         setChess(newChessOpponent);
                          setFen(tempGame.fen());
                          playSound('move'); // Opponent move sound
                          setMoveIndex(nextIndex + 1);
@@ -124,20 +124,30 @@ const PuzzlesInterface: React.FC = () => {
 
       } else {
         // Wrong move - feedback
-        console.log(`Wrong move. User: ${playedUci}, Expected: ${expectedMove}`);
         setFeedback('incorrect');
         setStreak(0);
         setRating(r => Math.max(100, r - 12)); // Lose points
         playSound('notify'); // Error sound
 
         // Show the wrong move briefly then undo
-        setChess(tempGame);
+        // We use a new instance for the wrong move visualization too
+        const newChessWrong = new Chess(tempGame.fen());
+        setChess(newChessWrong);
         setFen(tempGame.fen());
 
         setTimeout(() => {
-            tempGame.undo();
-            setChess(tempGame);
-            setFen(tempGame.fen());
+            // Undo logic: We need to revert to the state BEFORE the user move.
+            // Since tempGame was mutated, we can undo() it, OR better, just use the 'chess' state from closure?
+            // No, 'chess' state from closure is the starting state of this move.
+            // So we can just reset to that.
+
+            // However, handleMove closure captures 'chess'.
+            // So we can just restore 'chess' (the one before the move).
+            // But 'chess' is an object. We want to trigger re-render.
+            // So create a clone of the ORIGINAL 'chess' (from closure).
+            const originalChess = new Chess(chess.fen());
+            setChess(originalChess);
+            setFen(originalChess.fen());
             setFeedback('none');
         }, 1000);
       }

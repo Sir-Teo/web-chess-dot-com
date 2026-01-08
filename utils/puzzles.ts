@@ -26,8 +26,8 @@ export const PUZZLES: Puzzle[] = [
   },
   {
       id: "003",
-      fen: "3r2k1/5ppp/8/8/8/8/4QPPP/3R2K1 w - - 0 1",
-      moves: ["e2e8", "d8e8", "d1e8"],
+      fen: "3r2k1/5ppp/8/8/8/8/4QPPP/4R1K1 w - - 0 1",
+      moves: ["e2e8", "d8e8", "e1e8"],
       rating: 1200,
       theme: "Mate in 2 (Sacrifice)",
       color: 'w'
