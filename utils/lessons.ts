@@ -102,5 +102,56 @@ export const LESSONS: Lesson[] = [
                 explanation: 'Excellent! You have controlled the center, developed your knight, and placed your bishop on an active diagonal.'
             }
         ]
+    },
+    {
+        id: 'castling',
+        title: 'Castling',
+        category: 'Beginner',
+        description: 'Learn how to castle to protect your King.',
+        image: 'https://images.chesscomfiles.com/uploads/v1/article/25838.45564887.668x375o.1d0115016550.jpeg',
+        challenges: [
+            {
+                fen: '4k3/8/8/8/8/8/8/R3K2R w KQ - 0 1',
+                moves: ['e1g1'],
+                instruction: 'Castle Kingside (Short Castle).',
+                explanation: 'Great! The King moves two squares to the right, and the Rook jumps over.'
+            },
+            {
+                fen: '4k3/8/8/8/8/8/8/R3K2R w KQ - 0 1',
+                moves: ['e1c1'],
+                instruction: 'Castle Queenside (Long Castle).',
+                explanation: 'Perfect! The King moves two squares to the left.'
+            }
+        ]
+    },
+    {
+        id: 'en-passant',
+        title: 'En Passant',
+        category: 'Intermediate',
+        description: 'The special pawn capture rule everyone forgets!',
+        image: 'https://images.chesscomfiles.com/uploads/v1/article/25838.45564887.668x375o.1d0115016550.jpeg',
+        challenges: [
+            {
+                fen: 'rnbqkbnr/ppp1pppp/8/3pP3/8/8/PPPP1PPP/RNBQKBNR b KQkq - 0 2',
+                moves: ['f7f5', 'e5f6'],
+                instruction: 'Black plays f5. Perform En Passant capture!',
+                explanation: 'Correct! You can only capture en passant immediately after the pawn moves two squares.'
+            }
+        ]
+    },
+    {
+        id: 'queen-vs-pawn',
+        title: 'Queen vs Pawn',
+        category: 'Advanced',
+        description: 'Winning with a Queen against a Pawn on the 7th rank.',
+        image: 'https://images.chesscomfiles.com/uploads/v1/article/25838.45564887.668x375o.1d0115016550.jpeg',
+        challenges: [
+            {
+                fen: '8/2P5/8/8/8/6Q1/8/4K1k1 w - - 0 1',
+                moves: ['g3e3', 'g1f1', 'e3f3', 'f1g1', 'f3g3', 'g1f1', 'g3h2'],
+                instruction: 'Force the King in front of the pawn to bring your King closer.',
+                explanation: 'Well done! By forcing the King to block the pawn, you gain time to bring your own King.'
+            }
+        ]
     }
 ];

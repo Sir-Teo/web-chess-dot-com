@@ -4,8 +4,10 @@ import Chessboard from './Chessboard';
 import PuzzlesPanel from './PuzzlesPanel';
 import { PUZZLES, Puzzle } from '../utils/puzzles';
 import { useGameSound } from '../hooks/useGameSound';
+import { useUser } from '../context/UserContext';
 
 const PuzzlesInterface: React.FC = () => {
+  const { user } = useUser();
   const [currentPuzzleIndex, setCurrentPuzzleIndex] = useState(0);
   const [chess, setChess] = useState(new Chess());
   const [fen, setFen] = useState(PUZZLES[0].fen);
@@ -192,11 +194,11 @@ const PuzzlesInterface: React.FC = () => {
              <div className="flex justify-between items-start mt-2 px-1">
                 <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded bg-gray-500 overflow-hidden border border-white/20 relative group">
-                        <img src="https://picsum.photos/200" alt="Me" className="w-full h-full object-cover" />
+                        <img src={user.avatar} alt="Me" className="w-full h-full object-cover" />
                     </div>
                     <div className="flex flex-col justify-center">
                         <div className="flex items-center gap-1.5">
-                            <span className="text-white font-bold text-sm leading-none">Player</span>
+                            <span className="text-white font-bold text-sm leading-none">{user.username}</span>
                         </div>
                     </div>
                 </div>

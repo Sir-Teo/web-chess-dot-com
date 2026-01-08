@@ -31,5 +31,29 @@ export const PUZZLES: Puzzle[] = [
       rating: 1200,
       theme: "Mate in 2 (Sacrifice)",
       color: 'w'
+  },
+  {
+      id: "004",
+      fen: "r1b2rk1/pp1p1ppp/2n1p3/q7/1bP1n3/1PN2N2/PB1QPPPP/R3KB1R w KQ - 5 10",
+      moves: ["d2c2", "e4c3"],
+      rating: 1400,
+      theme: "Pin",
+      color: 'b'
+  },
+  {
+      id: "005",
+      fen: "5rk1/pp4pp/4p3/2R5/3Q4/1P3qP1/P6P/6K1 b - - 2 28",
+      moves: ["f3f1"],
+      rating: 800,
+      theme: "Mate in 1",
+      color: 'b'
+  },
+  {
+      id: "006",
+      fen: "r3k2r/ppp2ppp/2n1bn2/2b1p3/4P3/2P2N2/PP1NBPPP/R1B1K2R b KQkq - 0 8",
+      moves: ["f6g4", "e1g1", "g4f2", "f1f2"],
+      rating: 1500,
+      theme: "Fork / Discovery",
+      color: 'b'
   }
 ];

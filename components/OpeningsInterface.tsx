@@ -38,6 +38,33 @@ const OPENINGS = [
     moves: ['e4', 'c5', 'Nf3', 'd6', 'd4', 'cxd4', 'Nxd4', 'Nf6', 'Nc3', 'a6'],
     duration: '40 min',
     challenges: 12
+  },
+  {
+      id: 'french',
+      title: 'Learn The French Defense',
+      description: "A solid and resilient defense for Black against 1.e4. Challenge White's center from the start.",
+      fen: 'rnbqkbnr/pppp1ppp/4p3/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2',
+      moves: ['e4', 'e6', 'd4', 'd5', 'Nc3', 'Nf6', 'Bg5', 'Be7'],
+      duration: '35 min',
+      challenges: 10
+  },
+  {
+      id: 'caro-kann',
+      title: 'Learn The Caro-Kann',
+      description: "A solid, safe, and positional opening for Black. Similar to the French but the Bishop is not bad!",
+      fen: 'rnbqkbnr/pp1ppppp/2p5/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2',
+      moves: ['e4', 'c6', 'd4', 'd5', 'Nc3', 'dxe4', 'Nxe4', 'Bf5'],
+      duration: '30 min',
+      challenges: 8
+  },
+  {
+      id: 'queens-gambit',
+      title: 'Learn The Queen\'s Gambit',
+      description: "One of the oldest known openings. White offers a pawn to gain control of the center.",
+      fen: 'rnbqkbnr/ppp1pppp/8/3p4/2PP4/8/PP2PPPP/RNBQKBNR b KQkq - 0 2',
+      moves: ['d4', 'd5', 'c4', 'e6', 'Nc3', 'Nf6', 'Bg5', 'Be7'],
+      duration: '50 min',
+      challenges: 15
   }
 ];
 

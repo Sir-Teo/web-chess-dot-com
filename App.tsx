@@ -7,7 +7,9 @@ import AnalysisInterface from './components/AnalysisInterface';
 import OpeningsInterface from './components/OpeningsInterface';
 import LessonsInterface from './components/LessonsInterface';
 import SettingsModal from './components/SettingsModal';
+import ProfileInterface from './components/ProfileInterface';
 import { SettingsProvider } from './context/SettingsContext';
+import { UserProvider } from './context/UserContext';
 
 const AppContent: React.FC = () => {
   const [activeTab, setActiveTab] = useState<string>('dashboard');
@@ -78,6 +80,8 @@ const AppContent: React.FC = () => {
         return <OpeningsInterface onAnalyze={handleAnalyze} onNavigate={handleNavigate} />;
       case 'learn-lessons':
         return <LessonsInterface onNavigate={handleNavigate} />;
+      case 'profile':
+        return <ProfileInterface onNavigate={handleNavigate} />;
       case 'dashboard':
       default:
         return <Dashboard onNavigate={handleNavigate} />;
@@ -99,9 +103,11 @@ const AppContent: React.FC = () => {
 
 const App: React.FC = () => {
     return (
-        <SettingsProvider>
-            <AppContent />
-        </SettingsProvider>
+        <UserProvider>
+            <SettingsProvider>
+                <AppContent />
+            </SettingsProvider>
+        </UserProvider>
     );
 };
 
