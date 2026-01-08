@@ -11,6 +11,7 @@ import LessonsInterface from './components/LessonsInterface';
 import SettingsModal from './components/SettingsModal';
 import ProfileInterface from './components/ProfileInterface';
 import MultiplayerInterface from './components/MultiplayerInterface';
+import TournamentsInterface from './components/TournamentsInterface';
 import { SettingsProvider } from './context/SettingsContext';
 import { UserProvider } from './context/UserContext';
 
@@ -45,7 +46,7 @@ const AppContent: React.FC = () => {
          // Check if the hash path corresponds to a valid tab
          // e.g., #puzzles -> activeTab = 'puzzles'
          const cleanHash = hash.split('?')[0];
-         const validTabs = ['dashboard', 'play', 'puzzles', 'learn-lessons', 'learn-openings', 'profile', 'puzzle-rush', 'daily-puzzle', 'analysis', 'multiplayer'];
+         const validTabs = ['dashboard', 'play', 'puzzles', 'learn-lessons', 'learn-openings', 'profile', 'puzzle-rush', 'daily-puzzle', 'analysis', 'multiplayer', 'tournaments'];
 
          if (validTabs.includes(cleanHash)) {
              setActiveTab(cleanHash);
@@ -78,10 +79,15 @@ const AppContent: React.FC = () => {
       case 'play':
         return (
           <GameInterface
-            initialMode="play"
+            initialMode={gameParams.mode === 'tournament' ? 'tournament' : 'play'}
             initialTimeControl={gameParams.timeControl}
             initialFen={gameParams.fen}
             onAnalyze={handleAnalyze}
+            tournamentParams={gameParams.mode === 'tournament' ? {
+                tournamentId: gameParams.tournamentId,
+                opponentId: gameParams.opponentId
+            } : undefined}
+            onNavigate={handleNavigate}
           />
         );
       case 'play-friend':
@@ -132,6 +138,8 @@ const AppContent: React.FC = () => {
         return <ProfileInterface onNavigate={handleNavigate} />;
       case 'multiplayer':
         return <MultiplayerInterface onNavigate={handleNavigate} />;
+      case 'tournaments':
+        return <TournamentsInterface onNavigate={handleNavigate} />;
       case 'dashboard':
       default:
         return <Dashboard onNavigate={handleNavigate} />;

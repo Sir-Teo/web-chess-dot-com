@@ -21,14 +21,16 @@ import { identifyOpening } from '../utils/openings';
 import CoachSettingsModal from './CoachSettingsModal';
 
 interface GameInterfaceProps {
-  initialMode?: 'play' | 'bots' | 'review' | 'coach' | 'friend';
+  initialMode?: 'play' | 'bots' | 'review' | 'coach' | 'friend' | 'tournament';
   initialTimeControl?: number;
   initialFen?: string;
   onAnalyze?: (pgn: string, tab?: 'analysis' | 'review') => void;
+  tournamentParams?: { tournamentId: string, opponentId: string };
+  onNavigate?: (view: string, params?: any) => void;
 }
 
-const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', initialTimeControl = 600, initialFen, onAnalyze }) => {
-  const [activePanel, setActivePanel] = useState<'play' | 'review' | 'bots' | 'coach'>((initialMode === 'friend' ? 'play' : initialMode) as any);
+const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', initialTimeControl = 600, initialFen, onAnalyze, tournamentParams, onNavigate }) => {
+  const [activePanel, setActivePanel] = useState<'play' | 'review' | 'bots' | 'coach'>((initialMode === 'friend' || initialMode === 'tournament' ? 'play' : initialMode) as any);
   const [activeBot, setActiveBot] = useState<BotProfile | null>(null);
 
   const { openSettings } = useSettings();
@@ -182,9 +184,17 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
         // If initialMode is 'friend', we want to keep the activePanel as 'play'
         // which was set during initialization.
         // We only update if it is NOT friend, or map friend to play.
-        setActivePanel(initialMode === 'friend' ? 'play' : initialMode);
+        setActivePanel(initialMode === 'friend' || initialMode === 'tournament' ? 'play' : initialMode);
     }
   }, [initialMode]);
+
+  // Initialize Tournament Game
+  useEffect(() => {
+      if (initialMode === 'tournament' && tournamentParams) {
+          const opponent = ALL_BOTS.find(b => b.id === tournamentParams.opponentId) || ALL_BOTS[0];
+          handleStartBotGame(opponent, 'random');
+      }
+  }, [initialMode, tournamentParams]);
 
   useEffect(() => {
     if (initialTimeControl) setTimeControl(initialTimeControl);
@@ -850,20 +860,32 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
                                     Game Review
                                 </button>
                                 <div className="flex gap-2">
-                                    <button
-                                        onClick={handleNewGame}
-                                        className="flex-1 bg-[#383531] hover:bg-[#45423e] text-white font-bold py-3 rounded-lg shadow-lg flex items-center justify-center gap-2 transition-transform active:scale-95 text-sm"
-                                    >
-                                        <RotateCcw className="w-4 h-4" />
-                                        {activeBot ? "Rematch" : "New Game"}
-                                    </button>
-                                    <button
-                                        onClick={handleExit}
-                                        className="flex-1 bg-[#262421] hover:bg-[#363430] text-gray-300 font-bold py-3 rounded-lg shadow-lg flex items-center justify-center gap-2 transition-transform active:scale-95 text-sm"
-                                    >
-                                        <XCircle className="w-4 h-4" />
-                                        {activeBot ? "New Bot" : "Home"}
-                                    </button>
+                                    {initialMode === 'tournament' ? (
+                                        <button
+                                            onClick={() => onNavigate && onNavigate('tournaments')}
+                                            className="flex-1 bg-chess-green hover:bg-chess-greenHover text-white font-bold py-3 rounded-lg shadow-lg flex items-center justify-center gap-2 transition-transform active:scale-95 text-sm"
+                                        >
+                                            <Trophy className="w-4 h-4" />
+                                            Return to Tournament
+                                        </button>
+                                    ) : (
+                                        <>
+                                            <button
+                                                onClick={handleNewGame}
+                                                className="flex-1 bg-[#383531] hover:bg-[#45423e] text-white font-bold py-3 rounded-lg shadow-lg flex items-center justify-center gap-2 transition-transform active:scale-95 text-sm"
+                                            >
+                                                <RotateCcw className="w-4 h-4" />
+                                                {activeBot ? "Rematch" : "New Game"}
+                                            </button>
+                                            <button
+                                                onClick={handleExit}
+                                                className="flex-1 bg-[#262421] hover:bg-[#363430] text-gray-300 font-bold py-3 rounded-lg shadow-lg flex items-center justify-center gap-2 transition-transform active:scale-95 text-sm"
+                                            >
+                                                <XCircle className="w-4 h-4" />
+                                                {activeBot ? "New Bot" : "Home"}
+                                            </button>
+                                        </>
+                                    )}
                                 </div>
                              </div>
                          </div>
