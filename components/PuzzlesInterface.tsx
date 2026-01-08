@@ -3,6 +3,7 @@ import { Chess } from 'chess.js';
 import Chessboard from './Chessboard';
 import PuzzlesPanel from './PuzzlesPanel';
 import { PUZZLES, Puzzle } from '../utils/puzzles';
+import { useGameSound } from '../hooks/useGameSound';
 
 const PuzzlesInterface: React.FC = () => {
   const [currentPuzzleIndex, setCurrentPuzzleIndex] = useState(0);
@@ -12,6 +13,10 @@ const PuzzlesInterface: React.FC = () => {
   const [streak, setStreak] = useState(0);
   const [feedback, setFeedback] = useState<'correct' | 'incorrect' | 'none'>('none');
   const [showNextButton, setShowNextButton] = useState(false);
+  const [moveIndex, setMoveIndex] = useState(0); // Tracks progress in multi-move sequence
+  const [isOpponentMoving, setIsOpponentMoving] = useState(false);
+
+  const { playSound } = useGameSound();
 
   const currentPuzzle = PUZZLES[currentPuzzleIndex % PUZZLES.length];
 
@@ -22,68 +27,125 @@ const PuzzlesInterface: React.FC = () => {
     setFen(currentPuzzle.fen);
     setFeedback('none');
     setShowNextButton(false);
+    setMoveIndex(0);
+    setIsOpponentMoving(false);
   }, [currentPuzzleIndex, currentPuzzle]);
 
   const handleMove = useCallback((from: string, to: string, promotion: string = 'q') => {
-    if (feedback === 'correct') return; // Already solved
+    if (feedback === 'correct' || isOpponentMoving) return;
 
     try {
-      // Check legality first without moving state yet if we want to be strict,
-      // but chess.move validates legality.
-      // We need to clone to check valid move?
-      // Actually we just attempt move on `chess` instance.
+      const tempGame = new Chess(chess.fen());
 
-      // Note: Authentic puzzles usually just highlight red and snap back if wrong,
-      // or highlight green and stay if right.
+      // Determine if move is a promotion
+      // Note: chess.js move({ promotion: 'q' }) might fail if not a promotion.
+      // We should detect if it's a pawn moving to rank 8/1.
+      const piece = tempGame.get(from as any);
+      const isPromotion = piece?.type === 'p' && (
+          (piece.color === 'w' && to[1] === '8') ||
+          (piece.color === 'b' && to[1] === '1')
+      );
 
-      const move = chess.move({
-        from,
-        to,
-        promotion,
-      });
+      const moveConfig: { from: string, to: string, promotion?: string } = { from, to };
+      if (isPromotion) {
+          moveConfig.promotion = promotion;
+      }
+
+      const move = tempGame.move(moveConfig);
 
       if (!move) return;
 
-      const expectedMove = currentPuzzle.moves[0];
-      // Normalize comparison (handle promotion in UCI string if present in puzzle)
-      // Usually puzzle.moves is ["e2e4"] or ["a7a8q"]
-      // move.from + move.to is "e2e4"
-      // move.promotion is 'q' -> "a7a8q" (if promotion happened)
-
+      const expectedMove = currentPuzzle.moves[moveIndex];
       const playedUci = move.from + move.to + (move.promotion || '');
 
-      // Flexible match (if puzzle doesn't specify promo, assume q is fine?)
-      // Strict match is better.
+      console.log(`User Move: ${playedUci}, Expected: ${expectedMove}, Index: ${moveIndex}`);
 
-      const isCorrect = playedUci === expectedMove;
+      // Allow flexible promotion match if puzzle doesn't specify it explicitly (though it should)
+      const isCorrect = playedUci === expectedMove || (expectedMove.length === 4 && playedUci.startsWith(expectedMove));
 
       if (isCorrect) {
-         setFen(chess.fen());
-         setFeedback('correct');
-         // Authentic calculation logic (mock)
-         const bonus = 5 + Math.min(streak, 10);
-         setRating(r => r + 8 + bonus);
-         setStreak(s => s + 1);
-         setShowNextButton(true);
+         setChess(tempGame);
+         setFen(tempGame.fen());
+         playSound('move');
+
+         const nextIndex = moveIndex + 1;
+
+         if (nextIndex >= currentPuzzle.moves.length) {
+             // Puzzle Complete
+             setFeedback('correct');
+             const bonus = 5 + Math.min(streak, 10);
+             setRating(r => r + 8 + bonus);
+             setStreak(s => s + 1);
+             setShowNextButton(true);
+             playSound('gameEnd'); // Or success sound
+         } else {
+             // Correct move, but puzzle continues
+             setMoveIndex(nextIndex);
+             setIsOpponentMoving(true);
+
+             // Opponent Reply
+             setTimeout(() => {
+                 try {
+                     const opponentMoveUci = currentPuzzle.moves[nextIndex];
+                     const from = opponentMoveUci.substring(0, 2);
+                     const to = opponentMoveUci.substring(2, 4);
+                     // Check promotion for opponent
+                     // We can rely on tempGame to check piece type again
+                     const piece = tempGame.get(from as any);
+                     const isOpponentPromotion = piece?.type === 'p' && (
+                          (piece.color === 'w' && to[1] === '8') ||
+                          (piece.color === 'b' && to[1] === '1')
+                     );
+
+                     const moveConfig: { from: string, to: string, promotion?: string } = { from, to };
+                     if (isOpponentPromotion) {
+                         const promotionChar = opponentMoveUci.length > 4 ? opponentMoveUci.substring(4, 5) : 'q';
+                         moveConfig.promotion = promotionChar;
+                     }
+
+                     console.log(`Opponent attempting move: ${from}-${to} (${moveConfig.promotion || 'none'}) on FEN: ${tempGame.fen()}`);
+
+                     const replyMove = tempGame.move(moveConfig);
+                     if (replyMove) {
+                         setChess(tempGame);
+                         setFen(tempGame.fen());
+                         playSound('move'); // Opponent move sound
+                         setMoveIndex(nextIndex + 1);
+                     } else {
+                         console.error("Opponent move failed", opponentMoveUci);
+                     }
+                 } catch (err) {
+                     console.error("Error during opponent move", err);
+                 } finally {
+                     setIsOpponentMoving(false);
+                 }
+             }, 500); // 500ms delay for natural feel
+         }
+
       } else {
         // Wrong move - feedback
+        console.log(`Wrong move. User: ${playedUci}, Expected: ${expectedMove}`);
         setFeedback('incorrect');
         setStreak(0);
         setRating(r => Math.max(100, r - 12)); // Lose points
+        playSound('notify'); // Error sound
 
         // Show the wrong move briefly then undo
-        setFen(chess.fen());
+        setChess(tempGame);
+        setFen(tempGame.fen());
+
         setTimeout(() => {
-            chess.undo();
-            setFen(chess.fen());
-            setFeedback('none'); // Reset feedback to allow trying again
-        }, 1000); // 1s delay before reset
+            tempGame.undo();
+            setChess(tempGame);
+            setFen(tempGame.fen());
+            setFeedback('none');
+        }, 1000);
       }
 
     } catch (e) {
       console.error(e);
     }
-  }, [chess, feedback, currentPuzzle, streak]);
+  }, [chess, feedback, currentPuzzle, streak, moveIndex, isOpponentMoving, playSound]);
 
   const handleNextPuzzle = () => {
     setCurrentPuzzleIndex(prev => prev + 1);
@@ -105,13 +167,16 @@ const PuzzlesInterface: React.FC = () => {
                 </div>
             </div>
 
-            <div className="rounded-sm shadow-2xl ring-4 ring-black/10">
+            <div className="rounded-sm shadow-2xl ring-4 ring-black/10 relative">
                  <Chessboard
                     fen={fen}
                     onMove={handleMove}
                     boardOrientation={currentPuzzle.color === 'w' ? 'white' : 'black'}
-                    interactable={feedback !== 'correct'}
+                    interactable={feedback !== 'correct' && !isOpponentMoving}
                  />
+                 {isOpponentMoving && (
+                     <div className="absolute inset-0 z-10 bg-transparent cursor-wait"></div>
+                 )}
             </div>
             
              <div className="flex justify-between items-start mt-2 px-1">
