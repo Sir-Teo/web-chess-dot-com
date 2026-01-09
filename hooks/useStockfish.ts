@@ -1,8 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-
-// Reuse constant from utils/gameAnalysis or define here.
-// To avoid circular dependency issues (though none exist currently), we define it here.
-const STOCKFISH_URL = 'https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.0/stockfish.js';
+import { STOCKFISH_URL } from '../utils/gameAnalysis';
 
 export interface EvalScore {
   unit: 'cp' | 'mate'; // Changed from 'type' to 'unit' to match standard

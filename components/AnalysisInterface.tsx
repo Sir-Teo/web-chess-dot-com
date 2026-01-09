@@ -7,6 +7,7 @@ import ExplorerPanel from './ExplorerPanel';
 import EvaluationBar from './EvaluationBar';
 import { useStockfish } from '../hooks/useStockfish';
 import { Search, BookOpen, Activity } from 'lucide-react';
+import { GameReviewData } from '../src/utils/gameAnalysis';
 
 interface AnalysisInterfaceProps {
   initialPgn?: string;
@@ -36,6 +37,9 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({
   const [currentFen, setCurrentFen] = useState(game.fen());
   const [viewMoveIndex, setViewMoveIndex] = useState<number>(-1); // -1 = Live/Last
   
+  // Stored analysis data
+  const [analysisData, setAnalysisData] = useState<GameReviewData | undefined>(undefined);
+
   // Update game if props change
   useEffect(() => {
       if (initialPgn) {
@@ -155,12 +159,18 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({
                         currentMoveIndex={viewMoveIndex}
                         onMoveClick={onMoveClick}
                         stockfish={stockfish}
+                        fen={currentFen} // Pass current view FEN
+                        analysisData={analysisData} // Pass review data
+                        onNavigate={onNavigate}
                      />
                  )}
                  {activeTab === 'review' && (
                      <GameReviewPanel
                         pgn={game.pgn()}
                         onStartReview={() => {}}
+                        onAnalysisComplete={setAnalysisData}
+                        existingData={analysisData}
+                        currentMoveIndex={viewMoveIndex}
                      />
                  )}
                  {activeTab === 'explorer' && (
