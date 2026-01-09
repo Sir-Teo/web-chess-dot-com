@@ -1,4 +1,6 @@
 
+import { Chess } from 'chess.js';
+
 // Real implementation of StockfishClient
 export interface EngineScore {
   unit: 'cp' | 'mate';
@@ -6,9 +8,10 @@ export interface EngineScore {
 }
 
 export interface AnalysisLine {
-  id: number;
+  multipv: number;
+  pv: string; // UCI string "e2e4 e7e5"
   score: EngineScore;
-  moves: string[];
+  depth: number;
 }
 
 export interface MoveAnalysis {
@@ -21,7 +24,31 @@ export interface GameReviewData {
     moves: MoveAnalysis[];
 }
 
-// Placeholder for analyzeGame function
+// Convert a sequence of UCI moves (from a specific FEN) to SAN string
+export const uciLineToSan = (fen: string, pv: string): string => {
+  if (!pv) return '';
+  const tempGame = new Chess(fen);
+  const uciMoves = pv.split(' ');
+  const sanMoves: string[] = [];
+
+  for (const uci of uciMoves) {
+    if (!uci) continue;
+    const from = uci.substring(0, 2);
+    const to = uci.substring(2, 4);
+    const promotion = uci.length > 4 ? uci[4] : undefined;
+
+    try {
+      const move = tempGame.move({ from, to, promotion });
+      if (move) sanMoves.push(move.san);
+      else break;
+    } catch (e) {
+      break;
+    }
+  }
+  return sanMoves.join(' ');
+};
+
+// Placeholder for analyzeGame function - Will be implemented fully in next steps
 export const analyzeGame = async (pgn: string): Promise<GameReviewData> => {
     // This would invoke Stockfish to analyze the full game
     // For now, return mock data
@@ -37,17 +64,7 @@ export class StockfishClient {
   private onMessageCallback: ((msg: string) => void) | null = null;
 
   private constructor(workerUrl: string) {
-    // Create blob from code to avoid cross-origin issues if URL is external
-    // Actually, for this environment, we might need a specific handling.
-    // The previous memory said: "Stockfish.js ... by fetching the script ... and creating a Blob URL"
-    // But since I don't have the fetch logic here, I will rely on the caller passing a valid URL
-    // or implement the fetch-blob logic if `workerUrl` is a CDN link.
-    // However, `new Worker(url)` works for same origin. For CDN, we need Blob.
-
-    // Let's assume the caller handles the Blob creation OR we do it here.
-    // The previous `useCoach` calls `StockfishClient.create(STOCKFISH_URL)`.
-    // We should implement the static create method to handle the fetch.
-    this.worker = new Worker(workerUrl); // Placeholder, will be replaced in create
+    this.worker = new Worker(workerUrl);
   }
 
   static async create(url: string): Promise<StockfishClient> {
@@ -56,10 +73,7 @@ export class StockfishClient {
           const script = await response.text();
           const blob = new Blob([script], { type: 'application/javascript' });
           const blobUrl = URL.createObjectURL(blob);
-          const client = new StockfishClient(blobUrl); // Use private constructor logic effectively
-          // We can't use private ctor easily with async create in TS strict, but we can cast or just make ctor public/internal
-          // Re-instantiate properly
-          client.worker = new Worker(blobUrl);
+          const client = new StockfishClient(blobUrl);
           await client.init();
           return client;
       } catch (e) {
@@ -104,8 +118,6 @@ export class StockfishClient {
           const listener = (e: MessageEvent) => {
               const msg = e.data;
               if (msg.startsWith('info') && msg.includes('score')) {
-                  // Parse score
-                  // info depth 10 seldepth 14 multipv 1 score cp 45 ...
                   const parts = msg.split(' ');
                   const scoreIdx = parts.indexOf('score');
                   if (scoreIdx !== -1) {
