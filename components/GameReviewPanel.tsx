@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Trophy, XCircle, ChevronLeft, ChevronRight, AlertTriangle, Crosshair, CheckCircle, Search } from 'lucide-react';
 import { analyzeGame, GameReviewData, MoveAnalysis } from '../src/utils/gameAnalysis';
+import EvaluationGraph from './EvaluationGraph';
 
 import { Chess } from 'chess.js';
 
@@ -130,6 +131,26 @@ const GameReviewPanel: React.FC<GameReviewPanelProps> = ({ pgn, onStartReview, o
              </div>
         ) : (
              <div className="flex-1 overflow-y-auto">
+                 {/* Evaluation Graph */}
+                 {data && (
+                     <EvaluationGraph
+                        moves={data.moves}
+                        currentMoveIndex={currentMoveIndex !== undefined ? currentMoveIndex : -1}
+                        onMoveClick={(idx) => {
+                            if (onMoveClick && data) {
+                                // Find FEN after move idx
+                                // We might need to reconstruct to be safe, or store FENs in data
+                                const tempGame = new Chess();
+                                tempGame.loadPgn(pgn);
+                                const history = tempGame.history({ verbose: true });
+                                if (history[idx]) {
+                                    onMoveClick(history[idx].after, idx);
+                                }
+                            }
+                        }}
+                     />
+                 )}
+
                  {/* Accuracy Score */}
                  <div className="p-6 flex flex-col items-center border-b border-white/5 bg-gradient-to-b from-[#262522] to-[#211f1c]">
                      <div className="text-sm text-gray-400 font-bold uppercase mb-2">Accuracy</div>
