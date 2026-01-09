@@ -17,7 +17,9 @@ import {
   TrendingUp,
   Zap,
   Eye,
-  BarChart
+  BarChart,
+  Copy,
+  Download
 } from 'lucide-react';
 import MoveList from './MoveList';
 import { Chess } from 'chess.js';
@@ -46,6 +48,9 @@ interface AnalysisPanelProps {
   depth?: number;
   onDepthChange?: (depth: number) => void;
   onPractice?: () => void;
+  onNew?: () => void;
+  onSave?: () => void;
+  onSetup?: () => void;
 }
 
 // Helper to format eval
@@ -170,7 +175,10 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
     onSettingsChange,
     depth = 20,
     onDepthChange,
-    onPractice
+    onPractice,
+    onNew,
+    onSave,
+    onSetup
 }) => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const turn = currentFen?.split(' ')[1] as 'w' | 'b' || 'w';
@@ -313,17 +321,26 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
 
          {/* Bottom Actions */}
          <div className="flex items-center justify-between p-2 px-4">
-             <button className="flex flex-col items-center gap-1 text-gray-400 hover:text-white group transition-colors">
+             <button
+                onClick={onNew}
+                className="flex flex-col items-center gap-1 text-gray-400 hover:text-white group transition-colors"
+             >
                  <PlusCircle className="w-5 h-5 group-hover:text-white" />
                  <span className="text-[9px] font-bold uppercase tracking-wide">New</span>
              </button>
-             <button className="flex flex-col items-center gap-1 text-gray-400 hover:text-white group transition-colors">
+             <button
+                onClick={onSave}
+                className="flex flex-col items-center gap-1 text-gray-400 hover:text-white group transition-colors"
+             >
                  <Save className="w-5 h-5 group-hover:text-white" />
                  <span className="text-[9px] font-bold uppercase tracking-wide">Save</span>
              </button>
-             <button className="flex flex-col items-center gap-1 text-gray-400 hover:text-white group transition-colors">
-                 <Star className="w-5 h-5 group-hover:text-white" />
-                 <span className="text-[9px] font-bold uppercase tracking-wide">Review</span>
+             <button
+                onClick={onSetup}
+                className="flex flex-col items-center gap-1 text-gray-400 hover:text-white group transition-colors"
+             >
+                 <MoreHorizontal className="w-5 h-5 group-hover:text-white" />
+                 <span className="text-[9px] font-bold uppercase tracking-wide">Setup</span>
              </button>
              <button
                  onClick={onPractice}
@@ -332,10 +349,6 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
              >
                  <Target className="w-5 h-5 group-hover:text-white" />
                  <span className="text-[9px] font-bold uppercase tracking-wide">Practice</span>
-             </button>
-             <button className="flex flex-col items-center gap-1 text-gray-400 hover:text-white group transition-colors">
-                 <MoreHorizontal className="w-5 h-5 group-hover:text-white" />
-                 <span className="text-[9px] font-bold uppercase tracking-wide opacity-0 group-hover:opacity-100">More</span>
              </button>
          </div>
       </div>
