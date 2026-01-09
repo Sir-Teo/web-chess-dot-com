@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { STOCKFISH_URL } from '../utils/gameAnalysis';
+import { STOCKFISH_URL } from '../src/utils/gameAnalysis';
 
 export interface EvalScore {
   unit: 'cp' | 'mate'; // Changed from 'type' to 'unit' to match standard

@@ -2,15 +2,18 @@ import React, { useState, useEffect } from 'react';
 import { Trophy, XCircle, ChevronLeft, ChevronRight, AlertTriangle, Crosshair, CheckCircle, Search } from 'lucide-react';
 import { analyzeGame, GameReviewData, MoveAnalysis } from '../src/utils/gameAnalysis';
 
+import { Chess } from 'chess.js';
+
 interface GameReviewPanelProps {
   pgn: string;
   onStartReview: () => void;
   onAnalysisComplete?: (data: GameReviewData) => void;
   existingData?: GameReviewData;
   currentMoveIndex?: number; // To highlight key moments in list? Or navigate to them.
+  onMoveClick?: (fen: string, index: number) => void;
 }
 
-const GameReviewPanel: React.FC<GameReviewPanelProps> = ({ pgn, onStartReview, onAnalysisComplete, existingData }) => {
+const GameReviewPanel: React.FC<GameReviewPanelProps> = ({ pgn, onStartReview, onAnalysisComplete, existingData, onMoveClick }) => {
   const [reviewState, setReviewState] = useState<'idle' | 'analyzing' | 'complete'>('idle');
   const [progress, setProgress] = useState(0);
   const [data, setData] = useState<GameReviewData | null>(null);
@@ -32,6 +35,21 @@ const GameReviewPanel: React.FC<GameReviewPanelProps> = ({ pgn, onStartReview, o
       setBlunders(reviewData.moves.filter(m => m.classification === 'blunder'));
       setMistakes(reviewData.moves.filter(m => m.classification === 'mistake'));
       setMissedWins(reviewData.moves.filter(m => m.classification === 'forced')); // Assuming 'forced' or 'missed-win' logic
+  };
+
+  const handleMomentClick = (moments: MoveAnalysis[]) => {
+      if (moments.length > 0 && onMoveClick) {
+          // Reconstruct game to get FEN for the first moment
+          // This is a bit inefficient to do every click, but robust
+          const tempGame = new Chess();
+          tempGame.loadPgn(pgn);
+          const history = tempGame.history({ verbose: true });
+
+          const targetIndex = moments[0].moveIndex;
+          if (history[targetIndex]) {
+               onMoveClick(history[targetIndex].after, targetIndex);
+          }
+      }
   };
 
   const handleStartReview = async () => {
@@ -104,7 +122,10 @@ const GameReviewPanel: React.FC<GameReviewPanelProps> = ({ pgn, onStartReview, o
                  <div className="p-4">
                      <h4 className="text-xs font-bold text-gray-500 uppercase mb-3">Key Moments</h4>
                      <div className="space-y-2">
-                         <div className="bg-[#211f1c] p-3 rounded border border-white/5 flex items-center justify-between cursor-pointer hover:bg-[#302e2b] transition-colors">
+                         <div
+                            onClick={() => handleMomentClick(blunders)}
+                            className="bg-[#211f1c] p-3 rounded border border-white/5 flex items-center justify-between cursor-pointer hover:bg-[#302e2b] transition-colors"
+                         >
                              <div className="flex items-center gap-3">
                                  <div className="w-8 h-8 rounded-full bg-[#fa412d]/20 flex items-center justify-center">
                                      <XCircle className="w-5 h-5 text-[#fa412d]" />
@@ -119,7 +140,10 @@ const GameReviewPanel: React.FC<GameReviewPanelProps> = ({ pgn, onStartReview, o
                              <ChevronRight className="w-4 h-4 text-gray-500" />
                          </div>
 
-                         <div className="bg-[#211f1c] p-3 rounded border border-white/5 flex items-center justify-center gap-3 cursor-pointer hover:bg-[#302e2b] transition-colors">
+                         <div
+                            onClick={() => handleMomentClick(mistakes)}
+                            className="bg-[#211f1c] p-3 rounded border border-white/5 flex items-center justify-center gap-3 cursor-pointer hover:bg-[#302e2b] transition-colors"
+                         >
                               <div className="flex items-center gap-3 w-full">
                                  <div className="w-8 h-8 rounded-full bg-[#fea500]/20 flex items-center justify-center">
                                      <AlertTriangle className="w-5 h-5 text-[#fea500]" />
@@ -134,7 +158,10 @@ const GameReviewPanel: React.FC<GameReviewPanelProps> = ({ pgn, onStartReview, o
                              <ChevronRight className="w-4 h-4 text-gray-500" />
                          </div>
 
-                         <div className="bg-[#211f1c] p-3 rounded border border-white/5 flex items-center justify-center gap-3 cursor-pointer hover:bg-[#302e2b] transition-colors">
+                         <div
+                            onClick={() => handleMomentClick(missedWins)}
+                            className="bg-[#211f1c] p-3 rounded border border-white/5 flex items-center justify-center gap-3 cursor-pointer hover:bg-[#302e2b] transition-colors"
+                         >
                               <div className="flex items-center gap-3 w-full">
                                  <div className="w-8 h-8 rounded-full bg-[#ffc107]/20 flex items-center justify-center">
                                      <Crosshair className="w-5 h-5 text-[#ffc107]" />

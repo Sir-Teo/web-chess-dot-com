@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Chess } from 'chess.js';
-import { COMMON_OPENINGS, Opening } from '../src/utils/openings';
+import { COMMON_OPENINGS, Opening, getOpeningFromHistory } from '../src/utils/openings';
 
 interface ExplorerPanelProps {
   fen: string;
+  history?: string[];
   onPlayMove?: (move: string) => void;
 }
 
@@ -16,24 +17,16 @@ interface MoveStat {
   title?: string;
 }
 
-const ExplorerPanel: React.FC<ExplorerPanelProps> = ({ fen, onPlayMove }) => {
+const ExplorerPanel: React.FC<ExplorerPanelProps> = ({ fen, history, onPlayMove }) => {
   const [moves, setMoves] = useState<MoveStat[]>([]);
   const [openingName, setOpeningName] = useState<string>("");
 
   useEffect(() => {
-    // Determine current opening name
-    // We need PGN or history for exact match, but let's try with FEN or just known moves?
-    // The `identifyOpening` util takes PGN.
-    // Here we might not have full PGN.
-    // BUT we can use the FEN to generate legal moves.
+    // Identify opening from history
+    if (history) {
+        setOpeningName(getOpeningFromHistory(history));
+    }
 
-    // Logic:
-    // 1. Get all legal moves from current FEN.
-    // 2. For each move, simulate it and see if it leads to a known opening or matches stats.
-    // Since we don't have a real DB, we will mock stats or rely on opening book data if we had it structure.
-    // Our `COMMON_OPENINGS` is just a list of names and move sequences.
-
-    // Let's implement a simple "Book" checker.
     const game = new Chess(fen);
     const legalMoves = game.moves({ verbose: true });
 
@@ -45,10 +38,6 @@ const ExplorerPanel: React.FC<ExplorerPanelProps> = ({ fen, onPlayMove }) => {
         const w = Math.floor(Math.random() * 40) + 30;
         const d = Math.floor(Math.random() * 30) + 20;
         const b = 100 - w - d;
-
-        // Check if this move is part of any known opening sequence?
-        // This is hard without full history.
-        // But we can check if the resulting FEN is "good".
 
         return {
             san: m.san,
@@ -63,10 +52,7 @@ const ExplorerPanel: React.FC<ExplorerPanelProps> = ({ fen, onPlayMove }) => {
     newMoves.sort((a, b) => b.count - a.count);
 
     setMoves(newMoves);
-
-    // Identify current opening (if passed from parent or calculated? parent usually passes Opening Name)
-    // We can leave opening name empty if unknown.
-  }, [fen]);
+  }, [fen, history]);
 
   return (
     <div className="flex flex-col h-full bg-[#262522] text-gray-300">

@@ -211,7 +211,7 @@ export const analyzeGame = async (
         if (uciMove === prevBestMove) {
             classification = 'best';
         } else {
-            if (evalDiff <= 25) classification = 'excellent'; // or 'good'
+            if (evalDiff <= 25) classification = 'great'; // Using 'great' instead of 'excellent' to match type
             else if (evalDiff <= 50) classification = 'inaccuracy';
             else if (evalDiff <= 150) classification = 'mistake';
             else classification = 'blunder';
@@ -226,7 +226,7 @@ export const analyzeGame = async (
             moveIndex: i,
             score: { unit: 'cp', value: whiteEvalAfter }, // Store White perspective score
             bestMove: prevBestMove || '',
-            classification: classification === 'excellent' ? 'good' : classification,
+            classification: classification,
             _nextBestMove: result.bestMove
         });
 
