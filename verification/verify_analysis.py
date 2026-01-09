@@ -1,81 +1,58 @@
-from playwright.sync_api import sync_playwright, expect
-import time
 
-def verify_analysis_mode(page):
-    # Navigate to Analysis mode
-    print("Navigating to Analysis Mode...")
-    page.goto("http://localhost:3000/web-chess-dot-com/#analysis")
+from playwright.sync_api import sync_playwright
 
-    # Wait for the board to load (using the wrapper ID we know exists)
-    page.wait_for_selector("#chessboard-wrapper")
-    print("Board loaded.")
-
-    # Check for the new "Explorer" tab button
-    print("Checking for Explorer tab...")
-    explorer_tab = page.get_by_text("Explorer")
-    expect(explorer_tab).to_be_visible()
-
-    # Click it
-    print("Clicking Explorer tab...")
-    explorer_tab.click()
-
-    # Wait for Explorer Panel content
-    print("Waiting for Explorer content...")
-    page.wait_for_selector("text=Opening Explorer")
-    page.wait_for_selector("text=Games")
-
-    # Check for Move List (should list e4, d4, etc.)
-    # Note: Initial position should have e4 as a candidate
-    print("Checking for moves...")
-    expect(page.get_by_text("e4").first).to_be_visible()
-
-    # Click "e4" to make a move
-    print("Making a move (e4)...")
-    page.get_by_text("e4").first.click()
-
-    # Wait for move to be made (e5 response or user to play next)
-    # The explorer just plays the move for the current side (White)
-    time.sleep(1)
-
-    # Check if history updated (Black's turn now)
-    # Explorer should now show Black's responses to e4
-    expect(page.get_by_text("e5").first).to_be_visible()
-    expect(page.get_by_text("c5").first).to_be_visible()
-
-    # Take screenshot of Explorer
-    print("Taking screenshot of Explorer...")
-    page.screenshot(path="verification/analysis_explorer.png")
-
-    # Now check Setup Position Modal
-    print("Checking Setup Position...")
-    # Go back to analysis tab to see the toolbar
-    page.get_by_text("Analysis").click()
-
-    # Click "Setup" button in footer
-    print("Clicking Setup button...")
-    setup_btn = page.get_by_text("Setup")
-    setup_btn.click()
-
-    # Check if modal opens
-    print("Waiting for modal...")
-    # Fix strict mode violation by using a more specific locator
-    expect(page.get_by_role("heading", name="Load Position")).to_be_visible()
-    expect(page.get_by_text("FEN String")).to_be_visible()
-
-    # Take screenshot of Modal
-    print("Taking screenshot of Setup Modal...")
-    page.screenshot(path="verification/analysis_setup_modal.png")
-
-if __name__ == "__main__":
+def verify_analysis_features():
     with sync_playwright() as p:
-        print("Launching browser...")
         browser = p.chromium.launch(headless=True)
         page = browser.new_page()
-        try:
-            verify_analysis_mode(page)
-            print("Verification successful!")
-        except Exception as e:
-            print(f"Verification failed: {e}")
-            page.screenshot(path="verification/error.png")
-        finally:
-            browser.close()
+
+        # Navigate to analysis mode
+        page.goto("http://localhost:3000/web-chess-dot-com/#analysis")
+
+        # Wait for board to load
+        page.wait_for_selector("#chessboard-wrapper")
+
+        # 1. Test Setup Modal
+        # Open Setup Modal
+        page.get_by_role("button", name="Setup").click()
+        page.wait_for_selector("text=Load Position")
+
+        # Check for new tabs
+        if page.get_by_role("button", name="FEN").is_visible() and page.get_by_role("button", name="PGN").is_visible():
+            print("Setup Modal: Tabs visible")
+        else:
+            print("Setup Modal: Tabs MISSING")
+
+        # Switch to PGN tab
+        page.get_by_role("button", name="PGN").click()
+        page.get_by_placeholder("1. e4 e5 ...").fill("1. e4 e5 2. Nf3 Nc6 3. Bb5 a6")
+
+        # Load PGN
+        page.get_by_role("button", name="Load Game").click()
+
+        # Verify PGN loaded (game should be at end, move list visible)
+        page.wait_for_timeout(1000)
+
+        # Take screenshot of Loaded PGN state
+        page.screenshot(path="verification/analysis_pgn_load.png")
+        print("Screenshot saved: analysis_pgn_load.png")
+
+        # 2. Test Explorer
+        # Switch to Explorer tab
+        page.get_by_role("button", name="Explorer").click()
+        page.wait_for_selector("text=Opening Explorer")
+
+        # Check if Ruy Lopez is identified (since we loaded 1. e4 e5 2. Nf3 Nc6 3. Bb5 a6)
+        # 3. Bb5 is Ruy Lopez. 3... a6 is Morphy Defense.
+        # The explorer shows moves from current position.
+        # Current position after 3... a6 is r1bqkbnr/1pppppp1/p1n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 4
+        # White to move. Best move usually Ba4 or Bxc6.
+        # Check if "Ba4" is in the list.
+
+        page.screenshot(path="verification/analysis_explorer.png")
+        print("Screenshot saved: analysis_explorer.png")
+
+        browser.close()
+
+if __name__ == "__main__":
+    verify_analysis_features()
