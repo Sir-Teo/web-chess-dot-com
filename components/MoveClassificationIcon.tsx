@@ -8,7 +8,7 @@ import {
     X,
     Minus
 } from 'lucide-react';
-import { MoveAnalysis } from '../utils/gameAnalysis';
+import { MoveAnalysis } from '../src/utils/gameAnalysis';
 
 interface MoveClassificationIconProps {
     classification: MoveAnalysis['classification'] | null | undefined;

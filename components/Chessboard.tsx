@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { Chessboard as ReactChessboard } from 'react-chessboard';
-import { Arrow } from '../types';
+import { Arrow } from '../hooks/useCoach';
 import { useSettings, BOARD_THEMES } from '../context/SettingsContext';
 import PromotionModal from './PromotionModal';
 import { Chess } from 'chess.js';
@@ -26,7 +26,7 @@ const Chessboard: React.FC<ChessboardProps> = ({
   preMove,
   customSquareStyles: propCustomSquareStyles
 }) => {
-  const { boardTheme, pieceTheme, showCoordinates, animationSpeed } = useSettings();
+  const { boardTheme, showCoordinates, animationSpeed } = useSettings();
 
   const themeColors = useMemo(() => {
     return BOARD_THEMES.find(t => t.id === boardTheme) || BOARD_THEMES[0];
@@ -99,7 +99,7 @@ const Chessboard: React.FC<ChessboardProps> = ({
           const move = { from: moveFrom, to: square, promotion: 'q' }; // Default promo
 
           // Check for promotion
-          const piece = game.get(moveFrom as any);
+          const piece = game.get(moveFrom);
           if (
               piece?.type === 'p' &&
               ((piece.color === 'w' && square[1] === '8') || (piece.color === 'b' && square[1] === '1'))
@@ -233,30 +233,6 @@ const Chessboard: React.FC<ChessboardProps> = ({
       }
   };
 
-  // Custom Pieces
-  const customPieces = useMemo(() => {
-      const pieces = ['wP', 'wN', 'wB', 'wR', 'wQ', 'wK', 'bP', 'bN', 'bB', 'bR', 'bQ', 'bK'];
-      const pieceComponents: Record<string, (args: { squareWidth: number }) => JSX.Element> = {};
-
-      pieces.forEach(p => {
-          const color = p[0];
-          const type = p[1].toLowerCase(); // react-chessboard uses capital for piece, but URL logic uses lower
-          // Chess.com standard: wP -> wp, wN -> wn
-          // image url: {color}{type}
-          pieceComponents[p] = ({ squareWidth }) => (
-              <div
-                  style={{
-                      width: squareWidth,
-                      height: squareWidth,
-                      backgroundImage: `url(https://images.chesscomfiles.com/chess-themes/pieces/${pieceTheme}/150/${color}${type}.png)`,
-                      backgroundSize: '100%',
-                  }}
-              />
-          );
-      });
-      return pieceComponents;
-  }, [pieceTheme]);
-
   return (
     <div
       id="chessboard-wrapper"
@@ -268,7 +244,6 @@ const Chessboard: React.FC<ChessboardProps> = ({
       <PromotionModal
         isOpen={!!promotionMove}
         color={boardOrientation === 'white' ? 'w' : 'b'} // Assuming player is playing bottom color usually
-        pieceTheme={pieceTheme}
         onSelect={handlePromotionSelect}
         onClose={() => setPromotionMove(null)}
       />
@@ -283,7 +258,6 @@ const Chessboard: React.FC<ChessboardProps> = ({
         customLightSquareStyle={{ backgroundColor: themeColors.light }}
         customSquareStyles={customSquareStyles}
         customArrows={allArrows as any}
-        customPieces={customPieces}
         animationDuration={animationSpeed === 'slow' ? 500 : animationSpeed === 'fast' ? 100 : 200}
         showBoardNotation={showCoordinates}
       />

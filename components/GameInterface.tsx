@@ -1,40 +1,37 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import Chessboard from './Chessboard';
-import { Settings, Flag, XCircle, Search, ChevronRight, RotateCcw, MessageCircle, AlertCircle, Copy, Check, Lightbulb, Undo2, RefreshCw, Trophy, Loader2 } from 'lucide-react';
+import { Settings, Flag, XCircle, Search, ChevronRight, RotateCcw, MessageCircle, AlertCircle, Copy, Check, Lightbulb, Undo2, RefreshCw, Trophy, Loader } from 'lucide-react';
 import GameReviewPanel from './GameReviewPanel';
 import PlayBotsPanel from './PlayBotsPanel';
-import PlayCoachPanel from './PlayCoachPanel';
+import { PlayCoachPanel } from './PlayCoachPanel';
 import MoveList from './MoveList';
 import CapturedPieces from './CapturedPieces';
 import CoachFeedback from './CoachFeedback';
+import CoachSettingsModal from './CoachSettingsModal';
 import EvaluationBar from './EvaluationBar';
+// Ensure imports are visible for diff
 import { Chess } from 'chess.js';
 import { useStockfish } from '../hooks/useStockfish';
-import { useCoach, CoachSettings as ICoachSettings } from '../hooks/useCoach';
+import { useCoach, CoachSettings } from '../hooks/useCoach';
 import { useGameTimer } from '../hooks/useGameTimer';
 import { useGameSound } from '../hooks/useGameSound';
 import { useBotChatter } from '../hooks/useBotChatter';
 import { useSettings } from '../context/SettingsContext';
-import { useUser } from '../context/UserContext';
-import { ALL_BOTS, BotProfile } from '../utils/bots';
-import { identifyOpening } from '../utils/openings';
-import CoachSettingsModal from './CoachSettingsModal';
+import { ALL_BOTS, BotProfile } from '../src/utils/bots';
+import { identifyOpening } from '../src/utils/openings';
 
 interface GameInterfaceProps {
-  initialMode?: 'play' | 'bots' | 'review' | 'coach' | 'friend' | 'tournament';
+  initialMode?: 'play' | 'bots' | 'review' | 'coach';
   initialTimeControl?: number;
   initialFen?: string;
   onAnalyze?: (pgn: string, tab?: 'analysis' | 'review') => void;
-  tournamentParams?: { tournamentId: string, opponentId: string };
-  onNavigate?: (view: string, params?: any) => void;
 }
 
-const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', initialTimeControl = 600, initialFen, onAnalyze, tournamentParams, onNavigate }) => {
-  const [activePanel, setActivePanel] = useState<'play' | 'review' | 'bots' | 'coach'>((initialMode === 'friend' || initialMode === 'tournament' ? 'play' : initialMode) as any);
+const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', initialTimeControl = 600, initialFen, onAnalyze }) => {
+  const [activePanel, setActivePanel] = useState<'play' | 'review' | 'bots' | 'coach'>(initialMode);
   const [activeBot, setActiveBot] = useState<BotProfile | null>(null);
 
   const { openSettings } = useSettings();
-  const { user } = useUser();
 
   // Game State
   const [game, setGame] = useState(() => {
@@ -48,26 +45,24 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
       }
       return g;
   });
-  // Track the desired start position for "Rematch" or initial load
-  const [startPosition, setStartPosition] = useState<string | null>(initialFen || null);
   const [fen, setFen] = useState(game.fen());
   const [viewFen, setViewFen] = useState<string | null>(null); // For history navigation
   const [viewMoveIndex, setViewMoveIndex] = useState<number>(-1); // -1 = live
   const [lastMove, setLastMove] = useState<{from: string, to: string} | null>(null);
   const [isGameOver, setIsGameOver] = useState(false);
   const [gameResult, setGameResult] = useState<string>('');
-  
+
   // New: Start Game Flag to show board in Play Friend mode
   const [hasGameStarted, setHasGameStarted] = useState(false);
 
   // New: Simulated Matching State
   const [isSearching, setIsSearching] = useState(false);
   const [searchState, setSearchState] = useState<'searching' | 'found' | null>(null);
-  const [isPlayFriendMode, setIsPlayFriendMode] = useState(initialMode === 'friend');
+  const [isPlayFriendMode, setIsPlayFriendMode] = useState(false);
   const [copied, setCopied] = useState(false);
 
   // New: Play Mode (online vs local)
-  const [playMode, setPlayMode] = useState<'online' | 'pass-and-play'>(initialMode === 'friend' ? 'pass-and-play' : 'online');
+  const [playMode, setPlayMode] = useState<'online' | 'pass-and-play'>('online');
   const [onlineOpponent, setOnlineOpponent] = useState<{name: string, rating: number, avatar: string, flag: string} | null>(null);
 
   // User Color (default 'w')
@@ -75,13 +70,13 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
 
   // Coach Mode State
   const [isCoachMode, setIsCoachMode] = useState(false);
-  const [coachSettings, setCoachSettings] = useState<ICoachSettings>({
+  const [coachSettings, setCoachSettings] = useState<CoachSettings>({
       showSuggestionArrows: true,
       showThreatArrows: true,
       showEvalBar: true,
       showFeedback: true
   });
-  const [isCoachSettingsOpen, setIsCoachSettingsOpen] = useState(false);
+  const [showCoachSettings, setShowCoachSettings] = useState(false);
 
   // Chat/Bot Messages
   const [openingName, setOpeningName] = useState<string>("");
@@ -117,15 +112,11 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
       arrows: coachArrows,
       isThinking: isCoachThinking,
       resetFeedback,
-      currentEval,
-      isReady: isCoachReady // Get readiness state
-  } = useCoach(true, coachSettings); // Always enable for evaluation bar, settings determine feedback visibility
+      currentEval
+  } = useCoach(true, coachSettings); // Always enable for evaluation bar
 
   // Move Suggestion State
   const [suggestionArrow, setSuggestionArrow] = useState<{ from: string, to: string } | null>(null);
-  // Hint State
-  const [hintStage, setHintStage] = useState<0 | 1 | 2>(0); // 0: None, 1: Suggestion, 2: Best Move
-  // New: Loading state for hint
   const [waitingForHint, setWaitingForHint] = useState(false);
 
   // Pre-move State (Authenticity)
@@ -133,24 +124,13 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
 
   const customSquareStyles = useMemo(() => {
     const styles: Record<string, React.CSSProperties> = {};
-
-    // Hint highlight
-    if (hintStage > 0 && suggestionArrow) {
-        styles[suggestionArrow.from] = {
-            backgroundColor: 'rgba(241, 196, 15, 0.6)', // Yellow hint color matching arrow
-            boxShadow: 'inset 0 0 12px rgba(241, 196, 15, 0.9)'
-        };
-        if (hintStage > 1) {
-            styles[suggestionArrow.to] = {
-                backgroundColor: 'rgba(241, 196, 15, 0.35)',
-                boxShadow: 'inset 0 0 10px rgba(241, 196, 15, 0.7)'
-            };
-        }
-    }
-
     if (preMove) {
         styles[preMove.from] = { backgroundColor: 'rgba(244, 67, 54, 0.4)' }; // Softer red for pre-move source
         styles[preMove.to] = { backgroundColor: 'rgba(244, 67, 54, 0.4)' }; // Softer red for pre-move dest
+    }
+
+    if (suggestionArrow) {
+        styles[suggestionArrow.from] = { backgroundColor: 'rgba(255, 206, 86, 0.6)' };
     }
 
     // Check Highlight
@@ -176,25 +156,12 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
     } catch(e) {}
 
     return styles;
-  }, [preMove, fen, viewFen, hintStage, suggestionArrow]);
+  }, [preMove, fen, viewFen, suggestionArrow]);
 
   // Sync state if prop changes
   useEffect(() => {
-    if (initialMode) {
-        // If initialMode is 'friend', we want to keep the activePanel as 'play'
-        // which was set during initialization.
-        // We only update if it is NOT friend, or map friend to play.
-        setActivePanel(initialMode === 'friend' || initialMode === 'tournament' ? 'play' : initialMode);
-    }
+    if (initialMode) setActivePanel(initialMode);
   }, [initialMode]);
-
-  // Initialize Tournament Game
-  useEffect(() => {
-      if (initialMode === 'tournament' && tournamentParams) {
-          const opponent = ALL_BOTS.find(b => b.id === tournamentParams.opponentId) || ALL_BOTS[0];
-          handleStartBotGame(opponent, 'random');
-      }
-  }, [initialMode, tournamentParams]);
 
   useEffect(() => {
     if (initialTimeControl) setTimeControl(initialTimeControl);
@@ -202,7 +169,6 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
 
   // Handle initialFen change
   useEffect(() => {
-      setStartPosition(initialFen || null);
       if (initialFen) {
           const g = new Chess();
           try {
@@ -212,6 +178,9 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
               setIsGameOver(false);
               setGameResult('');
               setHasGameStarted(true); // If loading from FEN, assume we want to see/play it
+              // If it's a bot mode, we might need to trigger something?
+              // Usually practice is vs Computer, so we might want to ensure a bot is active or selected.
+              // For now, let user select bot if in bots mode.
           } catch (e) {
               console.error("Invalid initialFen update", e);
           }
@@ -219,11 +188,10 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
   }, [initialFen]);
 
   const isBotMode = activePanel === 'bots';
-  const isCoachPanel = activePanel === 'coach';
   const isReviewMode = activePanel === 'review';
   // Only consider it an engine opponent if there is an active bot or we are in bot mode
   // This allows sandbox play (empty board) when no game is active
-  const isEngineOpponent = isBotMode || isCoachPanel || (activePanel === 'play' && playMode === 'online' && !!activeBot);
+  const isEngineOpponent = isBotMode || (activePanel === 'play' && playMode === 'online' && !!activeBot);
 
   // Check Game Over
   useEffect(() => {
@@ -243,10 +211,10 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
 
   // Coach: On turn start (Continuous Analysis)
   useEffect(() => {
-      if (!isGameOver && isCoachReady) { // Check readiness
+      if (!isGameOver) {
            onTurnStart(game.fen());
       }
-  }, [game.fen(), isGameOver, onTurnStart, isCoachReady]);
+  }, [game.fen(), isGameOver, onTurnStart]);
 
   // Keyboard Navigation
   useEffect(() => {
@@ -382,8 +350,6 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
 
           // Clear suggestion on move
           setSuggestionArrow(null);
-          setHintStage(0);
-          setWaitingForHint(false);
       } else {
           setPreMove(null); // Invalid move
       }
@@ -395,7 +361,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
           const from = bestMove.substring(0, 2);
           const to = bestMove.substring(2, 4);
           const promotion = bestMove.length > 4 ? bestMove.substring(4, 5) : undefined;
-          
+
           // Ensure engine moves only on its turn
           if (game.turn() !== userColor) {
               const newGame = new Chess();
@@ -445,14 +411,6 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
 
   const handleNewGame = useCallback(() => {
       const newGame = new Chess();
-      // Use startPosition if available (e.g. Practice Mode)
-      if (startPosition) {
-          try {
-              newGame.load(startPosition);
-          } catch (e) {
-               console.error("Failed to load start position", e);
-          }
-      }
       setGame(newGame);
       setFen(newGame.fen());
       setViewFen(null);
@@ -468,12 +426,9 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
       setIsPlayFriendMode(false);
       setOpeningName("");
       setPreMove(null);
-      setSuggestionArrow(null);
-      setHintStage(0);
-      setWaitingForHint(false);
       playSound('gameStart');
 
-  }, [resetTimer, playSound, resetFeedback, activeBot, startPosition]);
+  }, [resetTimer, playSound, resetFeedback, activeBot]);
 
   // Automatic Engine Move (Start or Resume)
   // This handles cases where the bot is activated after the user has already moved (Sandbox -> Game transition)
@@ -496,33 +451,25 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
      }
   }, [game, isEngineOpponent, activeBot, userColor, isGameOver, sendCommand, resetBestMove]);
 
-  const showHint = useCallback((move: string) => {
-      const from = move.substring(0, 2);
-      const to = move.substring(2, 4);
-
-      // Show full move arrow immediately
-      setSuggestionArrow({ from, to });
-      setHintStage(2);
-
-      // Auto clear after 5 seconds
-      setTimeout(() => {
-          setSuggestionArrow(null);
-          setHintStage(0);
-      }, 5000);
-  }, []);
-
   const handleMoveSuggestion = useCallback(async () => {
       if (waitingForHint) return;
       setWaitingForHint(true);
       try {
-          const move = await getBestMove(game.fen());
-          if (move && move.length >= 4 && move !== '(none)' && move !== '0000') {
-              showHint(move);
+          // Use getBestMove from useCoach which handles async waiting
+          const currentFen = game.fen();
+          const move = await getBestMove(currentFen);
+
+          if (move) {
+              const from = move.substring(0, 2);
+              const to = move.substring(2, 4);
+              setSuggestionArrow({ from, to });
+              // Auto clear after 3 seconds
+              setTimeout(() => setSuggestionArrow(null), 3000);
           }
       } finally {
           setWaitingForHint(false);
       }
-  }, [game, getBestMove, waitingForHint, showHint]);
+  }, [game, getBestMove, waitingForHint]);
 
   const handleUndo = useCallback(() => {
       if (game.history().length === 0 || isGameOver) return;
@@ -568,8 +515,6 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
       resetFeedback();
       resetBestMove(); // Stop bot if it was thinking to prevent race condition
       setSuggestionArrow(null);
-      setHintStage(0);
-      setWaitingForHint(false);
   }, [game, isEngineOpponent, userColor, resetFeedback, resetBestMove]);
 
   const handleFlipBoard = useCallback(() => {
@@ -589,18 +534,37 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
       }
       setUserColor(finalColor);
 
-      // Enable Coach Mode if it's the Coach bot OR if we are coming from the coach panel
-      if (bot.id === 'coach' || activePanel === 'coach') {
-          setIsCoachMode(true);
-      } else {
-          // If we play a normal bot via "Play Computer", ensure coach mode is off by default
-          setIsCoachMode(false);
-      }
-
-      // If we are already in a practice session (custom start position) and it's the first game with this bot,
-      // we might want to respect the current board state?
-      // handleNewGame will use startPosition if set.
       handleNewGame();
+  };
+
+  const handleStartCoachGame = (settings: { botId: string, userColor: 'w' | 'b' | 'random', skillLevel?: number }) => {
+       // Find base bot
+       const baseBot = ALL_BOTS.find(b => b.id === settings.botId) || ALL_BOTS[ALL_BOTS.length - 1]; // Default to stockfish or last bot
+
+       // Create custom coach bot with overridden skill level
+       const coachBot: BotProfile = {
+           ...baseBot,
+           name: "The Coach",
+           avatar: "https://images.chesscomfiles.com/uploads/v1/user/57539420.f35d2592.200x200o.423977759dc2.jpeg", // Consistent with Panel
+           skillLevel: settings.skillLevel ?? baseBot.skillLevel,
+           depth: settings.skillLevel ? Math.min(20, settings.skillLevel + 2) : baseBot.depth, // Approximate depth
+           rating: settings.skillLevel ? settings.skillLevel * 150 : baseBot.rating
+       };
+
+       setActiveBot(coachBot);
+       setOnlineOpponent(null);
+       setPlayMode('online');
+       setIsCoachMode(true); // Activate Coach
+
+       let finalColor: 'w' | 'b' = 'w';
+       if (settings.userColor === 'random') {
+           finalColor = Math.random() > 0.5 ? 'w' : 'b';
+       } else {
+           finalColor = settings.userColor;
+       }
+       setUserColor(finalColor);
+
+       handleNewGame();
   };
 
   const handleExit = useCallback(() => {
@@ -655,21 +619,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
   };
 
   const handleCopyLink = () => {
-      // Encode game params into URL hash if available, or just copy base URL
-      let url = window.location.href;
-      // If we are in Play Friend mode, maybe append a hash representing the mode or initial FEN if set
-      if (isPlayFriendMode) {
-          const params = new URLSearchParams();
-          params.set('mode', 'friend');
-          if (timeControl) params.set('tc', timeControl.toString());
-          if (initialFen) params.set('fen', initialFen);
-          // We can't easily change the URL without reloading or using History API which might conflict with Router if any.
-          // But here we are just copying to clipboard.
-          const baseUrl = window.location.origin + window.location.pathname;
-          url = `${baseUrl}#${params.toString()}`;
-      }
-
-      navigator.clipboard.writeText(url);
+      navigator.clipboard.writeText(window.location.href);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
   };
@@ -699,35 +649,25 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
 
   return (
     <div className="flex flex-col lg:flex-row h-full md:h-screen w-full overflow-hidden bg-chess-dark">
-      
-      {/* Coach Settings Modal */}
-      <CoachSettingsModal
-          isOpen={isCoachSettingsOpen}
-          onClose={() => setIsCoachSettingsOpen(false)}
-          settings={coachSettings}
-          onSettingsChange={setCoachSettings}
-      />
 
       {/* Left Area (Board) */}
       <div className="flex-none lg:flex-1 flex flex-col items-center justify-center p-2 lg:p-4 bg-[#312e2b] relative">
-        
+
         {/* Evaluation Bar Desktop */}
-        {!isGameOver && coachSettings.showEvalBar && (
+        {!isGameOver && (isCoachMode ? coachSettings.showEvalBar : true) && (
              <div className="hidden lg:block absolute left-4 top-1/2 -translate-y-1/2 h-[80vh] w-6 z-0">
                 <EvaluationBar score={currentEval.score} mate={currentEval.mate} />
             </div>
         )}
 
         <div className="w-full max-w-[400px] lg:max-w-[calc(100vh_-_10rem)] relative flex flex-col justify-center">
-            
+
             {/* Coach Feedback Overlay (Inside Container) */}
-            {coachSettings.showFeedback && (
-                <CoachFeedback
-                    feedback={feedback}
-                    isThinking={isCoachThinking}
-                    onClose={resetFeedback}
-                />
-            )}
+            <CoachFeedback
+                feedback={feedback}
+                isThinking={isCoachThinking}
+                onClose={resetFeedback}
+            />
 
             {/* Opponent Info (Top) */}
             <div className="flex justify-between items-end mb-1 px-1 relative">
@@ -771,7 +711,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
                      </div>
                 )}
 
-                {(activePanel === 'play' || isBotMode || isCoachPanel) && (
+                {(activePanel === 'play' || isBotMode) && (
                     <div className={`
                         px-3 py-1.5 md:px-4 md:py-2 rounded-[4px] font-mono font-bold text-2xl shadow-[0_4px_0_0_rgba(0,0,0,0.1)] cursor-default min-w-[100px] text-center
                         ${game.turn() === (userColor === 'w' ? 'b' : 'w') && !isGameOver ? 'bg-white text-black shadow-[0_4px_0_0_#a0a0a0]' : 'bg-[#211f1c] text-[#706c66]'}
@@ -782,7 +722,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
             </div>
 
             <div className="rounded-sm shadow-2xl ring-4 ring-black/10 relative aspect-square">
-                 <Chessboard 
+                 <Chessboard
                     key={userColor} // Force re-mount on color change to ensure orientation updates
                     interactable={isInteractable}
                     fen={viewFen || fen}
@@ -823,7 +763,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
                              <div className="flex justify-between items-center gap-2 mb-8 bg-[#211f1c] p-3 rounded-lg border border-white/5">
                                  <div className="flex flex-col items-center flex-1">
                                       <div className="w-12 h-12 rounded-lg bg-gray-500 overflow-hidden border border-white/10 mb-2">
-                                          <img src={user.avatar} alt="Me" className="w-full h-full object-cover" />
+                                          <img src="https://picsum.photos/200" alt="Me" className="w-full h-full object-cover" />
                                       </div>
                                       <span className="text-xs font-bold text-gray-300">You</span>
                                       <span className="text-[10px] text-[#81b64c] font-bold bg-[#81b64c]/10 px-1.5 py-0.5 rounded mt-0.5">+8</span>
@@ -860,32 +800,20 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
                                     Game Review
                                 </button>
                                 <div className="flex gap-2">
-                                    {initialMode === 'tournament' ? (
-                                        <button
-                                            onClick={() => onNavigate && onNavigate('tournaments')}
-                                            className="flex-1 bg-chess-green hover:bg-chess-greenHover text-white font-bold py-3 rounded-lg shadow-lg flex items-center justify-center gap-2 transition-transform active:scale-95 text-sm"
-                                        >
-                                            <Trophy className="w-4 h-4" />
-                                            Return to Tournament
-                                        </button>
-                                    ) : (
-                                        <>
-                                            <button
-                                                onClick={handleNewGame}
-                                                className="flex-1 bg-[#383531] hover:bg-[#45423e] text-white font-bold py-3 rounded-lg shadow-lg flex items-center justify-center gap-2 transition-transform active:scale-95 text-sm"
-                                            >
-                                                <RotateCcw className="w-4 h-4" />
-                                                {activeBot ? "Rematch" : "New Game"}
-                                            </button>
-                                            <button
-                                                onClick={handleExit}
-                                                className="flex-1 bg-[#262421] hover:bg-[#363430] text-gray-300 font-bold py-3 rounded-lg shadow-lg flex items-center justify-center gap-2 transition-transform active:scale-95 text-sm"
-                                            >
-                                                <XCircle className="w-4 h-4" />
-                                                {activeBot ? "New Bot" : "Home"}
-                                            </button>
-                                        </>
-                                    )}
+                                    <button
+                                        onClick={handleNewGame}
+                                        className="flex-1 bg-[#383531] hover:bg-[#45423e] text-white font-bold py-3 rounded-lg shadow-lg flex items-center justify-center gap-2 transition-transform active:scale-95 text-sm"
+                                    >
+                                        <RotateCcw className="w-4 h-4" />
+                                        {activeBot ? "Rematch" : "New Game"}
+                                    </button>
+                                    <button
+                                        onClick={handleExit}
+                                        className="flex-1 bg-[#262421] hover:bg-[#363430] text-gray-300 font-bold py-3 rounded-lg shadow-lg flex items-center justify-center gap-2 transition-transform active:scale-95 text-sm"
+                                    >
+                                        <XCircle className="w-4 h-4" />
+                                        {activeBot ? "New Bot" : "Home"}
+                                    </button>
                                 </div>
                              </div>
                          </div>
@@ -897,15 +825,15 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
             <div className="flex justify-between items-start mt-1 px-1">
                 <div className="flex items-center gap-2 md:gap-3">
                     <div className="w-8 h-8 md:w-10 md:h-10 rounded bg-gray-500 overflow-hidden border border-white/20 relative group">
-                        <img src={user.avatar} alt="Me" className="w-full h-full object-cover" />
+                        <img src="https://picsum.photos/200" alt="Me" className="w-full h-full object-cover" />
                     </div>
                     <div className="flex flex-col justify-center">
                         <div className="flex items-center gap-1.5">
-                            <span className="text-white font-bold text-sm leading-none tracking-wide">{user.username}</span>
-                            <span className="text-lg md:text-xl leading-none">{user.country}</span>
+                            <span className="text-white font-bold text-sm leading-none tracking-wide">MasterTeo1205</span>
+                            <span className="text-lg md:text-xl leading-none">🇺🇸</span>
                         </div>
                          <div className="flex items-center gap-2 mt-1 h-5">
-                             <span className="text-xs text-[#a0a0a0] font-semibold">{user.rating}</span>
+                             <span className="text-xs text-[#a0a0a0] font-semibold">850</span>
                              <CapturedPieces game={game} color={userColor} />
                              {openingName && (
                                  <span className="text-[10px] text-[#a0a0a0] font-semibold ml-1 bg-[#262421] px-1.5 py-0.5 rounded border border-white/10 hidden sm:inline-block truncate max-w-[150px]" title={openingName}>
@@ -915,7 +843,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
                         </div>
                     </div>
                 </div>
-                {(activePanel === 'play' || isBotMode || isCoachPanel) && (
+                {(activePanel === 'play' || isBotMode) && (
                     <div className={`
                         px-3 py-1.5 md:px-4 md:py-2 rounded-[4px] font-mono font-bold text-2xl shadow-[0_4px_0_0_rgba(0,0,0,0.1)] cursor-default min-w-[100px] text-center
                         ${game.turn() === userColor && !isGameOver ? 'bg-white text-black shadow-[0_4px_0_0_#a0a0a0]' : 'bg-[#211f1c] text-[#706c66]'}
@@ -929,11 +857,11 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
 
       {/* Right Sidebar */}
       <div className="flex-1 lg:flex-none w-full lg:w-[350px] xl:w-[420px] bg-[#262522] flex flex-col border-l border-white/10 shrink-0 h-auto lg:h-auto z-10 relative shadow-2xl overflow-hidden">
-          
+
           {/* Mock Tab Switcher */}
           <div className="absolute top-0 left-[-40px] flex flex-col gap-2 p-2 z-0 pointer-events-none md:pointer-events-auto opacity-0 md:opacity-100">
-             {activePanel !== 'bots' && activePanel !== 'coach' && (
-                 <button 
+             {activePanel !== 'bots' && (
+                 <button
                     onClick={() => setActivePanel(activePanel === 'play' ? 'review' : 'play')}
                     className="bg-[#262522] p-2 rounded-l-md text-gray-400 hover:text-white shadow-lg border-y border-l border-white/10 pointer-events-auto"
                     title="Toggle View"
@@ -952,9 +880,9 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
               />
           ) : activePanel === 'bots' && !activeBot ? (
               <PlayBotsPanel onStartGame={handleStartBotGame} />
-          ) : activePanel === 'coach' && !activeBot ? (
-              <PlayCoachPanel onStartGame={handleStartBotGame} />
-          ) : (activeBot || hasGameStarted) ? (
+          ) : activePanel === 'coach' && !hasGameStarted ? (
+              <PlayCoachPanel onStartGame={handleStartCoachGame} />
+          ) : (activePanel === 'bots' && activeBot) || hasGameStarted ? (
                // Active Game View (Move List)
                <div className="flex flex-col h-full bg-[#262522]">
                    <div className="flex items-center justify-between px-4 py-2 bg-[#211f1c] border-b border-white/5">
@@ -962,6 +890,25 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
                             Game vs {onlineOpponent ? onlineOpponent.name : activeBot ? activeBot.name : 'Opponent'}
                         </span>
                         <div className="flex gap-2">
+
+                             {/* Coach Settings Cog */}
+                             {isCoachMode && (
+                                 <div className="relative">
+                                    <button
+                                        title="Coach Settings"
+                                        onClick={() => setShowCoachSettings(!showCoachSettings)}
+                                        className="text-gray-400 hover:text-white p-1 rounded"
+                                    >
+                                        <Settings className="w-4 h-4" />
+                                    </button>
+                                     <CoachSettingsModal
+                                         isOpen={showCoachSettings}
+                                         onClose={() => setShowCoachSettings(false)}
+                                         settings={coachSettings}
+                                         onUpdateSettings={setCoachSettings}
+                                     />
+                                 </div>
+                             )}
 
                              <div className="w-px bg-white/10 mx-1"></div>
 
@@ -971,17 +918,6 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
                              <button className="text-gray-400 hover:text-white" title="Abort" onClick={handleNewGame}>
                                  <XCircle className="w-4 h-4" />
                              </button>
-
-                             {/* Coach Settings Cog (Visible only in Coach Mode as per article, or generally) */}
-                             {isCoachMode && (
-                                 <button
-                                     onClick={() => setIsCoachSettingsOpen(true)}
-                                     className="text-gray-400 hover:text-white"
-                                     title="Coach Settings"
-                                 >
-                                     <Settings className="w-4 h-4" />
-                                 </button>
-                             )}
                         </div>
                    </div>
                    <MoveList
@@ -1035,16 +971,16 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
                         )}
 
                         {/* Game Controls: Suggestion/Undo for Bots */}
-                        {(isBotMode || isCoachPanel || playMode === 'pass-and-play') && !isGameOver && (
+                        {((isBotMode || activePanel === 'coach' || (!!activeBot && !onlineOpponent)) || playMode === 'pass-and-play') && !isGameOver && (
                              <div className="flex gap-1 mb-1">
-                                 {(isBotMode || isCoachPanel) && (
+                                 {(isBotMode || activePanel === 'coach' || (!!activeBot && !onlineOpponent)) && (
                                      <button
                                          onClick={handleMoveSuggestion}
-                                         className={`flex-1 ${hintStage > 0 ? 'bg-chess-green text-white' : 'bg-[#383531] text-gray-300'} hover:bg-[#45423e] rounded flex items-center justify-center py-2 hover:text-white transition-colors disabled:opacity-50`}
+                                         className="flex-1 bg-[#383531] hover:bg-[#45423e] rounded flex items-center justify-center py-2 text-gray-300 hover:text-white transition-colors"
                                          title="Move Suggestion (Hint)"
                                          disabled={waitingForHint}
                                      >
-                                         {waitingForHint ? <Loader2 className="w-5 h-5 animate-spin" /> : <Lightbulb className="w-5 h-5" />}
+                                         {waitingForHint ? <Loader className="w-5 h-5 animate-spin" /> : <Lightbulb className="w-5 h-5" />}
                                      </button>
                                  )}
                                  <button
@@ -1162,7 +1098,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
                         <img src="https://www.chess.com/bundles/web/images/color-icons/handshake.svg" alt="Start" className="w-12 h-12 md:w-16 md:h-16 opacity-50 mx-auto mb-2" />
                         <h3 className="text-white font-bold text-lg">Play Chess</h3>
                     </div>
-                    
+
                     <div className="w-full space-y-2">
                         <button
                             onClick={handleOnlinePlay}
@@ -1177,7 +1113,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
                             >
                                 Play Friend
                             </button>
-                            <button 
+                            <button
                                 onClick={() => setActivePanel('bots')}
                                 className="bg-[#383531] hover:bg-[#45423e] text-gray-300 py-3 rounded font-semibold text-sm transition-colors border-b-4 border-[#252422] active:border-b-0 active:translate-y-1"
                             >

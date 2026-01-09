@@ -11,6 +11,26 @@ export interface AnalysisLine {
   moves: string[];
 }
 
+export interface MoveAnalysis {
+    classification: 'brilliant' | 'best' | 'great' | 'good' | 'inaccuracy' | 'mistake' | 'blunder' | 'book' | 'forced';
+    reason?: string;
+}
+
+export interface GameReviewData {
+    accuracy: number;
+    moves: MoveAnalysis[];
+}
+
+// Placeholder for analyzeGame function
+export const analyzeGame = async (pgn: string): Promise<GameReviewData> => {
+    // This would invoke Stockfish to analyze the full game
+    // For now, return mock data
+    return {
+        accuracy: 85,
+        moves: []
+    };
+};
+
 export class StockfishClient {
   private worker: Worker;
   private isReady: boolean = false;

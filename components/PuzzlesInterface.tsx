@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Chess } from 'chess.js';
 import Chessboard from './Chessboard';
 import PuzzlesPanel from './PuzzlesPanel';
-import { PUZZLES, Puzzle } from '../utils/puzzles';
+import { PUZZLES, Puzzle } from '../src/utils/puzzles';
 import { useGameSound } from '../hooks/useGameSound';
 import { useUser } from '../context/UserContext';
 

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { ChevronLeft, CheckCircle, Award, RotateCcw } from 'lucide-react';
 import { Chess } from 'chess.js';
 import Chessboard from './Chessboard';
-import { LESSONS, Lesson, LessonChallenge } from '../utils/lessons';
+import { LESSONS, Lesson, LessonChallenge } from '../src/utils/lessons';
 import { useGameSound } from '../hooks/useGameSound';
 import { useLessonProgress } from '../hooks/useLessonProgress';
 
