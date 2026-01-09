@@ -1,6 +1,9 @@
 
 import { Chess } from 'chess.js';
 
+// Define Constant
+export const STOCKFISH_URL = 'https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.0/stockfish.js';
+
 // Real implementation of StockfishClient
 export interface EngineScore {
   unit: 'cp' | 'mate';
@@ -15,8 +18,14 @@ export interface AnalysisLine {
 }
 
 export interface MoveAnalysis {
+    moveSan: string;
+    moveIndex: number; // 0-based index in the full game history
+    score: EngineScore;
+    bestMove: string;
     classification: 'brilliant' | 'best' | 'great' | 'good' | 'inaccuracy' | 'mistake' | 'blunder' | 'book' | 'forced';
     reason?: string;
+    // Internal use for next iteration, optional
+    _nextBestMove?: string;
 }
 
 export interface GameReviewData {
@@ -46,16 +55,6 @@ export const uciLineToSan = (fen: string, pv: string): string => {
     }
   }
   return sanMoves.join(' ');
-};
-
-// Placeholder for analyzeGame function - Will be implemented fully in next steps
-export const analyzeGame = async (pgn: string): Promise<GameReviewData> => {
-    // This would invoke Stockfish to analyze the full game
-    // For now, return mock data
-    return {
-        accuracy: 85,
-        moves: []
-    };
 };
 
 export class StockfishClient {
@@ -147,3 +146,118 @@ export class StockfishClient {
       this.worker.postMessage('stop');
   }
 }
+
+// Helper to calculate win probability from Centipawns
+const getWinChance = (cp: number) => {
+    // Sigmoid-like approximation
+    return 50 + 50 * (2 / Math.PI) * Math.atan(cp / 400);
+};
+
+export const analyzeGame = async (
+    pgn: string,
+    onProgress?: (current: number, total: number) => void
+): Promise<GameReviewData> => {
+    // 1. Setup Game and Client
+    const game = new Chess();
+    game.loadPgn(pgn);
+    const history = game.history({ verbose: true });
+
+    const client = await StockfishClient.create(STOCKFISH_URL);
+    await client.setOption('MultiPV', 1);
+
+    const movesAnalysis: MoveAnalysis[] = [];
+    const tempGame = new Chess(); // To replay and get FENs
+
+    let previousScore: EngineScore = { unit: 'cp', value: 0 };
+
+    // Analyze Position 0 (Start)
+    client.setPosition(tempGame.fen());
+    const startAnalysis = await client.go(10); // Low depth for speed
+    let currentEval = startAnalysis.score?.unit === 'mate'
+         ? (startAnalysis.score.value > 0 ? 10000 : -10000)
+         : (startAnalysis.score?.value || 0);
+
+    for (let i = 0; i < history.length; i++) {
+        const move = history[i];
+        const isWhite = move.color === 'w';
+
+        // 2. Make the move to get next position
+        tempGame.move(move);
+        const fenAfter = tempGame.fen();
+
+        // 3. Analyze Position After
+        client.setPosition(fenAfter);
+        const result = await client.go(12);
+
+        let rawScore = result.score?.value || 0;
+        if (result.score?.unit === 'mate') {
+            rawScore = rawScore > 0 ? 20000 - rawScore : -20000 - rawScore;
+        }
+
+        // Convert to White perspective
+        const whiteEvalAfter = isWhite ? -rawScore : rawScore;
+
+        const evalDiff = isWhite
+            ? currentEval - whiteEvalAfter
+            : whiteEvalAfter - currentEval;
+
+        // Classification
+        let classification: MoveAnalysis['classification'] = 'good';
+
+        const prevBestMove = i === 0 ? startAnalysis.bestMove : movesAnalysis[i-1]?._nextBestMove;
+
+        const uciMove = move.from + move.to + (move.promotion || '');
+
+        if (uciMove === prevBestMove) {
+            classification = 'best';
+        } else {
+            if (evalDiff <= 25) classification = 'excellent'; // or 'good'
+            else if (evalDiff <= 50) classification = 'inaccuracy';
+            else if (evalDiff <= 150) classification = 'mistake';
+            else classification = 'blunder';
+        }
+
+        if (i < 10 && evalDiff < 15 && classification !== 'best') {
+            classification = 'book';
+        }
+
+        movesAnalysis.push({
+            moveSan: move.san,
+            moveIndex: i,
+            score: { unit: 'cp', value: whiteEvalAfter }, // Store White perspective score
+            bestMove: prevBestMove || '',
+            classification: classification === 'excellent' ? 'good' : classification,
+            _nextBestMove: result.bestMove
+        });
+
+        // Update state for next loop
+        currentEval = whiteEvalAfter;
+
+        if (onProgress) {
+            onProgress(i + 1, history.length);
+        }
+    }
+
+    client.terminate();
+
+    let totalScore = 0;
+    movesAnalysis.forEach(m => {
+        switch (m.classification) {
+            case 'brilliant':
+            case 'best':
+            case 'book': totalScore += 100; break;
+            case 'great': totalScore += 95; break;
+            case 'good': totalScore += 80; break;
+            case 'inaccuracy': totalScore += 50; break;
+            case 'mistake': totalScore += 20; break;
+            case 'blunder': totalScore += 0; break;
+        }
+    });
+
+    const accuracy = Math.round(totalScore / Math.max(1, movesAnalysis.length));
+
+    return {
+        accuracy,
+        moves: movesAnalysis
+    };
+};
