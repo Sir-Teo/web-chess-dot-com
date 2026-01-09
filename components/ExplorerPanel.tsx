@@ -31,10 +31,40 @@ const ExplorerPanel: React.FC<ExplorerPanelProps> = ({ fen, history, onPlayMove 
     const legalMoves = game.moves({ verbose: true });
 
     // Mock Stats Generator based on move quality (center control etc) just for visuals
+    // Enhanced with Book Moves from COMMON_OPENINGS
+    const currentMoveString = history ? history.join(' ') : "";
+
+    // Find book moves
+    const bookMoveCounts: Record<string, number> = {};
+
+    COMMON_OPENINGS.forEach(op => {
+        if (op.moves.startsWith(currentMoveString)) {
+            // Check if it's an exact match or continuation
+            const remainder = op.moves.substring(currentMoveString.length).trim();
+            if (remainder.length > 0) {
+                const nextMove = remainder.split(' ')[0];
+                // Only count if it's a valid next move (sometimes trimming might leave empty if exact match)
+                if (nextMove) {
+                     bookMoveCounts[nextMove] = (bookMoveCounts[nextMove] || 0) + 1;
+                }
+            }
+        }
+    });
+
     const newMoves: MoveStat[] = legalMoves.map(m => {
+        // Check if this move is in our book
+        const isBook = bookMoveCounts[m.san] !== undefined;
+        const bookWeight = bookMoveCounts[m.san] || 0;
+
         // Simple hash for consistency
         const hash = m.san.charCodeAt(0) + (m.to.charCodeAt(0) || 0);
-        const total = 1000 + (hash * 10);
+
+        // Boost count significantly if it's a book move
+        let total = 1000 + (hash * 10);
+        if (isBook) {
+            total += 50000 + (bookWeight * 5000);
+        }
+
         const w = Math.floor(Math.random() * 40) + 30;
         const d = Math.floor(Math.random() * 30) + 20;
         const b = 100 - w - d;
@@ -44,7 +74,8 @@ const ExplorerPanel: React.FC<ExplorerPanelProps> = ({ fen, history, onPlayMove 
             count: total,
             whiteWin: w,
             draw: d,
-            blackWin: b
+            blackWin: b,
+            title: isBook ? 'Book Move' : undefined
         };
     });
 
