@@ -70,12 +70,33 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({
       setViewMoveIndex(index);
   };
 
+  const handleReset = () => {
+      const g = new Chess();
+      setGame(g);
+      setCurrentFen(g.fen());
+      setViewMoveIndex(-1);
+      setAnalysisData(undefined);
+  };
+
   const handleUserMove = (from: string, to: string, promotion: string = 'q') => {
       const newGame = new Chess();
       try {
+          // If viewing the latest move, we can try to preserve history (PGN)
           if (viewMoveIndex === -1) {
-             newGame.load(game.fen());
+             // Clone game state including history if possible
+             // However, loading PGN clears headers/comments, but keeps move history.
+             try {
+                 newGame.loadPgn(game.pgn());
+                 // Double check if FEN matches (handling possible PGN load errors)
+                 if (newGame.fen() !== game.fen()) {
+                     // Fallback if PGN load results in different state (e.g. if loaded from FEN init)
+                     newGame.load(game.fen());
+                 }
+             } catch (e) {
+                 newGame.load(game.fen());
+             }
           } else {
+             // If browsing history, we fork from that position (clearing future history)
              newGame.load(currentFen);
           }
       } catch(e) {
@@ -162,6 +183,7 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({
                         fen={currentFen} // Pass current view FEN
                         analysisData={analysisData} // Pass review data
                         onNavigate={onNavigate}
+                        onReset={handleReset}
                      />
                  )}
                  {activeTab === 'review' && (
@@ -171,11 +193,13 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({
                         onAnalysisComplete={setAnalysisData}
                         existingData={analysisData}
                         currentMoveIndex={viewMoveIndex}
+                        onMoveClick={onMoveClick}
                      />
                  )}
                  {activeTab === 'explorer' && (
                      <ExplorerPanel
                         fen={currentFen}
+                        history={game.history()}
                         onPlayMove={(san) => {
                              const g = new Chess(currentFen);
                              try {

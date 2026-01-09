@@ -1,58 +1,130 @@
+import time
+from playwright.sync_api import sync_playwright
 
-from playwright.sync_api import sync_playwright, expect
-
-def test_analysis_lines():
+def verify_analysis():
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
-        page = browser.new_page()
+        context = browser.new_context()
+        page = context.new_page()
 
-        # Capture console logs
-        page.on("console", lambda msg: print(f"Console: {msg.text}"))
-        page.on("pageerror", lambda err: print(f"Page Error: {err}"))
+        # Navigate to the analysis page (assuming there's a route or button)
+        # Since I added features to AnalysisInterface, I'll navigate to it.
+        # It's likely routed via App.tsx but specific route might be tricky if not default.
+        # But I can use hash routing if supported or just default path if it defaults to Dashboard then I click "Analysis" or similar?
+        # App.tsx usually has routes. Based on memory,  handles view.
+        # Let's try to find a way to reach Analysis.
+        # Actually, I can use the hash param #analysis if supported, or just verify the components if I can reach them.
 
-        try:
-            # Navigate
-            page.goto("http://localhost:3000/web-chess-dot-com/#analysis")
+        # Checking App.tsx (memory or read?)
+        # Memory says: "The transition from gameplay to analysis is handled by App.tsx... mounts AnalysisInterface with initialPgn prop."
+        # Also "OpeningsInterface implements... 'Analyze' triggers the onAnalyze callback".
 
-            # Wait for board
-            expect(page.locator("#chessboard-wrapper")).to_be_visible(timeout=10000)
+        # Let's try navigating to root and looking for "Analysis" or "Tools" -> "Analysis".
+        # Or I can try the  path.
 
-            # Check for header
-            expect(page.get_by_text("Stockfish 16 (Lite)")).to_be_visible(timeout=5000)
+        page.goto("http://localhost:3000/web-chess-dot-com/")
 
-            # Wait for lines - Use a simpler text search to debug
-            # Wait for ANY text in the lines container
-            # The container has class "min-h-[100px]"
-            # If empty, it says "Calculating..."
+        # Wait for page load
+        page.wait_for_timeout(3000)
 
-            # Check if "Calculating..." is visible
-            calc_locator = page.get_by_text("Calculating...")
-            if calc_locator.is_visible():
-                print("Calculating... is visible")
+        # Check if we can find a link to analysis
+        # "ExplorerPanel" is in AnalysisInterface.
+        # Maybe I can reach it via sidebar "Analysis" (if it exists)
+        # Or clicking "Review" button after a game.
 
-            # Wait for "Calculating..." to DISAPPEAR (implies lines arrived)
-            # OR wait for a score
-            # Let's wait for a score span
-            score_selector = "span.text-green-400, span.text-white" # We use text-white for moderate scores
+        # Try to find sidebar item "Analysis" or "Tools"
+        # If not, try to start a game and resign and review.
 
-            # We can also check if lines.length > 0 by looking for the row container
-            # The row has "hover:bg-white/5"
-            # selector: .group.hover\:bg-white\/5
+        # Let's try clicking "Play Bots" -> Start -> Resign -> Review
+        # This covers GameReviewPanel and AnalysisPanel.
 
-            print("Waiting for analysis lines...")
-            page.wait_for_selector(".group", timeout=20000)
-            print("Lines found!")
+        # 1. Click Play Bots (Sidebar)
+        page.get_by_role("button", name="Play Bots").click()
+        page.wait_for_timeout(1000)
 
-            # Take screenshot
-            page.screenshot(path="/home/jules/verification/analysis_lines.png")
-            print("Verification screenshot taken at /home/jules/verification/analysis_lines.png")
+        # 2. Click Play (PlayBotsPanel)
+        page.get_by_test_id("play-bot-start").click()
+        page.wait_for_timeout(2000)
 
-        except Exception as e:
-            print(f"Error: {e}")
-            page.screenshot(path="/home/jules/verification/error_screenshot.png")
-            print("Error screenshot taken at /home/jules/verification/error_screenshot.png")
-        finally:
-            browser.close()
+        # 3. Resign (GameInterface)
+        # Resign button is usually a flag icon or "Resign".
+        # Find flag icon button.
+        page.locator("button.bg-neutral-700").first.click() # Guessing selector for controls? No.
+        # Let's look for "Resign" text or aria-label.
+        # Or just make moves until game over? Resign is faster.
+        # The resign button has flag icon.
+        # Let's try to click the button with title "Resign" or similar.
+        # If not found, I'll try to find the generic "Resign" text in modal if it appears.
+
+        # Actually, let's try to verify the UI without full game flow if possible.
+        # Is there a direct route?
+        # Memory: "Sidebar component directs 'Tournaments' ... 'Daily Puzzle' ... 'Multiplayer'".
+        # Doesn't mention 'Analysis' in sidebar explicitly.
+
+        # Let's try the URL hash approach?
+        # Memory: "App.tsx ... validates and maps URL hash parameters ... to activeTab".
+        # But  is for internal tabs like "puzzles".
+        #  handles mode.
+
+        # Let's stick to the Game -> Resign -> Review flow.
+
+        # Finding Resign button:
+        # It's usually in the controls area.
+        #  has controls.
+        # Button with Flag icon.
+        # Let's try ? No text usually.
+        #
+
+        page.locator("button:has(svg.lucide-flag)").click()
+        page.wait_for_timeout(1000)
+
+        # Confirm Resign (Modal)
+        page.get_by_role("button", name="Resign", exact=True).click()
+        page.wait_for_timeout(1000)
+
+        # Game Over Modal appears.
+        # Click "Game Review" button.
+        page.get_by_role("button", name="Game Review").click()
+        page.wait_for_timeout(2000)
+
+        # Now we should be in AnalysisInterface.
+        # Verify "Analysis", "Review", "Explorer" tabs exist.
+        page.get_by_text("Analysis").click()
+        page.wait_for_timeout(1000)
+        page.screenshot(path="verification/analysis_tab.png")
+
+        page.get_by_text("Review").click()
+        page.wait_for_timeout(1000)
+        page.screenshot(path="verification/review_tab.png")
+
+        page.get_by_text("Explorer").click()
+        page.wait_for_timeout(1000)
+        page.screenshot(path="verification/explorer_tab.png")
+
+        # Verify specific features
+
+        # 1. Review Tab: Click on "Key Moments" (even if 0)
+        # We need a game with moves to have blunders. Resigning at start has 0 moves.
+        # So stats will be 0.
+        # But we can check if the elements exist.
+
+        # 2. Explorer Tab: Check for opening name.
+        # Start pos opening name is usually "Unknown" or nothing or "Start".
+        #  -> "Unknown Opening" or "".
+        # Let's check if the table exists.
+
+        # 3. Analysis Tab: Check for "Copy PGN" and "Reset" buttons.
+        page.get_by_text("Analysis").click()
+        page.wait_for_timeout(500)
+
+        # Look for Copy PGN button
+        if page.get_by_text("Copy PGN").is_visible():
+            print("Copy PGN button found")
+
+        if page.get_by_text("Reset").is_visible():
+            print("Reset button found")
+
+        browser.close()
 
 if __name__ == "__main__":
-    test_analysis_lines()
+    verify_analysis()

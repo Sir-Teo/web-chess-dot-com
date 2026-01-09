@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Chess } from 'chess.js';
-import { Settings, Play, FastForward, Pause, Cpu } from 'lucide-react';
+import { Settings, Play, FastForward, Pause, Cpu, RotateCcw, Copy, Check } from 'lucide-react';
 import MoveList from './MoveList';
 import { uciLineToSan, GameReviewData } from '../src/utils/gameAnalysis'; // Import helper
 
@@ -13,6 +13,7 @@ interface AnalysisPanelProps {
   fen?: string; // Current FEN to analyze
   analysisData?: GameReviewData;
   onNavigate?: (view: string, params?: any) => void;
+  onReset?: () => void;
 }
 
 const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
@@ -23,13 +24,21 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
     stockfish,
     fen,
     analysisData,
-    onNavigate
+    onNavigate,
+    onReset
 }) => {
   const [depth, setDepth] = useState(15);
   const [isAnalyzing, setIsAnalyzing] = useState(true); // Default to analyzing
+  const [copied, setCopied] = useState(false);
 
   // Destructure stockfish hook
   const { sendCommand, isReady, lines } = stockfish;
+
+  const handleCopyPgn = () => {
+      navigator.clipboard.writeText(game.pgn());
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+  };
 
   useEffect(() => {
      if (isReady && isAnalyzing) {
@@ -112,14 +121,30 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
         />
 
         {/* Footer Actions */}
-        <div className="mt-auto bg-[#211f1c] p-2 flex gap-1 border-t border-white/5">
+        <div className="mt-auto bg-[#211f1c] p-2 flex flex-col gap-2 border-t border-white/5">
+            <div className="flex gap-1">
+                <button
+                    onClick={handleCopyPgn}
+                    className="flex-1 bg-[#302e2b] hover:bg-[#3d3a36] rounded flex items-center justify-center py-2 text-gray-400 hover:text-white transition-colors text-xs font-bold gap-2"
+                >
+                    {copied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+                    {copied ? "Copied!" : "Copy PGN"}
+                </button>
+                <button
+                     onClick={onReset}
+                     className="flex-1 bg-[#302e2b] hover:bg-[#3d3a36] rounded flex items-center justify-center py-2 text-gray-400 hover:text-white transition-colors text-xs font-bold gap-2"
+                >
+                     <RotateCcw className="w-4 h-4" />
+                     Reset
+                </button>
+            </div>
              <button
                  onClick={() => {
                      if (onNavigate) {
                          onNavigate('play-bots', { initialFen: fen || game.fen(), practiceTitle: 'Practice Position' });
                      }
                  }}
-                 className="flex-1 bg-[#383531] hover:bg-[#45423e] rounded flex items-center justify-center py-2 text-gray-400 hover:text-white transition-colors text-xs font-bold gap-2"
+                 className="w-full bg-[#383531] hover:bg-[#45423e] rounded flex items-center justify-center py-2 text-gray-400 hover:text-white transition-colors text-xs font-bold gap-2"
              >
                  <Cpu className="w-4 h-4" />
                  Practice vs Computer
