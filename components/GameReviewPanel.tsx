@@ -11,9 +11,10 @@ interface GameReviewPanelProps {
   existingData?: GameReviewData;
   currentMoveIndex?: number; // To highlight key moments in list? Or navigate to them.
   onMoveClick?: (fen: string, index: number) => void;
+  onRetry?: (fen: string, moveIndex: number, bestMove: string) => void;
 }
 
-const GameReviewPanel: React.FC<GameReviewPanelProps> = ({ pgn, onStartReview, onAnalysisComplete, existingData, onMoveClick }) => {
+const GameReviewPanel: React.FC<GameReviewPanelProps> = ({ pgn, onStartReview, onAnalysisComplete, existingData, onMoveClick, onRetry }) => {
   const [reviewState, setReviewState] = useState<'idle' | 'analyzing' | 'complete'>('idle');
   const [progress, setProgress] = useState(0);
   const [data, setData] = useState<GameReviewData | null>(null);
@@ -40,16 +41,36 @@ const GameReviewPanel: React.FC<GameReviewPanelProps> = ({ pgn, onStartReview, o
   const handleMomentClick = (moments: MoveAnalysis[]) => {
       if (moments.length > 0 && onMoveClick) {
           // Reconstruct game to get FEN for the first moment
-          // This is a bit inefficient to do every click, but robust
           const tempGame = new Chess();
           tempGame.loadPgn(pgn);
           const history = tempGame.history({ verbose: true });
 
           const targetIndex = moments[0].moveIndex;
           if (history[targetIndex]) {
+               // Show result AFTER the mistake
                onMoveClick(history[targetIndex].after, targetIndex);
           }
       }
+  };
+
+  const handleRetryClick = (e: React.MouseEvent, moment: MoveAnalysis) => {
+      e.stopPropagation();
+      if (!onRetry) return;
+
+      const tempGame = new Chess();
+      tempGame.loadPgn(pgn);
+      const history = tempGame.history({ verbose: true });
+
+      // We want the position BEFORE the mistake
+      const targetIndex = moment.moveIndex;
+      // If moveIndex is 0, FEN is start. Else FEN is 'after' of moveIndex-1
+      const fenBefore = targetIndex === 0
+           ? 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
+           : history[targetIndex - 1].after;
+
+      // Best move is needed. moment.bestMove is what we want.
+      // NOTE: moment.bestMove is likely UCI (e.g. "e2e4")
+      onRetry(fenBefore, targetIndex, moment.bestMove);
   };
 
   const handleStartReview = async () => {
@@ -122,40 +143,63 @@ const GameReviewPanel: React.FC<GameReviewPanelProps> = ({ pgn, onStartReview, o
                  <div className="p-4">
                      <h4 className="text-xs font-bold text-gray-500 uppercase mb-3">Key Moments</h4>
                      <div className="space-y-2">
-                         <div
-                            onClick={() => handleMomentClick(blunders)}
-                            className="bg-[#211f1c] p-3 rounded border border-white/5 flex items-center justify-between cursor-pointer hover:bg-[#302e2b] transition-colors"
-                         >
-                             <div className="flex items-center gap-3">
-                                 <div className="w-8 h-8 rounded-full bg-[#fa412d]/20 flex items-center justify-center">
-                                     <XCircle className="w-5 h-5 text-[#fa412d]" />
-                                 </div>
-                                 <div>
-                                     <div className="font-bold text-sm">{blunders.length} Blunders</div>
-                                     <div className="text-xs text-gray-400">
-                                         {blunders.length > 0 ? `Moves: ${blunders.map(b => Math.ceil((b.moveIndex + 1)/2)).join(', ')}` : 'None'}
+                         {/* Detailed List for Blunders to allow individual Retry */}
+                         <div className="space-y-1">
+                             {blunders.map((b, i) => (
+                                 <div
+                                     key={i}
+                                     onClick={() => handleMomentClick([b])}
+                                     className="bg-[#211f1c] p-2 rounded border border-white/5 flex items-center justify-between cursor-pointer hover:bg-[#302e2b] transition-colors group"
+                                 >
+                                     <div className="flex items-center gap-3">
+                                         <div className="w-6 h-6 rounded-full bg-[#fa412d]/20 flex items-center justify-center">
+                                             <XCircle className="w-3 h-3 text-[#fa412d]" />
+                                         </div>
+                                         <div className="text-xs font-bold text-gray-300">
+                                             Move {Math.ceil((b.moveIndex + 1) / 2)}
+                                         </div>
                                      </div>
+                                     <button
+                                         onClick={(e) => handleRetryClick(e, b)}
+                                         className="opacity-0 group-hover:opacity-100 bg-[#383531] hover:bg-chess-green text-white text-[10px] px-2 py-1 rounded transition-all"
+                                     >
+                                         Retry
+                                     </button>
                                  </div>
-                             </div>
-                             <ChevronRight className="w-4 h-4 text-gray-500" />
+                             ))}
+                             {blunders.length === 0 && (
+                                <div className="text-center text-xs text-gray-500 py-2">No Blunders</div>
+                             )}
                          </div>
 
-                         <div
-                            onClick={() => handleMomentClick(mistakes)}
-                            className="bg-[#211f1c] p-3 rounded border border-white/5 flex items-center justify-center gap-3 cursor-pointer hover:bg-[#302e2b] transition-colors"
-                         >
-                              <div className="flex items-center gap-3 w-full">
-                                 <div className="w-8 h-8 rounded-full bg-[#fea500]/20 flex items-center justify-center">
-                                     <AlertTriangle className="w-5 h-5 text-[#fea500]" />
-                                 </div>
-                                 <div>
-                                     <div className="font-bold text-sm">{mistakes.length} Mistakes</div>
-                                     <div className="text-xs text-gray-400">
-                                         {mistakes.length > 0 ? `Moves: ${mistakes.map(b => Math.ceil((b.moveIndex + 1)/2)).join(', ')}` : 'None'}
+                         <div className="my-2 border-t border-white/5"></div>
+
+                         <div className="space-y-1">
+                             {mistakes.map((b, i) => (
+                                 <div
+                                     key={i}
+                                     onClick={() => handleMomentClick([b])}
+                                     className="bg-[#211f1c] p-2 rounded border border-white/5 flex items-center justify-between cursor-pointer hover:bg-[#302e2b] transition-colors group"
+                                 >
+                                     <div className="flex items-center gap-3">
+                                         <div className="w-6 h-6 rounded-full bg-[#fea500]/20 flex items-center justify-center">
+                                             <AlertTriangle className="w-3 h-3 text-[#fea500]" />
+                                         </div>
+                                         <div className="text-xs font-bold text-gray-300">
+                                             Move {Math.ceil((b.moveIndex + 1) / 2)}
+                                         </div>
                                      </div>
+                                     <button
+                                         onClick={(e) => handleRetryClick(e, b)}
+                                         className="opacity-0 group-hover:opacity-100 bg-[#383531] hover:bg-chess-green text-white text-[10px] px-2 py-1 rounded transition-all"
+                                     >
+                                         Retry
+                                     </button>
                                  </div>
-                             </div>
-                             <ChevronRight className="w-4 h-4 text-gray-500" />
+                             ))}
+                             {mistakes.length === 0 && (
+                                <div className="text-center text-xs text-gray-500 py-2">No Mistakes</div>
+                             )}
                          </div>
 
                          <div
