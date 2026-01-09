@@ -2,8 +2,10 @@ import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import Chessboard from './Chessboard';
 import AnalysisPanel from './AnalysisPanel';
 import GameReviewPanel from './GameReviewPanel';
+import ExplorerPanel from './ExplorerPanel';
 import EvaluationBar from './EvaluationBar';
-import { User, Check, X, RefreshCcw } from 'lucide-react';
+import SetupPositionModal from './SetupPositionModal';
+import { User, Check, X, RefreshCcw, BookOpen } from 'lucide-react';
 import { Chess } from 'chess.js';
 import { useStockfish } from '../hooks/useStockfish';
 import { Arrow } from '../hooks/useCoach';
@@ -13,7 +15,7 @@ import { GameReviewData } from '../utils/gameAnalysis';
 interface AnalysisInterfaceProps {
   initialPgn?: string;
   initialFen?: string;
-  defaultTab?: 'analysis' | 'review';
+  defaultTab?: 'analysis' | 'review' | 'explorer';
   onNavigate?: (view: string, params?: any) => void;
 }
 
@@ -25,7 +27,7 @@ export interface AnalysisSettings {
 }
 
 const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initialFen, defaultTab, onNavigate }) => {
-  const [activeTab, setActiveTab] = useState<'analysis' | 'review'>('analysis');
+  const [activeTab, setActiveTab] = useState<'analysis' | 'review' | 'explorer'>('analysis');
 
   // Master game record
   const [game, setGame] = useState(new Chess());
@@ -50,11 +52,39 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
   });
 
   const [depth, setDepth] = useState(20);
+  const [isSetupModalOpen, setIsSetupModalOpen] = useState(false);
 
   // New: Practice Handler
   const handlePractice = () => {
       if (onNavigate) {
           onNavigate('play-bots', { fen: currentFen });
+      }
+  };
+
+  const handleNewGame = () => {
+      const newGame = new Chess();
+      setGame(newGame);
+      setStartFen(null);
+      setAnalysisData(null);
+      setCurrentMoveIndex(0);
+  };
+
+  const handleSavePgn = () => {
+      const pgn = game.pgn();
+      navigator.clipboard.writeText(pgn).then(() => {
+          alert("PGN copied to clipboard!");
+      });
+  };
+
+  const handleLoadFen = (fen: string) => {
+      try {
+          const newGame = new Chess(fen);
+          setGame(newGame);
+          setStartFen(fen);
+          setAnalysisData(null);
+          setCurrentMoveIndex(0);
+      } catch (e) {
+          console.error("Failed to load FEN", e);
       }
   };
   
@@ -275,7 +305,8 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
             
             setGame(newMasterGame);
             setCurrentMoveIndex(prev => prev + 1);
-            setActiveTab('analysis');
+            // Don't switch tab if already on explorer
+            if (activeTab === 'review') setActiveTab('analysis');
         }
     } catch (e) {}
   };
@@ -292,6 +323,14 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
               bestMove: moveData.bestMove
           });
           setActiveTab('analysis');
+      }
+  };
+
+  const handleExplorerMove = (san: string) => {
+      const tempGame = new Chess(currentFen);
+      const move = tempGame.move(san);
+      if (move) {
+          handleMove(move.from, move.to);
       }
   };
 
@@ -414,6 +453,13 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
                   >
                       Review
                   </button>
+                  <button
+                      onClick={() => setActiveTab('explorer')}
+                      className={`flex-1 py-1.5 text-sm font-bold rounded transition-colors flex items-center justify-center gap-2 ${activeTab === 'explorer' ? 'bg-[#3d3b38] text-white shadow' : 'text-gray-400 hover:text-gray-200'}`}
+                  >
+                      <BookOpen className="w-3.5 h-3.5" />
+                      Explorer
+                  </button>
               </div>
           </div>
 
@@ -432,6 +478,12 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
                      onRetry={handleRetryStart}
                      onAnalysisComplete={setAnalysisData}
                      currentMoveIndex={currentMoveIndex}
+                  />
+              ) : activeTab === 'explorer' ? (
+                  <ExplorerPanel
+                    game={game}
+                    currentFen={currentFen}
+                    onMoveClick={handleExplorerMove}
                   />
               ) : (
                   <AnalysisPanel
@@ -452,10 +504,19 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
                     depth={depth}
                     onDepthChange={setDepth}
                     onPractice={handlePractice}
+                    onNew={handleNewGame}
+                    onSave={handleSavePgn}
+                    onSetup={() => setIsSetupModalOpen(true)}
                   />
               )}
           </div>
       </div>
+
+      <SetupPositionModal
+         isOpen={isSetupModalOpen}
+         onClose={() => setIsSetupModalOpen(false)}
+         onLoadFen={handleLoadFen}
+      />
     </div>
   );
 };
