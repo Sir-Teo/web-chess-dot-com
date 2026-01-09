@@ -43,13 +43,30 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
   // Retry Mode
   const [retryState, setRetryState] = useState<{ isRetrying: boolean, bestMove?: string, feedback?: 'correct' | 'incorrect' | null } | null>(null);
 
-  // Settings
-  const [settings, setSettings] = useState<AnalysisSettings>({
-      showArrows: true,
-      showEvalBar: true,
-      highlightMoves: true,
-      showThreats: false
+  // Settings with persistence
+  const [settings, setSettings] = useState<AnalysisSettings>(() => {
+      try {
+          const saved = localStorage.getItem('analysis_settings');
+          return saved ? JSON.parse(saved) : {
+              showArrows: true,
+              showEvalBar: true,
+              highlightMoves: true,
+              showThreats: false
+          };
+      } catch (e) {
+          return {
+              showArrows: true,
+              showEvalBar: true,
+              highlightMoves: true,
+              showThreats: false
+          };
+      }
   });
+
+  // Save settings when changed
+  useEffect(() => {
+      localStorage.setItem('analysis_settings', JSON.stringify(settings));
+  }, [settings]);
 
   const [depth, setDepth] = useState(20);
   const [isSetupModalOpen, setIsSetupModalOpen] = useState(false);
@@ -57,7 +74,7 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
   // New: Practice Handler
   const handlePractice = () => {
       if (onNavigate) {
-          onNavigate('play-bots', { fen: currentFen });
+          onNavigate('play-bots', { fen: currentFen, practiceTitle: identifyOpening(game.pgn()) });
       }
   };
 
@@ -85,6 +102,20 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
           setCurrentMoveIndex(0);
       } catch (e) {
           console.error("Failed to load FEN", e);
+      }
+  };
+
+  const handleLoadPgn = (pgn: string) => {
+      try {
+          const newGame = new Chess();
+          newGame.loadPgn(pgn);
+          setGame(newGame);
+          setStartFen(null);
+          setAnalysisData(null);
+          setCurrentMoveIndex(newGame.history().length);
+          setActiveTab('review');
+      } catch (e) {
+          console.error("Failed to load PGN", e);
       }
   };
   
@@ -516,6 +547,7 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({ initialPgn, initi
          isOpen={isSetupModalOpen}
          onClose={() => setIsSetupModalOpen(false)}
          onLoadFen={handleLoadFen}
+         onLoadPgn={handleLoadPgn}
       />
     </div>
   );
