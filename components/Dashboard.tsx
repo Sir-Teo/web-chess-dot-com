@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import Chessboard from './Chessboard';
 import { useLessonProgress } from '../hooks/useLessonProgress';
-import { LESSONS } from '../utils/lessons';
+import { LESSONS } from '../src/utils/lessons';
 import { useUser } from '../context/UserContext';
 
 interface DashboardProps {

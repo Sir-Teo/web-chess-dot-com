@@ -1,108 +1,96 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useRef, useEffect } from 'react';
 import { Chess } from 'chess.js';
-import { GameReviewData } from '../utils/gameAnalysis';
-import MoveClassificationIcon from './MoveClassificationIcon';
+import { Search } from 'lucide-react';
+import { MoveAnalysis } from '../src/utils/gameAnalysis';
 
 interface MoveListProps {
   game: Chess;
-  onMoveClick?: (fen: string, moveIndex: number) => void;
-  currentMoveIndex?: number; // -1 means latest
-  analysisData?: GameReviewData | null;
+  currentMoveIndex: number;
+  onMoveClick: (fen: string, index: number) => void;
+  analysisData?: MoveAnalysis[]; // Optional analysis data to show classification
 }
 
-const MoveList: React.FC<MoveListProps> = ({ game, onMoveClick, currentMoveIndex = -1, analysisData }) => {
-  const history = game.history({ verbose: true });
+const MoveList: React.FC<MoveListProps> = ({ game, currentMoveIndex, onMoveClick, analysisData }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Game Result
-  const isGameOver = game.isGameOver();
-  const result = isGameOver ? (game.isCheckmate() ? (game.turn() === 'w' ? '0-1' : '1-0') : '1/2-1/2') : null;
-  const resultReason = isGameOver ? (game.isCheckmate() ? 'Checkmate' : game.isDraw() ? 'Draw' : 'Game Over') : null;
+  const history = game.history({ verbose: true });
 
-  // Auto-scroll to bottom only if we are at the latest move
-  useEffect(() => {
-    if (scrollRef.current && (currentMoveIndex === -1 || currentMoveIndex >= history.length - 1)) {
-        // Use requestAnimationFrame to ensure DOM is updated
-        requestAnimationFrame(() => {
-             if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-        });
-    }
-  }, [history.length, currentMoveIndex]);
-
-  const moves: { w?: { san: string, after: string, index: number }; b?: { san: string, after: string, index: number }; moveNumber: number }[] = [];
-
+  // Create pairs of moves
+  const movePairs: { white?: any, black?: any, index: number }[] = [];
   for (let i = 0; i < history.length; i += 2) {
-    moves.push({
-      moveNumber: Math.floor(i / 2) + 1,
-      w: { san: history[i].san, after: history[i].after, index: i },
-      b: history[i + 1] ? { san: history[i + 1].san, after: history[i + 1].after, index: i + 1 } : undefined,
-    });
+      movePairs.push({
+          white: history[i],
+          black: history[i + 1],
+          index: i
+      });
   }
 
-  const isSelected = (index: number) => {
-      if (currentMoveIndex === -1) return index === history.length - 1;
-      return currentMoveIndex === index;
-  };
+  // Scroll to active move
+  useEffect(() => {
+    if (scrollRef.current) {
+        // Find active element
+        const activeEl = scrollRef.current.querySelector('[data-active="true"]');
+        if (activeEl) {
+            activeEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        } else if (currentMoveIndex === -1 && history.length > 0) {
+            // If live (-1) and has history, scroll to bottom
+            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+        }
+    }
+  }, [currentMoveIndex, history.length]);
 
-  const getMoveClassification = (index: number) => {
-      if (!analysisData || !analysisData.moves[index]) return null;
-      return analysisData.moves[index].classification;
+  // Helper to get move classification style/icon
+  const getMoveClass = (index: number) => {
+      if (!analysisData || !analysisData[index]) return null;
+      // return analysisData[index].classification; // e.g. 'blunder', 'brilliant'
+      // For now, we assume simple strings if we had them.
+      // But we will just use a visual marker if needed.
+      return null;
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#262522]">
-      <div className="flex items-center px-4 py-1.5 bg-[#211f1c] text-xs font-semibold text-gray-500 uppercase tracking-wider border-b border-black/20">
-         <span className="w-8 text-center">#</span>
-         <span className="flex-1 pl-2">White</span>
-         <span className="flex-1 pl-2">Black</span>
-      </div>
-
-      <div className="flex-1 overflow-y-auto custom-scrollbar" ref={scrollRef}>
-          {moves.map((move) => (
-              <div key={move.moveNumber} className={`flex text-sm py-0.5 ${move.moveNumber % 2 !== 0 ? 'bg-[#262421]' : 'bg-[#2b2926]'}`}>
-                  <span className="w-8 text-center text-[#555] font-mono py-1.5 text-xs">{move.moveNumber}.</span>
-
-                  {/* White Move */}
-                  {move.w && (
+    <div className="flex-1 overflow-y-auto bg-[#262522]" ref={scrollRef}>
+      <div className="w-full text-sm font-semibold">
+          {movePairs.map((pair, i) => (
+              <div
+                key={i}
+                className={`flex ${i % 2 === 0 ? 'bg-[#262522]' : 'bg-[#211f1c]'}`}
+              >
+                  <div className="w-12 py-1.5 pl-4 text-[#706c66] flex items-center">
+                      {i + 1}.
+                  </div>
+                  <button
+                      onClick={() => onMoveClick(pair.white.after, pair.index)}
+                      data-active={currentMoveIndex === pair.index}
+                      className={`
+                          flex-1 py-1.5 pl-2 text-left hover:bg-white/5 transition-colors flex items-center gap-2 relative
+                          ${currentMoveIndex === pair.index ? 'bg-[#484644] text-white ring-inset ring-1 ring-white/10' : 'text-gray-300'}
+                      `}
+                  >
+                      <span>{pair.white.san}</span>
+                      {getMoveClass(pair.index) && <span className="w-2 h-2 rounded-full bg-red-500"></span>}
+                  </button>
+                  {pair.black ? (
                       <button
-                        className={`flex-1 flex items-center justify-between text-left px-2 py-1.5 transition-colors font-bold rounded-sm mx-1 ${
-                            isSelected(move.w.index) ? 'bg-[#4a4845] text-white shadow-inner border-b border-white/5 ring-1 ring-white/5' : 'text-[#c3c3c3] hover:text-white hover:bg-white/5'
-                        }`}
-                        onClick={() => onMoveClick?.(move.w!.after, move.w!.index)}
+                          onClick={() => onMoveClick(pair.black.after, pair.index + 1)}
+                          data-active={currentMoveIndex === pair.index + 1}
+                          className={`
+                              flex-1 py-1.5 pl-2 text-left hover:bg-white/5 transition-colors flex items-center gap-2 relative
+                              ${currentMoveIndex === pair.index + 1 ? 'bg-[#484644] text-white ring-inset ring-1 ring-white/10' : 'text-gray-300'}
+                          `}
                       >
-                          <span className={isSelected(move.w.index) ? 'text-white' : 'text-[#c3c3c3]'}>{move.w.san}</span>
-                          <MoveClassificationIcon classification={getMoveClassification(move.w.index)} size={12} />
-                      </button>
-                  )}
-
-                  {/* Black Move */}
-                  {move.b ? (
-                      <button
-                        className={`flex-1 flex items-center justify-between text-left px-2 py-1.5 transition-colors font-bold rounded-sm mx-1 ${
-                            isSelected(move.b.index) ? 'bg-[#4a4845] text-white shadow-inner border-b border-white/5 ring-1 ring-white/5' : 'text-[#c3c3c3] hover:text-white hover:bg-white/5'
-                        }`}
-                        onClick={() => onMoveClick?.(move.b!.after, move.b!.index)}
-                      >
-                          <span className={isSelected(move.b.index) ? 'text-white' : 'text-[#c3c3c3]'}>{move.b.san}</span>
-                          <MoveClassificationIcon classification={getMoveClassification(move.b.index)} size={12} />
+                          <span>{pair.black.san}</span>
                       </button>
                   ) : (
-                      <span className="flex-1 mx-1"></span>
+                      <div className="flex-1"></div>
                   )}
               </div>
           ))}
 
-          {moves.length === 0 && (
-             <div className="flex flex-col items-center justify-center h-40 text-gray-600 text-sm font-medium italic">
-                 Game Start
-             </div>
-          )}
-
-          {/* Game Over Result */}
-          {isGameOver && (
-              <div className="flex flex-col items-center py-4 bg-[#211f1c] mt-2 border-t border-white/5">
-                  <div className="text-white font-black text-xl tracking-widest">{result}</div>
-                  <div className="text-gray-500 text-xs uppercase font-bold tracking-wider mt-1">{resultReason}</div>
+          {/* Empty State */}
+          {history.length === 0 && (
+              <div className="flex flex-col items-center justify-center p-8 text-[#706c66] italic opacity-50">
+                   Game start
               </div>
           )}
       </div>

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Trophy, Users, Clock, ArrowLeft, ChevronRight, Lock, Play, Star, Medal } from 'lucide-react';
 import { useUser } from '../context/UserContext';
-import { ALL_BOTS, BotProfile } from '../utils/bots';
+import { ALL_BOTS, BotProfile } from '../src/utils/bots';
 
 interface Tournament {
     id: string;

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Chess } from 'chess.js';
 import { Timer, X, Zap, Trophy, RefreshCcw, Home } from 'lucide-react';
 import Chessboard from './Chessboard';
-import { PUZZLES, Puzzle } from '../utils/puzzles';
+import { PUZZLES, Puzzle } from '../src/utils/puzzles';
 import { useGameSound } from '../hooks/useGameSound';
 
 interface PuzzleRushInterfaceProps {
