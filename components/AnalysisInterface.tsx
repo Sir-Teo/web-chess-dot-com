@@ -57,21 +57,9 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({
       }
   }, [initialPgn, initialFen]);
 
-  // Engine Hook for Eval Bar
-  const { isReady, bestMove, sendCommand, resetBestMove } = useStockfish();
-  const [evalScore, setEvalScore] = useState<{unit: 'cp' | 'mate', value: number} | null>(null);
-
-  // Auto-analysis on move change
-  useEffect(() => {
-     if (isReady) {
-         // This logic duplicates AnalysisPanel a bit, but AnalysisPanel might be just controls.
-         // Ideally, AnalysisInterface manages the engine state if it's shared across tabs.
-         // But let's assume AnalysisPanel handles its own heavy lifting for lines.
-         // We just want a quick score for the board here if needed.
-         // Or we rely on `useCoach` logic for consistent eval?
-         // Let's keep it simple: AnalysisInterface is layout. AnalysisPanel does engine work.
-     }
-  }, [currentFen, isReady]);
+  // Engine Hook - Shared instance for Analysis Panel and Eval Bar
+  const stockfish = useStockfish();
+  const { isReady, bestMove, evalScore } = stockfish;
 
   const onMoveClick = (fen: string, index: number) => {
       setCurrentFen(fen);
@@ -79,12 +67,6 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({
   };
 
   const handleUserMove = (from: string, to: string, promotion: string = 'q') => {
-      // Create new game from current position (branching?)
-      // For analysis, usually we just append to current game state or branch.
-      // If we are viewing history and move, we create a variation.
-      // But `chess.js` doesn't support variations easily in linear history.
-      // We will just overwrite for now or support "Try Line".
-
       const newGame = new Chess();
       try {
           if (viewMoveIndex === -1) {
@@ -118,7 +100,7 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({
         <div className="flex-1 flex flex-col items-center justify-center p-2 lg:p-4 bg-[#312e2b] relative">
             {/* Evaluation Bar */}
             <div className="hidden lg:block absolute left-4 top-1/2 -translate-y-1/2 h-[80vh] w-6 z-0">
-                <EvaluationBar score={evalScore?.value || 0} mate={evalScore?.unit === 'mate' ? evalScore.value : null} />
+                <EvaluationBar score={evalScore?.value || 0} mate={evalScore?.unit === 'mate' ? evalScore.value : undefined} />
             </div>
 
             <div className="w-full max-w-[calc(100vh_-_8rem)] aspect-square shadow-2xl">
@@ -172,6 +154,7 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({
                         game={game}
                         currentMoveIndex={viewMoveIndex}
                         onMoveClick={onMoveClick}
+                        stockfish={stockfish}
                      />
                  )}
                  {activeTab === 'review' && (
@@ -188,9 +171,6 @@ const AnalysisInterface: React.FC<AnalysisInterfaceProps> = ({
                              try {
                                  const m = g.move(san);
                                  if (m) {
-                                     // Update main game state
-                                     // This is tricky if we are in history.
-                                     // For explorer, usually we just update the board to show the line.
                                      handleUserMove(m.from, m.to, m.promotion);
                                  }
                              } catch(e) {}
