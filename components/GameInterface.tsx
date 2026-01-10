@@ -648,19 +648,19 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
   );
 
   return (
-    <div className="flex flex-col lg:flex-row h-full md:h-screen w-full overflow-hidden bg-chess-dark">
+    <div className="flex flex-col md:flex-row h-full md:h-screen w-full overflow-hidden bg-chess-dark">
 
       {/* Left Area (Board) */}
-      <div className="flex-none lg:flex-1 flex flex-col items-center justify-center p-2 lg:p-4 bg-[#312e2b] relative">
+      <div className="flex-none md:flex-1 flex flex-col items-center justify-center p-2 md:p-4 bg-[#312e2b] relative">
 
         {/* Evaluation Bar Desktop */}
         {!isGameOver && (isCoachMode ? coachSettings.showEvalBar : true) && (
-             <div className="hidden lg:block absolute left-4 top-1/2 -translate-y-1/2 h-[80vh] w-6 z-0">
+             <div className="hidden md:block absolute left-2 lg:left-4 top-1/2 -translate-y-1/2 h-[80vh] w-4 lg:w-6 z-0">
                 <EvaluationBar score={currentEval.score} mate={currentEval.mate} />
             </div>
         )}
 
-        <div className="w-full max-w-[400px] lg:max-w-[calc(100vh_-_10rem)] relative flex flex-col justify-center">
+        <div className="w-full md:max-w-[calc(100vh_-_10rem)] relative flex flex-col justify-center">
 
             {/* Coach Feedback Overlay (Inside Container) */}
             <CoachFeedback
@@ -856,7 +856,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
       </div>
 
       {/* Right Sidebar */}
-      <div className="flex-1 lg:flex-none w-full lg:w-[350px] xl:w-[420px] bg-[#262522] flex flex-col border-l border-white/10 shrink-0 h-auto lg:h-auto z-10 relative shadow-2xl overflow-hidden">
+      <div className="flex-1 md:flex-none w-full md:w-[320px] lg:w-[350px] xl:w-[420px] bg-[#262522] flex flex-col border-l border-white/10 shrink-0 h-auto md:h-full z-10 relative shadow-2xl overflow-hidden">
 
           {/* Mock Tab Switcher */}
           <div className="absolute top-0 left-[-40px] flex flex-col gap-2 p-2 z-0 pointer-events-none md:pointer-events-auto opacity-0 md:opacity-100">
