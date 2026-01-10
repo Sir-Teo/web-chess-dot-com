@@ -28,7 +28,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
   }, [isLessonComplete]);
 
   return (
-    <div className="p-6 md:p-8 max-w-7xl mx-auto w-full">
+    <div className="p-4 md:p-8 max-w-7xl mx-auto w-full">
       
       {/* User Header */}
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-8 gap-4">
