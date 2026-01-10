@@ -147,10 +147,14 @@ export class StockfishClient {
   }
 }
 
-// Helper to calculate win probability from Centipawns
-const getWinChance = (cp: number) => {
-    // Sigmoid-like approximation
-    return 50 + 50 * (2 / Math.PI) * Math.atan(cp / 400);
+// Helper to normalize scores to white perspective centipawns (internal use)
+// Mate is +/- 20000
+const normalizeScore = (score: EngineScore | null): number => {
+    if (!score) return 0;
+    if (score.unit === 'mate') {
+        return score.value > 0 ? 20000 - score.value : -20000 - score.value;
+    }
+    return score.value;
 };
 
 export const analyzeGame = async (
@@ -168,14 +172,11 @@ export const analyzeGame = async (
     const movesAnalysis: MoveAnalysis[] = [];
     const tempGame = new Chess(); // To replay and get FENs
 
-    let previousScore: EngineScore = { unit: 'cp', value: 0 };
-
     // Analyze Position 0 (Start)
     client.setPosition(tempGame.fen());
     const startAnalysis = await client.go(10); // Low depth for speed
-    let currentEval = startAnalysis.score?.unit === 'mate'
-         ? (startAnalysis.score.value > 0 ? 10000 : -10000)
-         : (startAnalysis.score?.value || 0);
+
+    let currentEval = normalizeScore(startAnalysis.score);
 
     for (let i = 0; i < history.length; i++) {
         const move = history[i];
@@ -189,13 +190,38 @@ export const analyzeGame = async (
         client.setPosition(fenAfter);
         const result = await client.go(12);
 
-        let rawScore = result.score?.value || 0;
-        if (result.score?.unit === 'mate') {
-            rawScore = rawScore > 0 ? 20000 - rawScore : -20000 - rawScore;
+        let whiteEvalAfter = normalizeScore(result.score);
+        // If it was black's turn to move (result is from white's perspective after black move),
+        // Stockfish gives score relative to side to move? No, UCI 'score cp' is always side-to-move relative usually.
+        // Wait, 'score cp' in UCI is relative to the side to move.
+        // My normalizeScore doesn't account for who moved.
+
+        // Actually, let's verify UCI 'score cp'.
+        // "The score is from the point of view of the side to move."
+        // So if White just moved, it's Black's turn. The score is for Black.
+        // So `result.score.value` is for Black.
+        // White Eval = -1 * result.score.value.
+
+        // Let's refine `whiteEvalAfter`.
+        // `fenAfter` is the position with `game.turn()` (next player) to move.
+        // If `game.turn()` is Black, result is for Black. WhiteEval = -result.
+        // If `game.turn()` is White, result is for White. WhiteEval = result.
+
+        const turnAfter = tempGame.turn(); // 'w' or 'b'
+        let rawScore = normalizeScore(result.score);
+        if (turnAfter === 'b') {
+            whiteEvalAfter = rawScore; // White just moved. Wait.
+            // If turn is Black, side to move is Black. Score is for Black.
+            // So White score is -rawScore.
+             whiteEvalAfter = -rawScore;
+        } else {
+            // Turn is White. Side to move is White. Score is for White.
+            whiteEvalAfter = rawScore;
         }
 
-        // Convert to White perspective
-        const whiteEvalAfter = isWhite ? -rawScore : rawScore;
+        // Calculate Loss (how much worse did I make my position?)
+        // If I am White: Loss = PrevEval - NewEval (If I was +500 and now +100, Loss is 400)
+        // If I am Black: Loss = NewEval - PrevEval (If I was -500 (good for black) and now -100, Loss is -100 - (-500) = 400)
 
         const evalDiff = isWhite
             ? currentEval - whiteEvalAfter
@@ -205,21 +231,48 @@ export const analyzeGame = async (
         let classification: MoveAnalysis['classification'] = 'good';
 
         const prevBestMove = i === 0 ? startAnalysis.bestMove : movesAnalysis[i-1]?._nextBestMove;
-
         const uciMove = move.from + move.to + (move.promotion || '');
+
+        // Win Thresholds (CP)
+        const WINNING_THRESHOLD = 700; // +7.00
+        const LOST_WIN_THRESHOLD = 200; // Dropped below +2.00
+
+        const isWinning = isWhite ? currentEval > WINNING_THRESHOLD : currentEval < -WINNING_THRESHOLD;
+        const isMate = isWhite ? currentEval > 10000 : currentEval < -10000;
+
+        const stillWinning = isWhite ? whiteEvalAfter > LOST_WIN_THRESHOLD : whiteEvalAfter < -LOST_WIN_THRESHOLD;
+        const stillMate = isWhite ? whiteEvalAfter > 10000 : whiteEvalAfter < -10000;
 
         if (uciMove === prevBestMove) {
             classification = 'best';
         } else {
-            if (evalDiff <= 25) classification = 'great'; // Using 'great' instead of 'excellent' to match type
-            else if (evalDiff <= 50) classification = 'inaccuracy';
-            else if (evalDiff <= 150) classification = 'mistake';
-            else classification = 'blunder';
+             // Missed Win Logic
+            if ((isMate && !stillMate) || (isWinning && !stillWinning)) {
+                // Check if the drop is significant
+                if (evalDiff > 300) { // arbitrary threshold for "Missed Win"
+                    classification = 'forced';
+                } else {
+                    classification = 'blunder';
+                }
+            } else if (evalDiff <= 25) {
+                classification = 'great';
+            } else if (evalDiff <= 60) {
+                classification = 'inaccuracy';
+            } else if (evalDiff <= 200) {
+                classification = 'mistake';
+            } else {
+                classification = 'blunder';
+            }
         }
 
-        if (i < 10 && evalDiff < 15 && classification !== 'best') {
-            classification = 'book';
+        // Book Move Override
+        if (i < 10 && evalDiff < 20 && classification !== 'best' && classification !== 'forced') {
+             classification = 'book';
         }
+
+        // Override for "Good" moves that aren't quite great but not inaccuracies
+        if (classification === 'inaccuracy' && evalDiff < 30) classification = 'good';
+
 
         movesAnalysis.push({
             moveSan: move.san,
@@ -250,7 +303,9 @@ export const analyzeGame = async (
             case 'good': totalScore += 80; break;
             case 'inaccuracy': totalScore += 50; break;
             case 'mistake': totalScore += 20; break;
-            case 'blunder': totalScore += 0; break;
+            case 'blunder':
+            case 'forced':
+                totalScore += 0; break;
         }
     });
 
