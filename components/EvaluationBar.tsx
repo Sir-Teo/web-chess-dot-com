@@ -3,36 +3,23 @@ import React from 'react';
 interface EvaluationBarProps {
     score: number; // in centipawns (from white's perspective). +100 = +1.0
     mate?: number; // moves to mate (positive for white, negative for black)
+    orientation?: 'vertical' | 'horizontal';
 }
 
-const EvaluationBar: React.FC<EvaluationBarProps> = ({ score, mate }) => {
-    // Calculate percentage for white bar height
+const EvaluationBar: React.FC<EvaluationBarProps> = ({ score, mate, orientation = 'vertical' }) => {
+    // Calculate percentage for white bar size
     let percentage = 50;
 
     if (mate !== undefined) {
         if (mate > 0) percentage = 100; // White mates
         else percentage = 0;   // Black mates
     } else {
-        // Use a sigmoid-like function or clamped linear
-        // Standard is often: 50 + (score / 10) clamped to 0-100? No, that's too sensitive. 1 pawn = 10%.
-        // Lichess uses: 50 + 50 * (2 / (1 + exp(-0.004 * score)) - 1)
-        // Let's use a simpler clamped linear for now or the Lichess formula.
-        // Let's use a simpler formula: 1 pawn (100cp) = ~10% shift?
-        // Let's try: 50 + (score / 10) limited to 5% and 95%.
-        // Actually, let's use the formula:
-        // p = 1 / (1 + 10^(-score/400)) which is standard ELO probability, but here we want visual advantage.
-        // Let's stick to a visual clamp.
-        // 500 cp (+5) should be near full bar (95%).
-
         // Linear Clamped:
         // score is cp.
         // Max range: +/- 500 (5 pawns) -> 100% / 0%
         const clampedScore = Math.max(-500, Math.min(500, score));
         percentage = 50 + (clampedScore / 10);
     }
-
-    // Invert because height is from bottom? Yes, height: X% means X% from bottom is white.
-    // CSS height grows from bottom if we position absolute bottom 0.
 
     // Display text
     let text = "";
@@ -44,19 +31,64 @@ const EvaluationBar: React.FC<EvaluationBarProps> = ({ score, mate }) => {
 
     const isWhiteWinning = (mate !== undefined && mate > 0) || (mate === undefined && score > 0);
 
-    return (
-        <div className="w-full h-full bg-[#403d39] relative rounded overflow-hidden flex flex-col border border-black/20">
-            {/* Black Bar (Background is technically black/dark, White bar overlays) */}
+    const isVertical = orientation === 'vertical';
 
+    return (
+        <div className={`w-full h-full bg-[#403d39] relative rounded overflow-hidden flex ${isVertical ? 'flex-col' : 'flex-row'} border border-black/20`}>
             {/* White Bar */}
             <div
-                className="w-full bg-white absolute bottom-0 left-0 transition-all duration-500 ease-in-out"
-                style={{ height: `${percentage}%` }}
+                className="bg-white absolute transition-all duration-500 ease-in-out"
+                style={{
+                    ...(isVertical ? {
+                        bottom: 0,
+                        left: 0,
+                        width: '100%',
+                        height: `${percentage}%`
+                    } : {
+                        top: 0,
+                        left: 0,
+                        height: '100%',
+                        width: `${percentage}%`
+                    })
+                }}
             />
 
             {/* Score Label */}
-            <div className={`absolute left-0 right-0 text-[10px] font-bold text-center z-10 ${percentage > 90 ? 'top-1 text-[#403d39]' : percentage < 10 ? 'bottom-1 text-white' : isWhiteWinning ? 'bottom-1 text-[#403d39]' : 'top-1 text-white'}`}>
-                {text}
+            <div
+                className={`absolute text-[10px] font-bold z-10 flex items-center justify-center
+                ${isVertical
+                    ? `left-0 right-0 text-center ${percentage > 90 ? 'top-1 text-[#403d39]' : percentage < 10 ? 'bottom-1 text-white' : isWhiteWinning ? 'bottom-1 text-[#403d39]' : 'top-1 text-white'}`
+                    : `top-0 bottom-0 px-1 ${percentage > 90 ? 'right-0 text-[#403d39]' : percentage < 10 ? 'left-0 text-white' : isWhiteWinning ? 'left-1 text-[#403d39]' : 'right-1 text-white'}`
+                }`}
+                style={!isVertical && !(percentage > 90 || percentage < 10) ? {
+                     left: isWhiteWinning ? `${percentage}%` : 'auto',
+                     right: !isWhiteWinning ? `${100 - percentage}%` : 'auto',
+                     transform: isWhiteWinning ? 'translateX(-100%)' : 'translateX(100%)' // Move text inside/outside? No, just keep it simple.
+                } : {}}
+            >
+                {!isVertical ? (
+                    // Simplified horizontal text positioning
+                    <div className={`w-full h-full flex items-center ${
+                         percentage > 90 ? 'justify-end pr-1 text-[#403d39]' :
+                         percentage < 10 ? 'justify-start pl-1 text-white' :
+                         isWhiteWinning ? 'justify-end pr-1 text-[#403d39] mix-blend-exclusion' : 'justify-start pl-1 text-white mix-blend-exclusion'
+                         // mix-blend might be tricky with bg colors.
+                         // Let's stick to simple logic:
+                         // If White winning (large white bar), text should be inside white bar (black text) or outside?
+                         // If bar is 50%, text is in middle.
+                    }`}>
+                         <span style={{
+                             color: percentage > 50 ? '#403d39' : '#fff',
+                             // Position absolute based on center?
+                             position: 'absolute',
+                             left: '50%',
+                             transform: 'translateX(-50%)',
+                             textShadow: '0 0 2px rgba(0,0,0,0.5)' // Ensure visibility
+                         }}>{text}</span>
+                    </div>
+                ) : (
+                    text
+                )}
             </div>
         </div>
     );

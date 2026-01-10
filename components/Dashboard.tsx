@@ -225,15 +225,15 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
          <h2 className="text-white font-bold text-lg">Recommended Match</h2>
       </div>
       
-      <div className="bg-[#262421] p-4 rounded-lg flex items-center gap-4 border border-white/5">
-         <div className="w-16 h-16 rounded overflow-hidden">
+      <div className="bg-[#262421] p-4 rounded-lg flex flex-col sm:flex-row items-center gap-4 border border-white/5">
+         <div className="w-full sm:w-16 h-32 sm:h-16 rounded overflow-hidden">
             <img src="https://picsum.photos/id/1/200/200" alt="Rec" className="w-full h-full object-cover" />
          </div>
-         <div className="flex-1">
+         <div className="flex-1 text-center sm:text-left">
             <h4 className="text-white font-bold">MagnusCarlsen vs Hikaru</h4>
             <p className="text-sm text-gray-400">Speed Chess Championship 2024</p>
          </div>
-         <button className="bg-[#383531] text-white px-4 py-2 rounded font-semibold hover:bg-[#45423e]">
+         <button className="bg-[#383531] text-white px-4 py-2 rounded font-semibold hover:bg-[#45423e] w-full sm:w-auto">
             Watch
          </button>
       </div>
