@@ -1,3 +1,4 @@
+
 import React, { useMemo } from 'react';
 import { MoveAnalysis } from '../src/utils/gameAnalysis';
 
@@ -13,10 +14,10 @@ const EvaluationGraph: React.FC<EvaluationGraphProps> = ({ moves, currentMoveInd
     const data = [{ x: 0, y: 0, index: -1 }];
 
     moves.forEach((move, i) => {
-        let val = move.score.value;
-        if (move.score.unit === 'mate') {
+        let val = move.eval || 0;
+        if (move.mate) {
             // Clamp mate scores for visual graph
-            val = val > 0 ? 1000 : -1000;
+            val = move.mate > 0 ? 1000 : -1000;
         }
 
         // Clamp CP scores between -1000 and 1000 for display
@@ -76,6 +77,9 @@ const EvaluationGraph: React.FC<EvaluationGraphProps> = ({ moves, currentMoveInd
                 // Skip the start point 0 if it messes up alignment or handle it
                 if (i === 0) return null; // Or render a small slice
 
+                // Get original move if possible
+                const move = moves[p.index];
+
                 return (
                     <div
                         key={i}
@@ -89,7 +93,7 @@ const EvaluationGraph: React.FC<EvaluationGraphProps> = ({ moves, currentMoveInd
 
                          {/* Tooltip on hover */}
                          <div className="hidden group-hover/bar:block absolute bottom-full left-1/2 -translate-x-1/2 bg-black/80 text-white text-[10px] px-2 py-1 rounded whitespace-nowrap mb-1 z-10">
-                            Move {Math.ceil((p.index + 1) / 2)}: {moves[p.index].score.unit === 'mate' ? `M${moves[p.index].score.value}` : (moves[p.index].score.value / 100).toFixed(2)}
+                            Move {Math.ceil((p.index + 1) / 2)}: {move?.mate ? `M${move.mate}` : move?.eval ? (move.eval / 100).toFixed(2) : "0.00"}
                          </div>
                     </div>
                 );

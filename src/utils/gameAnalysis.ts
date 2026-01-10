@@ -1,5 +1,6 @@
 
 import { Chess } from 'chess.js';
+import { identifyOpening } from './openings';
 
 // Define Constant
 export const STOCKFISH_URL = 'https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.0/stockfish.js';
@@ -18,18 +19,25 @@ export interface AnalysisLine {
 }
 
 export interface MoveAnalysis {
-    moveSan: string;
+    moveNumber: number;
     moveIndex: number; // 0-based index in the full game history
-    score: EngineScore;
-    bestMove: string;
-    classification: 'brilliant' | 'best' | 'great' | 'good' | 'inaccuracy' | 'mistake' | 'blunder' | 'book' | 'forced';
-    reason?: string;
-    // Internal use for next iteration, optional
-    _nextBestMove?: string;
+    color: 'w' | 'b';
+    san: string;
+    from: string;
+    to: string;
+    fen: string;
+    eval?: number; // centipawns
+    mate?: number; // Mate in moves
+    bestMove?: string;
+    classification: 'brilliant' | 'great' | 'best' | 'excellent' | 'good' | 'inaccuracy' | 'mistake' | 'blunder' | 'book' | 'missed-win' | 'forced';
+    reason?: string; // Explanation for the classification
+    _nextBestMove?: string; // Internal use
 }
 
 export interface GameReviewData {
-    accuracy: number;
+    accuracy: { w: number; b: number };
+    performanceRating: { w: number; b: number };
+    opening: string;
     moves: MoveAnalysis[];
 }
 
@@ -61,9 +69,13 @@ export class StockfishClient {
   private worker: Worker;
   private isReady: boolean = false;
   private onMessageCallback: ((msg: string) => void) | null = null;
+  private resolveCurrent: ((value: { bestMove: string, score: EngineScore | null }) => void) | null = null;
+  private currentCommand: 'uci' | 'go' | null = null;
+  private bestMove: string | null = null;
+  private score: EngineScore | null = null;
 
-  private constructor(workerUrl: string) {
-    this.worker = new Worker(workerUrl);
+  private constructor(worker: Worker) {
+    this.worker = worker;
   }
 
   static async create(url: string): Promise<StockfishClient> {
@@ -72,7 +84,9 @@ export class StockfishClient {
           const script = await response.text();
           const blob = new Blob([script], { type: 'application/javascript' });
           const blobUrl = URL.createObjectURL(blob);
-          const client = new StockfishClient(blobUrl);
+          const worker = new Worker(blobUrl);
+
+          const client = new StockfishClient(worker);
           await client.init();
           return client;
       } catch (e) {
@@ -87,18 +101,53 @@ export class StockfishClient {
         if (msg === 'uciok') {
             this.isReady = true;
         }
+        this.handleMessage(msg);
         if (this.onMessageCallback) this.onMessageCallback(msg);
     };
     this.worker.postMessage('uci');
     // Wait for uciok
-    return new Promise<void>((resolve) => {
+    return new Promise<void>((resolve, reject) => {
+        let attempts = 0;
         const check = setInterval(() => {
+            attempts++;
             if (this.isReady) {
                 clearInterval(check);
                 resolve();
             }
+            if (attempts > 200) { // 10 seconds
+                clearInterval(check);
+                reject(new Error("Stockfish init timeout"));
+            }
         }, 50);
     });
+  }
+
+  private handleMessage(line: string) {
+      if (this.currentCommand === 'go') {
+          // Handle CP score
+          if (line.startsWith('info') && line.includes('score cp')) {
+              const match = line.match(/score cp (-?\d+)/);
+              if (match) {
+                   this.score = { unit: 'cp', value: parseInt(match[1]) };
+              }
+          }
+          // Handle Mate score
+          else if (line.startsWith('info') && line.includes('score mate')) {
+              const match = line.match(/score mate (-?\d+)/);
+              if (match) {
+                  this.score = { unit: 'mate', value: parseInt(match[1]) };
+              }
+          }
+
+          if (line.startsWith('bestmove')) {
+              this.bestMove = line.split(' ')[1];
+              if (this.resolveCurrent) {
+                  this.resolveCurrent({ bestMove: this.bestMove, score: this.score });
+                  this.resolveCurrent = null;
+                  this.currentCommand = null;
+              }
+          }
+      }
   }
 
   async setOption(name: string, value: string | number) {
@@ -111,29 +160,10 @@ export class StockfishClient {
 
   async go(depth: number): Promise<{ bestMove: string, score: EngineScore | null }> {
       return new Promise((resolve) => {
-          let bestMove = '';
-          let score: EngineScore | null = null;
-
-          const listener = (e: MessageEvent) => {
-              const msg = e.data;
-              if (msg.startsWith('info') && msg.includes('score')) {
-                  const parts = msg.split(' ');
-                  const scoreIdx = parts.indexOf('score');
-                  if (scoreIdx !== -1) {
-                      const type = parts[scoreIdx + 1];
-                      const val = parseInt(parts[scoreIdx + 2]);
-                      if (type === 'cp' || type === 'mate') {
-                          score = { unit: type as 'cp' | 'mate', value: val };
-                      }
-                  }
-              }
-              if (msg.startsWith('bestmove')) {
-                  bestMove = msg.split(' ')[1];
-                  this.worker.removeEventListener('message', listener);
-                  resolve({ bestMove, score });
-              }
-          };
-          this.worker.addEventListener('message', listener);
+          this.currentCommand = 'go';
+          this.score = null;
+          this.bestMove = null;
+          this.resolveCurrent = resolve;
           this.worker.postMessage(`go depth ${depth}`);
       });
   }
@@ -157,162 +187,274 @@ const normalizeScore = (score: EngineScore | null): number => {
     return score.value;
 };
 
+// Convert score to CP for comparison logic
+const getComparisonScore = (score: EngineScore, turn: 'w' | 'b'): number => {
+    let cp = 0;
+    if (score.unit === 'cp') {
+        cp = score.value;
+    } else {
+        // Mate
+        if (score.value > 0) cp = 10000 - score.value; // Positive Mate (e.g. M1 = 9999)
+        else cp = -10000 - score.value; // Negative Mate (e.g. -M1 = -9999)
+    }
+
+    // Engine returns score relative to side to move.
+    // If it's Black's turn, a positive score means Black is winning.
+    // We normalize to White perspective for consistent loss calculation.
+    if (turn === 'b') {
+        cp = -cp;
+    }
+    return cp;
+};
+
 export const analyzeGame = async (
     pgn: string,
     onProgress?: (current: number, total: number) => void
 ): Promise<GameReviewData> => {
-    // 1. Setup Game and Client
+    // 1. Setup Engine
+    let client: StockfishClient | null = null;
+    try {
+        client = await StockfishClient.create(STOCKFISH_URL);
+        await client.setOption('MultiPV', 1);
+    } catch (e) {
+        console.warn("Analysis engine failed to load, proceeding with move parsing only.", e);
+    }
+
+    // 2. Parse Game
     const game = new Chess();
-    game.loadPgn(pgn);
+    try {
+        game.loadPgn(pgn);
+    } catch (e) {
+        console.error("Invalid PGN for analysis", e);
+        return { accuracy: { w: 0, b: 0 }, performanceRating: { w: 400, b: 400 }, opening: "Unknown", moves: [] };
+    }
+
     const history = game.history({ verbose: true });
 
-    const client = await StockfishClient.create(STOCKFISH_URL);
-    await client.setOption('MultiPV', 1);
+    // Identify Opening
+    const openingName = identifyOpening(pgn);
 
-    const movesAnalysis: MoveAnalysis[] = [];
-    const tempGame = new Chess(); // To replay and get FENs
+    // Reconstruct game states
+    const tempGame = new Chess();
+    const movesToAnalyze: { fenBefore: string, fenAfter: string, move: any }[] = [];
 
-    // Analyze Position 0 (Start)
-    client.setPosition(tempGame.fen());
-    const startAnalysis = await client.go(10); // Low depth for speed
-
-    let currentEval = normalizeScore(startAnalysis.score);
-
-    for (let i = 0; i < history.length; i++) {
-        const move = history[i];
-        const isWhite = move.color === 'w';
-
-        // 2. Make the move to get next position
+    for (const move of history) {
+        const fenBefore = tempGame.fen();
         tempGame.move(move);
         const fenAfter = tempGame.fen();
+        movesToAnalyze.push({ fenBefore, fenAfter, move });
+    }
 
-        // 3. Analyze Position After
-        client.setPosition(fenAfter);
-        const result = await client.go(12);
+    const results: MoveAnalysis[] = [];
 
-        let whiteEvalAfter = normalizeScore(result.score);
-        // If it was black's turn to move (result is from white's perspective after black move),
-        // Stockfish gives score relative to side to move? No, UCI 'score cp' is always side-to-move relative usually.
-        // Wait, 'score cp' in UCI is relative to the side to move.
-        // My normalizeScore doesn't account for who moved.
+    // Analyze Loop
+    // Reduced depth to 12 for better performance
+    const DEPTH = 12;
 
-        // Actually, let's verify UCI 'score cp'.
-        // "The score is from the point of view of the side to move."
-        // So if White just moved, it's Black's turn. The score is for Black.
-        // So `result.score.value` is for Black.
-        // White Eval = -1 * result.score.value.
+    for (let i = 0; i < movesToAnalyze.length; i++) {
+        if (onProgress) onProgress(i + 1, movesToAnalyze.length);
 
-        // Let's refine `whiteEvalAfter`.
-        // `fenAfter` is the position with `game.turn()` (next player) to move.
-        // If `game.turn()` is Black, result is for Black. WhiteEval = -result.
-        // If `game.turn()` is White, result is for White. WhiteEval = result.
+        const { fenBefore, fenAfter, move } = movesToAnalyze[i];
+        const turnBefore = fenBefore.split(' ')[1] as 'w' | 'b';
+        const turnAfter = fenAfter.split(' ')[1] as 'w' | 'b';
 
-        const turnAfter = tempGame.turn(); // 'w' or 'b'
-        let rawScore = normalizeScore(result.score);
-        if (turnAfter === 'b') {
-            whiteEvalAfter = rawScore; // White just moved. Wait.
-            // If turn is Black, side to move is Black. Score is for Black.
-            // So White score is -rawScore.
-             whiteEvalAfter = -rawScore;
-        } else {
-            // Turn is White. Side to move is White. Score is for White.
-            whiteEvalAfter = rawScore;
-        }
+        let classification: MoveAnalysis['classification'] = 'book';
+        let evalCp = 0;
+        let evalMate: number | undefined = undefined;
+        let bestMove = '';
+        let reason = "";
 
-        // Calculate Loss (how much worse did I make my position?)
-        // If I am White: Loss = PrevEval - NewEval (If I was +500 and now +100, Loss is 400)
-        // If I am Black: Loss = NewEval - PrevEval (If I was -500 (good for black) and now -100, Loss is -100 - (-500) = 400)
+        if (client) {
+            try {
+                // A. Evaluate position BEFORE (to see what was expected)
+                client.setPosition(fenBefore);
+                const bestMoveResult = await client.go(DEPTH);
+                bestMove = bestMoveResult.bestMove;
 
-        const evalDiff = isWhite
-            ? currentEval - whiteEvalAfter
-            : whiteEvalAfter - currentEval;
+                let scoreBefore = 0;
+                let scoreBeforeObj = bestMoveResult.score;
+                let mateBefore: number | undefined = undefined;
 
-        // Classification
-        let classification: MoveAnalysis['classification'] = 'good';
-
-        const prevBestMove = i === 0 ? startAnalysis.bestMove : movesAnalysis[i-1]?._nextBestMove;
-        const uciMove = move.from + move.to + (move.promotion || '');
-
-        // Win Thresholds (CP)
-        const WINNING_THRESHOLD = 700; // +7.00
-        const LOST_WIN_THRESHOLD = 200; // Dropped below +2.00
-
-        const isWinning = isWhite ? currentEval > WINNING_THRESHOLD : currentEval < -WINNING_THRESHOLD;
-        const isMate = isWhite ? currentEval > 10000 : currentEval < -10000;
-
-        const stillWinning = isWhite ? whiteEvalAfter > LOST_WIN_THRESHOLD : whiteEvalAfter < -LOST_WIN_THRESHOLD;
-        const stillMate = isWhite ? whiteEvalAfter > 10000 : whiteEvalAfter < -10000;
-
-        if (uciMove === prevBestMove) {
-            classification = 'best';
-        } else {
-             // Missed Win Logic
-            if ((isMate && !stillMate) || (isWinning && !stillWinning)) {
-                // Check if the drop is significant
-                if (evalDiff > 300) { // arbitrary threshold for "Missed Win"
-                    classification = 'forced';
-                } else {
-                    classification = 'blunder';
+                if (scoreBeforeObj) {
+                    scoreBefore = getComparisonScore(scoreBeforeObj, turnBefore);
+                    if (scoreBeforeObj.unit === 'mate') {
+                        mateBefore = turnBefore === 'w' ? scoreBeforeObj.value : -scoreBeforeObj.value;
+                    }
                 }
-            } else if (evalDiff <= 25) {
-                classification = 'great';
-            } else if (evalDiff <= 60) {
-                classification = 'inaccuracy';
-            } else if (evalDiff <= 200) {
-                classification = 'mistake';
-            } else {
-                classification = 'blunder';
+
+                // B. Check if played move matches best move
+                const playedMoveUci = move.from + move.to + (move.promotion || '');
+                classification = 'good';
+                evalCp = scoreBefore;
+
+                // Check for forced mate sequence
+                const isForcedMate = mateBefore !== undefined &&
+                                     ((turnBefore === 'w' && mateBefore > 0) || (turnBefore === 'b' && mateBefore < 0));
+
+                // Identify capture/check context
+                const isCapture = move.captured || move.flags.includes('c') || move.flags.includes('e');
+                const isCheck = move.san.includes('+');
+
+                if (bestMove === playedMoveUci) {
+                    classification = 'best';
+                    if (isForcedMate) {
+                        classification = 'great'; // Finding mate is great
+                        reason = "You found the correct winning move!";
+                    } else if (isCapture) {
+                        reason = "Best move. You captured the right piece.";
+                    } else {
+                        reason = "This was the best move in the position.";
+                    }
+                } else {
+                    // C. Evaluate RESULTING position
+                    client.setPosition(fenAfter);
+                    const afterResult = await client.go(DEPTH);
+
+                    let scoreAfter = 0;
+                    const scoreAfterObj = afterResult.score;
+                    let mateAfter: number | undefined = undefined;
+
+                    if (scoreAfterObj) {
+                        scoreAfter = getComparisonScore(scoreAfterObj, turnAfter);
+                        evalCp = scoreAfter; // This is the eval *after* the move
+                        if (scoreAfterObj.unit === 'mate') {
+                            mateAfter = turnAfter === 'w' ? scoreAfterObj.value : -scoreAfterObj.value;
+                        }
+                    }
+                    evalMate = mateAfter; // Store for UI
+
+                    const isWhite = move.color === 'w';
+                    const loss = isWhite ? (scoreBefore - scoreAfter) : (scoreAfter - scoreBefore);
+
+                    // CLASSIFICATION LOGIC
+
+                    // 1. Missed Win
+                    // If we had a mate (isForcedMate) and now we don't (or mate is much slower/lost)
+                    if (isForcedMate) {
+                         // Check if we still have mate
+                         const stillHasMate = mateAfter !== undefined && ((isWhite && mateAfter > 0) || (!isWhite && mateAfter < 0));
+                         if (!stillHasMate) {
+                             classification = 'missed-win';
+                             reason = "You missed a forced checkmate sequence.";
+                         } else {
+                             // Still mate but maybe slower?
+                             classification = 'good'; // or inaccuracy
+                             reason = "You still have a mate, but there was a faster way.";
+                         }
+                    }
+                    // 2. Blunder (High CP Loss or Losing winning position)
+                    else if (loss > 200) {
+                        classification = 'blunder';
+                        if (isCapture) {
+                            reason = "This capture was a blunder.";
+                        } else if (loss > 500) {
+                             reason = "A critical error that loses the game.";
+                        } else {
+                            reason = "You gave away a significant advantage.";
+                        }
+                    }
+                    // 3. Mistake
+                    else if (loss > 100) {
+                        classification = 'mistake';
+                        if (isCapture) {
+                             reason = "This capture hurts your position.";
+                        } else if (isCheck) {
+                             reason = "This check was a mistake.";
+                        } else {
+                             reason = "This move hurts your position.";
+                        }
+                    }
+                    // 4. Inaccuracy
+                    else if (loss > 50) {
+                        classification = 'inaccuracy';
+                        reason = "There was a slightly better move.";
+                    }
+                    // 5. Good/Excellent
+                    else if (loss > 20) {
+                        classification = 'good';
+                        reason = "A solid move.";
+                    } else {
+                        classification = 'excellent';
+                        reason = "An excellent move!";
+                    }
+                }
+            } catch (err) {
+                console.error("Error analyzing move", i, err);
             }
         }
 
         // Book Move Override
-        if (i < 10 && evalDiff < 20 && classification !== 'best' && classification !== 'forced') {
-             classification = 'book';
+        if (i < 8 && classification !== 'best' && classification !== 'missed-win' && classification !== 'blunder') {
+             // Heuristic: If early in game and not a disaster, call it book or good.
+             // We could check if it is in Opening DB, but for now simple heuristic.
+             // classification = 'book';
         }
 
-        // Override for "Good" moves that aren't quite great but not inaccuracies
-        if (classification === 'inaccuracy' && evalDiff < 30) classification = 'good';
-
-
-        movesAnalysis.push({
-            moveSan: move.san,
+        results.push({
+            moveNumber: Math.floor(i / 2) + 1,
             moveIndex: i,
-            score: { unit: 'cp', value: whiteEvalAfter }, // Store White perspective score
-            bestMove: prevBestMove || '',
+            color: move.color,
+            san: move.san,
+            from: move.from,
+            to: move.to,
+            fen: fenAfter,
+            eval: evalCp,
+            mate: evalMate,
+            bestMove: bestMove,
             classification: classification,
-            _nextBestMove: result.bestMove
+            reason: reason
         });
+    }
 
-        // Update state for next loop
-        currentEval = whiteEvalAfter;
+    if (client) {
+        client.terminate();
+    }
+    return calculateStats(results, openingName);
+};
 
-        if (onProgress) {
-            onProgress(i + 1, history.length);
+const calculateStats = (moves: MoveAnalysis[], opening: string): GameReviewData => {
+    let wScore = 0, bScore = 0;
+    let wMoves = 0, bMoves = 0;
+
+    for (const m of moves) {
+        const score = m.classification === 'best' ? 100 :
+                      m.classification === 'great' ? 95 :
+                      m.classification === 'excellent' ? 90 :
+                      m.classification === 'good' ? 80 :
+                      m.classification === 'book' ? 100 :
+                      m.classification === 'inaccuracy' ? 50 :
+                      m.classification === 'mistake' ? 20 :
+                      m.classification === 'missed-win' ? 0 :
+                      m.classification === 'blunder' ? 0 : 0;
+
+        if (m.color === 'w') {
+            wScore += score;
+            wMoves++;
+        } else {
+            bScore += score;
+            bMoves++;
         }
     }
 
-    client.terminate();
+    const wAccuracy = wMoves ? Math.round(wScore / wMoves) : 0;
+    const bAccuracy = bMoves ? Math.round(bScore / bMoves) : 0;
 
-    let totalScore = 0;
-    movesAnalysis.forEach(m => {
-        switch (m.classification) {
-            case 'brilliant':
-            case 'best':
-            case 'book': totalScore += 100; break;
-            case 'great': totalScore += 95; break;
-            case 'good': totalScore += 80; break;
-            case 'inaccuracy': totalScore += 50; break;
-            case 'mistake': totalScore += 20; break;
-            case 'blunder':
-            case 'forced':
-                totalScore += 0; break;
-        }
-    });
-
-    const accuracy = Math.round(totalScore / Math.max(1, movesAnalysis.length));
+    // Estimate Elo based on accuracy
+    // Simple linear interpolation for fun
+    // 100 -> 2800, 50 -> 400
+    const wElo = Math.max(100, Math.round(400 + (wAccuracy - 50) * 48));
+    const bElo = Math.max(100, Math.round(400 + (bAccuracy - 50) * 48));
 
     return {
-        accuracy,
-        moves: movesAnalysis
+        accuracy: {
+            w: wAccuracy,
+            b: bAccuracy
+        },
+        performanceRating: {
+            w: wElo,
+            b: bElo
+        },
+        opening,
+        moves
     };
 };
