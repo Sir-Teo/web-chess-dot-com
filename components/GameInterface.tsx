@@ -25,9 +25,11 @@ interface GameInterfaceProps {
   initialTimeControl?: number;
   initialFen?: string;
   onAnalyze?: (pgn: string, tab?: 'analysis' | 'review') => void;
+  tournamentParams?: { tournamentId: string, opponentId: string };
+  onNavigate?: (view: string, params?: any) => void;
 }
 
-const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', initialTimeControl = 600, initialFen, onAnalyze }) => {
+const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', initialTimeControl = 600, initialFen, onAnalyze, tournamentParams, onNavigate }) => {
   const [activePanel, setActivePanel] = useState<'play' | 'review' | 'bots' | 'coach'>(initialMode);
   const [activeBot, setActiveBot] = useState<BotProfile | null>(null);
 
@@ -651,7 +653,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
     <div className="flex flex-col md:flex-row h-full md:h-screen w-full overflow-hidden bg-chess-dark">
 
       {/* Left Area (Board) */}
-      <div className="flex-none md:flex-1 flex flex-col items-center justify-center p-0 md:p-4 bg-[#312e2b] relative">
+      <div className="flex-none md:flex-1 flex flex-col items-center justify-start md:justify-center p-0 md:p-4 bg-[#312e2b] relative">
 
         {/* Evaluation Bar Desktop */}
         {!isGameOver && (isCoachMode ? coachSettings.showEvalBar : true) && (
@@ -670,7 +672,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
             />
 
             {/* Opponent Info (Top) */}
-            <div className="flex justify-between items-end mb-1 px-3 md:px-1 relative">
+            <div className="flex justify-between items-end mb-1 px-3 md:px-1 relative pt-2 md:pt-0">
                 <div className="flex items-center gap-2 md:gap-3">
                     <div className="w-8 h-8 md:w-10 md:h-10 rounded bg-gray-500 overflow-hidden border border-white/20 relative group">
                         {onlineOpponent ? (
@@ -720,6 +722,13 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
                     </div>
                 )}
             </div>
+
+            {/* Evaluation Bar Mobile (Horizontal) */}
+            {!isGameOver && (isCoachMode ? coachSettings.showEvalBar : true) && (
+                 <div className="md:hidden w-full h-3 mb-1 relative shadow-sm">
+                    <EvaluationBar score={currentEval.score} mate={currentEval.mate} orientation="horizontal" />
+                </div>
+            )}
 
             <div className="rounded-sm shadow-2xl ring-4 ring-black/10 relative aspect-square">
                  <Chessboard
