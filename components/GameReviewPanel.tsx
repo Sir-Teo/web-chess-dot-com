@@ -15,7 +15,7 @@ interface GameReviewPanelProps {
   onRetry?: (fen: string, moveIndex: number, bestMove: string) => void;
 }
 
-const GameReviewPanel: React.FC<GameReviewPanelProps> = ({ pgn, onStartReview, onAnalysisComplete, existingData, onMoveClick, onRetry }) => {
+const GameReviewPanel: React.FC<GameReviewPanelProps> = ({ pgn, onStartReview, onAnalysisComplete, existingData, onMoveClick, onRetry, currentMoveIndex }) => {
   const [reviewState, setReviewState] = useState<'idle' | 'analyzing' | 'complete'>('idle');
   const [progress, setProgress] = useState(0);
   const [data, setData] = useState<GameReviewData | null>(null);
