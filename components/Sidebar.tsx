@@ -23,7 +23,11 @@ import {
   BookOpen,
   User,
   Menu,
-  MessageCircle
+  MessageCircle,
+  X,
+  ChevronDown,
+  ChevronUp,
+  LogOut
 } from 'lucide-react';
 import { useSettings } from '../context/SettingsContext';
 
@@ -36,6 +40,10 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => {
   const [hoveredTab, setHoveredTab] = useState<string | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { openSettings } = useSettings();
+
+  // Mobile Menu State
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [expandedMobileMenu, setExpandedMobileMenu] = useState<string | null>(null);
 
   const handleMouseEnter = (id: string) => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
@@ -103,8 +111,27 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => {
       { id: 'puzzles', label: 'Puzzles', icon: Puzzle },
       { id: 'learn', label: 'Learn', icon: GraduationCap },
       { id: 'watch', label: 'Watch', icon: Binoculars },
-      { id: 'more', label: 'More', icon: Menu },
+      { id: 'more', label: 'More', icon: Menu }, // Opens Mobile Menu
   ];
+
+  const handleMobileNavClick = (id: string) => {
+    if (id === 'more') {
+        setIsMobileMenuOpen(prev => !prev);
+        setExpandedMobileMenu(null);
+    } else if (id === 'learn') {
+        // If already on learn tab, maybe just toggle menu?
+        // Or if menu is closed, open it to Learn section
+        setIsMobileMenuOpen(true);
+        setExpandedMobileMenu(expandedMobileMenu === 'learn' ? null : 'learn');
+    } else {
+        setActiveTab(id);
+        setIsMobileMenuOpen(false);
+    }
+  };
+
+  const toggleMobileSubMenu = (id: string) => {
+      setExpandedMobileMenu(prev => prev === id ? null : id);
+  };
 
   const hoveredItem = navItems.find(item => item.id === hoveredTab);
 
@@ -181,20 +208,114 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => {
     </div>
 
     {/* Mobile Bottom Navigation */}
-    <div className="md:hidden fixed bottom-0 left-0 right-0 bg-[#211f1c] border-t border-white/10 z-50 flex justify-around items-center h-[60px] pb-safe">
+    <div className="md:hidden fixed bottom-0 left-0 right-0 bg-[#211f1c] border-t border-white/10 z-[60] flex justify-around items-center h-[60px] pb-safe">
         {mobileNavItems.map((item) => (
             <button 
                 key={item.id}
-                onClick={() => setActiveTab(item.id === 'play' ? 'play' : item.id === 'puzzles' ? 'puzzles' : 'dashboard')}
+                onClick={() => handleMobileNavClick(item.id)}
                 className="flex flex-col items-center justify-center w-full h-full gap-1 active:bg-white/5"
             >
-                <item.icon className={`w-6 h-6 ${activeTab === item.id ? 'text-chess-green' : 'text-[#8b8987]'}`} />
-                <span className={`text-[10px] font-semibold ${activeTab === item.id ? 'text-white' : 'text-[#8b8987]'}`}>
+                <item.icon className={`w-6 h-6 ${activeTab === item.id && !isMobileMenuOpen ? 'text-chess-green' : 'text-[#8b8987]'}`} />
+                <span className={`text-[10px] font-semibold ${activeTab === item.id && !isMobileMenuOpen ? 'text-white' : 'text-[#8b8987]'}`}>
                     {item.label}
                 </span>
             </button>
         ))}
     </div>
+
+    {/* Mobile Menu Overlay */}
+    {isMobileMenuOpen && (
+        <div className="md:hidden fixed inset-0 z-50 bg-[#211f1c] flex flex-col pb-[60px] animate-in slide-in-from-bottom duration-200">
+            {/* Header */}
+            <div className="flex items-center justify-between p-4 border-b border-white/10">
+                <div className="flex items-center gap-1">
+                    <div className="text-chess-green font-bold text-2xl tracking-tighter">Chess</div>
+                    <div className="text-white font-bold text-2xl tracking-tighter">.com</div>
+                </div>
+                <button onClick={() => setIsMobileMenuOpen(false)} className="text-gray-400 hover:text-white">
+                    <X className="w-6 h-6" />
+                </button>
+            </div>
+
+            {/* Menu Content */}
+            <div className="flex-1 overflow-y-auto p-2">
+                {/* Search */}
+                <div className="relative mb-4 px-2">
+                    <input
+                        type="text"
+                        placeholder="Search"
+                        className="w-full bg-[#1b1a19] text-sm text-gray-300 rounded-md py-3 pl-10 pr-4 border border-white/10 focus:border-white/20 outline-none"
+                    />
+                    <Search className="w-5 h-5 absolute left-5 top-3 text-gray-500" />
+                </div>
+
+                {/* Nav Items */}
+                <div className="flex flex-col gap-1">
+                    {navItems.map((item) => (
+                        <div key={item.id} className="flex flex-col">
+                            <button
+                                onClick={() => {
+                                    if (item.subItems) {
+                                        toggleMobileSubMenu(item.id);
+                                    } else {
+                                        setActiveTab(item.id);
+                                        setIsMobileMenuOpen(false);
+                                    }
+                                }}
+                                className={`
+                                    w-full flex items-center justify-between px-4 py-3 rounded-lg transition-colors
+                                    ${activeTab === item.id ? 'bg-[#302e2b] text-white' : 'text-[#c3c3c3] hover:bg-[#2a2926]'}
+                                `}
+                            >
+                                <div className="flex items-center gap-4">
+                                    <item.icon className={`w-6 h-6 ${activeTab === item.id ? 'text-chess-green' : 'text-[#8b8987]'}`} />
+                                    <span className="font-bold text-lg">{item.label}</span>
+                                </div>
+                                {item.subItems && (
+                                    expandedMobileMenu === item.id ? <ChevronUp className="w-5 h-5 text-gray-500" /> : <ChevronDown className="w-5 h-5 text-gray-500" />
+                                )}
+                            </button>
+
+                            {/* Sub Items */}
+                            {item.subItems && expandedMobileMenu === item.id && (
+                                <div className="ml-12 flex flex-col gap-1 mt-1 mb-2 border-l border-white/10 pl-2">
+                                    {item.subItems.map((sub, idx) => (
+                                        <button
+                                            key={idx}
+                                            onClick={() => {
+                                                setActiveTab(sub.action);
+                                                setIsMobileMenuOpen(false);
+                                            }}
+                                            className="flex items-center gap-3 px-4 py-3 rounded-md text-gray-400 hover:text-white hover:bg-white/5 text-left"
+                                        >
+                                            <sub.icon className="w-5 h-5 opacity-70" />
+                                            <span className="font-semibold">{sub.label}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    ))}
+                </div>
+
+                {/* Extra Mobile Actions */}
+                <div className="mt-6 border-t border-white/10 pt-4 px-2 flex flex-col gap-2">
+                    <button onClick={openSettings} className="flex items-center gap-4 px-4 py-3 rounded-lg text-[#c3c3c3] hover:bg-[#2a2926]">
+                        <Settings className="w-6 h-6 text-[#8b8987]" />
+                        <span className="font-bold text-lg">Settings</span>
+                    </button>
+                    <button className="flex items-center gap-4 px-4 py-3 rounded-lg text-[#c3c3c3] hover:bg-[#2a2926]">
+                        <Diamond className="w-6 h-6 text-blue-500" />
+                        <span className="font-bold text-lg text-blue-500">Membership</span>
+                    </button>
+                    <button className="flex items-center gap-4 px-4 py-3 rounded-lg text-[#c3c3c3] hover:bg-[#2a2926]">
+                        <LogOut className="w-6 h-6 text-[#8b8987]" />
+                        <span className="font-bold text-lg">Log Out</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    )}
 
     {/* Flyout Menu (Desktop Only) */}
     {hoveredItem && hoveredItem.subItems && (
