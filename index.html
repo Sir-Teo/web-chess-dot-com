@@ -2,7 +2,9 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#312e2b" />
+    <link rel="manifest" href="/manifest.json" />
     <title>Chess.com Clone</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -37,7 +39,17 @@
       body {
         background-color: #312e2b;
         color: #c3c3c3;
+        overscroll-behavior-y: none;
       }
+      /* Safe Area Utilities */
+      .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+      .pt-safe { padding-top: env(safe-area-inset-top); }
+      .pl-safe { padding-left: env(safe-area-inset-left); }
+      .pr-safe { padding-right: env(safe-area-inset-right); }
+
+      /* Mobile Nav Padding: 60px (nav height) + safe area */
+      .pb-nav-mobile { padding-bottom: calc(60px + env(safe-area-inset-bottom)); }
+
       /* Custom scrollbar for authentic feel */
       ::-webkit-scrollbar {
         width: 8px;

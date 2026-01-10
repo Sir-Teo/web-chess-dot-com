@@ -150,7 +150,7 @@ const AppContent: React.FC = () => {
     <div className="flex min-h-screen bg-chess-dark font-sans antialiased text-chess-text selection:bg-chess-green selection:text-white">
       <Sidebar activeTab={activeTab === 'play-friend' ? 'play' : activeTab} setActiveTab={handleNavigate} />
       
-      <main className="flex-1 flex flex-col overflow-hidden relative pb-[60px] md:pb-0">
+      <main className="flex-1 flex flex-col overflow-hidden relative pb-nav-mobile md:pb-0">
         {renderContent()}
       </main>
 

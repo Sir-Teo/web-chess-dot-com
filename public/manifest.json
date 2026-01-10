@@ -1,0 +1,20 @@
+{
+  "short_name": "Chess",
+  "name": "Chess.com Clone",
+  "icons": [
+    {
+      "src": "https://www.chess.com/bundles/web/favicons/apple-touch-icon.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "https://www.chess.com/bundles/web/favicons/apple-touch-icon.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#312e2b",
+  "background_color": "#312e2b"
+}
