@@ -15,9 +15,10 @@ interface GameReviewPanelProps {
   currentMoveIndex?: number; // To highlight key moments in list? Or navigate to them.
   onMoveClick?: (fen: string, index: number) => void;
   onRetry?: (fen: string, moveIndex: number, bestMove: string) => void;
+  userColor?: 'w' | 'b';
 }
 
-const GameReviewPanel: React.FC<GameReviewPanelProps> = ({ pgn, onStartReview, onAnalysisComplete, existingData, onMoveClick, onRetry, currentMoveIndex }) => {
+const GameReviewPanel: React.FC<GameReviewPanelProps> = ({ pgn, onStartReview, onAnalysisComplete, existingData, onMoveClick, onRetry, currentMoveIndex, userColor }) => {
   const [reviewState, setReviewState] = useState<'idle' | 'analyzing' | 'complete'>('idle');
   const [progress, setProgress] = useState(0);
   const [data, setData] = useState<GameReviewData | null>(null);
@@ -64,12 +65,19 @@ const GameReviewPanel: React.FC<GameReviewPanelProps> = ({ pgn, onStartReview, o
           if (counts[m.classification] !== undefined) {
               counts[m.classification]++;
           }
+          if (m.classification === 'missed-win') {
+              counts.forced++;
+          }
       });
       setStats(counts);
 
-      setBlunders(reviewData.moves.filter(m => m.classification === 'blunder'));
-      setMistakes(reviewData.moves.filter(m => m.classification === 'mistake'));
-      setMissedWins(reviewData.moves.filter(m => m.classification === 'forced'));
+      // Key moments focus on user errors primarily? Or both?
+      // If userColor is provided, filter by it. Else show all.
+      const relevantMoves = userColor ? reviewData.moves.filter(m => m.color === userColor) : reviewData.moves;
+
+      setBlunders(relevantMoves.filter(m => m.classification === 'blunder'));
+      setMistakes(relevantMoves.filter(m => m.classification === 'mistake'));
+      setMissedWins(relevantMoves.filter(m => m.classification === 'missed-win' || m.classification === 'forced'));
   };
 
   const handleMomentClick = (moments: MoveAnalysis[]) => {
@@ -100,7 +108,7 @@ const GameReviewPanel: React.FC<GameReviewPanelProps> = ({ pgn, onStartReview, o
            ? 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
            : history[targetIndex - 1].after;
 
-      onRetry(fenBefore, targetIndex, moment.bestMove);
+      onRetry(fenBefore, targetIndex, moment.bestMove || '');
   };
 
   const handleStartReview = async () => {
@@ -143,6 +151,13 @@ const GameReviewPanel: React.FC<GameReviewPanelProps> = ({ pgn, onStartReview, o
       </div>
   );
 
+  // Get active move classification/reason
+  const activeMove = data && currentMoveIndex !== undefined && currentMoveIndex >= 0 ? data.moves[currentMoveIndex] : null;
+
+  const displayColor = userColor || 'w';
+  const userAccuracy = data ? (displayColor === 'w' ? data.accuracy.w : data.accuracy.b) : 0;
+  const userElo = data ? (displayColor === 'w' ? data.performanceRating.w : data.performanceRating.b) : 0;
+
   return (
     <div className="flex flex-col h-full bg-[#262522] text-white">
         {/* Header */}
@@ -150,6 +165,25 @@ const GameReviewPanel: React.FC<GameReviewPanelProps> = ({ pgn, onStartReview, o
             <h2 className="font-bold text-lg">Game Review</h2>
             {data && <div className="text-xs text-gray-400">{data.moves.length} moves</div>}
         </div>
+
+        {/* Active Move Feedback Banner */}
+        {activeMove && reviewState === 'complete' && (
+            <div className="bg-[#211f1c] p-3 border-b border-white/5 animate-in fade-in slide-in-from-top-2">
+                 <div className="flex items-start gap-3">
+                     <div className="mt-1">
+                        <MoveClassificationIcon classification={activeMove.classification} size="md" />
+                     </div>
+                     <div>
+                         <div className="font-bold text-sm capitalize mb-0.5">
+                             {activeMove.classification.replace('-', ' ')}
+                         </div>
+                         <div className="text-xs text-gray-400 leading-snug">
+                             {activeMove.reason || "No detailed analysis available."}
+                         </div>
+                     </div>
+                 </div>
+            </div>
+        )}
 
         {reviewState === 'idle' && !existingData ? (
              <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
@@ -202,13 +236,35 @@ const GameReviewPanel: React.FC<GameReviewPanelProps> = ({ pgn, onStartReview, o
                  )}
 
                  {/* Accuracy Score */}
-                 <div className="p-4 flex flex-col items-center border-b border-white/5 bg-gradient-to-b from-[#262522] to-[#211f1c]">
-                     <div className="text-xs text-gray-400 font-bold uppercase mb-1">Accuracy</div>
-                     <div className="text-6xl font-black text-white mb-1 tracking-tighter">{data?.accuracy}</div>
-                     <div className={`text-sm font-bold ${data?.accuracy && data.accuracy >= 90 ? "text-green-400" : "text-yellow-400"}`}>
-                         {data?.accuracy && data.accuracy >= 90 ? "Excellent" : data?.accuracy && data.accuracy >= 70 ? "Good" : "Inaccuracy"}
+                 <div className="grid grid-cols-2 gap-px bg-white/5 border-b border-white/5">
+                     <div className="p-4 flex flex-col items-center bg-[#262522]">
+                         <div className="text-xs text-gray-400 font-bold uppercase mb-1">Accuracy</div>
+                         <div className="text-4xl font-black text-white mb-1 tracking-tighter">
+                             {userAccuracy}
+                         </div>
+                         <div className={`text-xs font-bold ${userAccuracy >= 90 ? "text-green-400" : userAccuracy >= 70 ? "text-yellow-400" : "text-gray-400"}`}>
+                             {userAccuracy >= 90 ? "Excellent" : userAccuracy >= 70 ? "Good" : "Inaccuracy"}
+                         </div>
+                     </div>
+                     <div className="p-4 flex flex-col items-center bg-[#262522]">
+                        <div className="text-xs text-gray-400 font-bold uppercase mb-1">Est. Elo</div>
+                         <div className="text-4xl font-black text-white mb-1 tracking-tighter">
+                             {userElo}
+                         </div>
+                         <div className="text-xs text-gray-500 font-medium">Performance</div>
                      </div>
                  </div>
+
+                 {/* Opening Info */}
+                 {data?.opening && (
+                     <div className="p-3 border-b border-white/5 flex items-center gap-3 bg-[#2a2926]">
+                         <BookOpen className="w-5 h-5 text-gray-400" />
+                         <div>
+                             <div className="text-xs text-gray-400 font-bold uppercase">Opening</div>
+                             <div className="text-sm font-bold text-white">{data.opening}</div>
+                         </div>
+                     </div>
+                 )}
 
                  {/* Classification Breakdown */}
                  <div className="p-4 border-b border-white/5">
@@ -228,7 +284,7 @@ const GameReviewPanel: React.FC<GameReviewPanelProps> = ({ pgn, onStartReview, o
 
                  {/* Key Moments */}
                  <div className="p-4">
-                     <h4 className="text-xs font-bold text-gray-500 uppercase mb-3">Key Moments</h4>
+                     <h4 className="text-xs font-bold text-gray-500 uppercase mb-3">Key Moments ({displayColor === 'w' ? "White" : "Black"})</h4>
                      <div className="space-y-2">
                          {/* Detailed List for Blunders to allow individual Retry */}
                          <div className="space-y-1">
@@ -242,8 +298,13 @@ const GameReviewPanel: React.FC<GameReviewPanelProps> = ({ pgn, onStartReview, o
                                          <div className="w-6 h-6 rounded-full bg-[#fa412d]/20 flex items-center justify-center">
                                              <XCircle className="w-3 h-3 text-[#fa412d]" />
                                          </div>
-                                         <div className="text-xs font-bold text-gray-300">
-                                             Move {Math.ceil((b.moveIndex + 1) / 2)}
+                                         <div>
+                                            <div className="text-xs font-bold text-gray-300">
+                                                Move {Math.ceil((b.moveIndex + 1) / 2)}
+                                            </div>
+                                            <div className="text-[10px] text-gray-500 truncate max-w-[120px]">
+                                                {b.reason || "Blunder"}
+                                            </div>
                                          </div>
                                      </div>
                                      <button
@@ -272,8 +333,13 @@ const GameReviewPanel: React.FC<GameReviewPanelProps> = ({ pgn, onStartReview, o
                                          <div className="w-6 h-6 rounded-full bg-[#fea500]/20 flex items-center justify-center">
                                              <AlertTriangle className="w-3 h-3 text-[#fea500]" />
                                          </div>
-                                         <div className="text-xs font-bold text-gray-300">
-                                             Move {Math.ceil((b.moveIndex + 1) / 2)}
+                                         <div>
+                                            <div className="text-xs font-bold text-gray-300">
+                                                Move {Math.ceil((b.moveIndex + 1) / 2)}
+                                            </div>
+                                            <div className="text-[10px] text-gray-500 truncate max-w-[120px]">
+                                                {b.reason || "Mistake"}
+                                            </div>
                                          </div>
                                      </div>
                                      <button

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Chess } from 'chess.js';
-import { BotProfile } from '../utils/bots';
+import { BotProfile } from '../src/utils/bots';
 
 export const useBotChatter = (
   game: Chess,

@@ -6,40 +6,55 @@ import {
     Check,
     BookOpen,
     X,
-    Minus
+    Minus,
+    CircleSlash, // For missed win (forced) - or Target
+    Target
 } from 'lucide-react';
 import { MoveAnalysis } from '../src/utils/gameAnalysis';
 
 interface MoveClassificationIconProps {
     classification: MoveAnalysis['classification'] | null | undefined;
-    size?: number;
+    size?: 'sm' | 'md' | 'lg' | number;
 }
 
 const MoveClassificationIcon: React.FC<MoveClassificationIconProps> = ({ classification, size = 16 }) => {
     if (!classification) return null;
 
+    // Resolve size prop
+    let pixelSize = 16;
+    if (typeof size === 'number') {
+        pixelSize = size;
+    } else {
+        switch (size) {
+            case 'sm': pixelSize = 12; break;
+            case 'md': pixelSize = 20; break;
+            case 'lg': pixelSize = 24; break;
+        }
+    }
+
     const getIcon = () => {
         switch (classification) {
             case 'brilliant':
-                return <Sparkles size={size} className="text-white fill-white" />;
+                return <Sparkles size={pixelSize} className="text-white fill-white" />;
             case 'great':
-                return <span className="font-bold font-mono text-white text-[10px]">!</span>;
+                return <span className="font-bold font-mono text-white" style={{ fontSize: pixelSize * 0.8 }}>!</span>;
             case 'best':
-                return <Star size={size} className="text-white fill-white" />; // Filled star usually
+                return <Star size={pixelSize} className="text-white fill-white" />; // Filled star usually
             case 'excellent':
-                return <ThumbsUp size={size} className="text-white fill-white" />;
+                return <ThumbsUp size={pixelSize} className="text-white fill-white" />;
             case 'good':
-                return <Check size={size} className="text-white" />;
+                return <Check size={pixelSize} className="text-white" />;
             case 'book':
-                return <BookOpen size={size} className="text-white fill-white" />;
+                return <BookOpen size={pixelSize} className="text-white fill-white" />;
             case 'inaccuracy':
-                return <span className="font-bold font-mono text-white text-[10px]">?!</span>;
+                return <span className="font-bold font-mono text-white" style={{ fontSize: pixelSize * 0.8 }}>?!</span>;
             case 'mistake':
-                return <span className="font-bold font-mono text-white text-[10px]">?</span>;
+                return <span className="font-bold font-mono text-white" style={{ fontSize: pixelSize * 0.8 }}>?</span>;
             case 'blunder':
-                return <span className="font-bold font-mono text-white text-[10px]">??</span>;
+                return <span className="font-bold font-mono text-white" style={{ fontSize: pixelSize * 0.8 }}>??</span>;
             case 'missed-win':
-                return <Minus size={size} className="text-white" />;
+            case 'forced': // Legacy support
+                return <Target size={pixelSize} className="text-white fill-white" />;
             default:
                 return null;
         }
@@ -56,20 +71,18 @@ const MoveClassificationIcon: React.FC<MoveClassificationIconProps> = ({ classif
             case 'inaccuracy': return 'bg-[#f7c045]'; // Yellow
             case 'mistake': return 'bg-[#e6912c]'; // Orange
             case 'blunder': return 'bg-[#fa412d]'; // Red
-            case 'missed-win': return 'bg-[#fa412d]'; // Red
+            case 'missed-win':
+            case 'forced': return 'bg-[#fa412d]'; // Red or Pink? Chess.com uses Pink/Red for Missed Win.
             default: return 'bg-transparent';
         }
     };
 
     const bgColor = getBgColor();
 
-    // "Good" usually has no background or a subtle one, but consistent styling looks better.
-    // Authentic chess.com icons are often inside a circle or square.
-
     return (
         <div
             className={`flex items-center justify-center rounded-full shadow-sm ${bgColor}`}
-            style={{ width: size + 4, height: size + 4, minWidth: size + 4 }}
+            style={{ width: pixelSize + 4, height: pixelSize + 4, minWidth: pixelSize + 4 }}
             title={classification.charAt(0).toUpperCase() + classification.slice(1)}
         >
             {getIcon()}
