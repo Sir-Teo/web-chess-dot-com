@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Chess } from 'chess.js';
 import { Settings, Play, FastForward, Pause, Cpu, RotateCcw, Copy, Check } from 'lucide-react';
 import MoveList from './MoveList';
+import AnalysisSettingsModal from './AnalysisSettingsModal';
 import { uciLineToSan, GameReviewData } from '../src/utils/gameAnalysis'; // Import helper
 
 interface AnalysisPanelProps {
@@ -30,6 +31,11 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
   const [depth, setDepth] = useState(15);
   const [isAnalyzing, setIsAnalyzing] = useState(true); // Default to analyzing
   const [copied, setCopied] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [engineSettings, setEngineSettings] = useState(() => {
+      const saved = localStorage.getItem('analysis_engine_settings');
+      return saved ? JSON.parse(saved) : { lines: 3, threads: 1, hash: 32 };
+  });
 
   // Destructure stockfish hook
   const { sendCommand, isReady, lines } = stockfish;
@@ -40,24 +46,40 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
       setTimeout(() => setCopied(false), 2000);
   };
 
+  const updateSettings = (newSettings: any) => {
+      setEngineSettings(newSettings);
+      localStorage.setItem('analysis_engine_settings', JSON.stringify(newSettings));
+  };
+
   useEffect(() => {
      if (isReady && isAnalyzing) {
          // Start Analysis
          sendCommand('stop');
 
+         // Apply settings
+         sendCommand(`setoption name MultiPV value ${engineSettings.lines}`);
+         sendCommand(`setoption name Threads value ${engineSettings.threads}`);
+         sendCommand(`setoption name Hash value ${engineSettings.hash}`);
+
          // Use the passed FEN or fallback to game.fen()
          const targetFen = fen || game.fen();
 
          sendCommand(`position fen ${targetFen}`);
-         sendCommand(`setoption name MultiPV value 3`);
          sendCommand(`go depth ${depth}`);
      } else {
          sendCommand('stop');
      }
-  }, [fen, game, isAnalyzing, depth, isReady, sendCommand]);
+  }, [fen, game, isAnalyzing, depth, isReady, sendCommand, engineSettings]);
 
   return (
     <div className="flex flex-col h-full bg-[#262522]">
+        <AnalysisSettingsModal
+            isOpen={showSettings}
+            onClose={() => setShowSettings(false)}
+            initialSettings={engineSettings}
+            onSave={updateSettings}
+        />
+
         {/* Controls Header */}
         <div className="flex items-center justify-between px-4 py-2 bg-[#211f1c] border-b border-white/5">
             <div className="flex items-center gap-2">
@@ -72,7 +94,10 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
                 >
                     {isAnalyzing ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
                 </button>
-                <button className="p-1.5 rounded text-gray-400 hover:text-white bg-[#302e2b]">
+                <button
+                    onClick={() => setShowSettings(true)}
+                    className="p-1.5 rounded text-gray-400 hover:text-white bg-[#302e2b]"
+                >
                     <Settings className="w-4 h-4" />
                 </button>
             </div>
