@@ -1,20 +1,74 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# Chess.com Clone
 
-# Run and deploy your AI Studio app
+A high-fidelity web-based chess platform built with React and TypeScript, featuring interactive gameplay, AI analysis, and comprehensive learning tools.
 
-This contains everything you need to run your app locally.
+## Features
 
-View your app in AI Studio: https://ai.studio/apps/drive/1cubU7QYria1hhTCo455EGFbnKNhATel4
+- **Multiple Game Modes**: Play online, against AI bots, locally (pass-and-play), or with friends via P2P
+- **Advanced Analysis**: Stockfish-powered game analysis with move classification (Brilliant, Blunder, etc.)
+- **Puzzles & Training**: Standard puzzles, Puzzle Rush, daily challenges, and progressive lessons
+- **Opening Study**: 100+ chess openings with ECO classification
+- **Customization**: Multiple board and piece themes, settings for animations, sounds, and move input
+- **Performance Tracking**: Elo estimation, accuracy ratings, and detailed statistics
 
-## Run Locally
+## Tech Stack
 
-**Prerequisites:**  Node.js
+- **Frontend**: React 18 + TypeScript + Vite
+- **Chess Engine**: chess.js + Stockfish.js
+- **UI Components**: react-chessboard, lucide-react
+- **Networking**: PeerJS for multiplayer
 
+## Quick Start
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+**Prerequisites**: Node.js
+
+```bash
+# Install dependencies
+npm install
+
+# Start development server
+npm run dev
+
+# Build for production
+npm run build
+```
+
+The app runs on `http://localhost:3000`
+
+## Project Structure
+
+```
+├── App.tsx                     # Main router and state
+├── components/                 # React components (29 total)
+│   ├── GameInterface.tsx       # Main game UI
+│   ├── AnalysisInterface.tsx   # Game analysis & review
+│   ├── PuzzlesInterface.tsx    # Puzzle modes
+│   └── ...
+├── context/                    # User & settings context
+├── hooks/                      # Custom React hooks
+├── src/utils/                  # Game analysis, puzzles, openings
+└── types.ts                    # TypeScript interfaces
+```
+
+## Key Features Detail
+
+### Game Analysis
+- Real-time Stockfish evaluation
+- Move classification with centipawn analysis
+- Opening identification
+- Player accuracy and performance rating
+
+### Learning Tools
+- Interactive lessons with progression tracking
+- Opening database with detailed variations
+- Coach mode with move feedback
+- Bot opponents with adjustable difficulty
+
+### Customization
+- 6 board themes (Green, Brown, Blue, Gray, Purple, Orange)
+- 7 piece sets (Neo, Wood, Alpha, Classic, Icy, Game Room, Glass)
+- Configurable animations, sounds, and controls
+
+## License
+
+MIT
