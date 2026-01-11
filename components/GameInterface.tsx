@@ -133,6 +133,7 @@ const GameInterface: React.FC<GameInterfaceProps> = ({ initialMode = 'play', ini
 
     if (suggestionArrow) {
         styles[suggestionArrow.from] = { backgroundColor: 'rgba(255, 206, 86, 0.6)' };
+        styles[suggestionArrow.to] = { backgroundColor: 'rgba(255, 206, 86, 0.6)' };
     }
 
     // Check Highlight
