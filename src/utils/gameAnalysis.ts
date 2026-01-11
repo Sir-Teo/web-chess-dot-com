@@ -2,8 +2,8 @@
 import { Chess } from 'chess.js';
 import { identifyOpening } from './openings';
 
-// Define Constant
-export const STOCKFISH_URL = 'https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.0/stockfish.js';
+// Define Constant - using jsdelivr CDN which is more reliable
+export const STOCKFISH_URL = 'https://cdn.jsdelivr.net/npm/stockfish@14.0.0/src/stockfish.js';
 
 // Real implementation of StockfishClient
 export interface EngineScore {
