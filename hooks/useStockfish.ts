@@ -74,27 +74,26 @@ export const useStockfish = () => {
                     setBestLine(pv);
                  }
 
-                 // Handle MultiPV
+                 // Handle MultiPV - default to 1 if not specified (single line mode)
                  const multipvMatch = line.match(/multipv (\d+)/);
                  const depthMatch = line.match(/depth (\d+)/);
 
-                 if (multipvMatch) {
-                     const idx = parseInt(multipvMatch[1]);
-                     const depth = depthMatch ? parseInt(depthMatch[1]) : 0;
+                 // Always update lines - use multipv 1 as default when not specified
+                 const idx = multipvMatch ? parseInt(multipvMatch[1]) : 1;
+                 const currentDepth = depthMatch ? parseInt(depthMatch[1]) : 0;
 
-                     setLines(prev => {
-                         const newLines = [...prev];
-                         const existingIdx = newLines.findIndex(l => l.multipv === idx);
-                         const newLine: AnalysisLine = { multipv: idx, pv, score, depth };
+                 setLines(prev => {
+                     const newLines = [...prev];
+                     const existingIdx = newLines.findIndex(l => l.multipv === idx);
+                     const newLine: AnalysisLine = { multipv: idx, pv, score, depth: currentDepth };
 
-                         if (existingIdx >= 0) {
-                             newLines[existingIdx] = newLine;
-                         } else {
-                             newLines.push(newLine);
-                         }
-                         return newLines.sort((a, b) => a.multipv - b.multipv);
-                     });
-                 }
+                     if (existingIdx >= 0) {
+                         newLines[existingIdx] = newLine;
+                     } else {
+                         newLines.push(newLine);
+                     }
+                     return newLines.sort((a, b) => a.multipv - b.multipv);
+                 });
              }
           }
         };
@@ -116,7 +115,8 @@ export const useStockfish = () => {
 
   const sendCommand = useCallback((cmd: string) => {
     if (workerRef.current) {
-        if (cmd.startsWith('position') || cmd.startsWith('go')) {
+        // Only clear lines when starting a new analysis (go command)
+        if (cmd.startsWith('go')) {
              setLines([]);
         }
         workerRef.current.postMessage(cmd);
