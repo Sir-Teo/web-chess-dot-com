@@ -33,12 +33,21 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
   const [copied, setCopied] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [engineSettings, setEngineSettings] = useState(() => {
-      const saved = localStorage.getItem('analysis_engine_settings');
-      return saved ? JSON.parse(saved) : { lines: 3, threads: 1, hash: 32 };
+      const defaultSettings = { lines: 3, threads: 1, hash: 32 };
+      try {
+          const saved = localStorage.getItem('analysis_engine_settings');
+          if (saved) {
+              const parsed = JSON.parse(saved);
+              return { ...defaultSettings, ...parsed };
+          }
+      } catch (e) {
+          // Ignore parse errors, use defaults
+      }
+      return defaultSettings;
   });
 
   // Destructure stockfish hook
-  const { sendCommand, isReady, lines } = stockfish;
+  const { sendCommand, isReady, isLoading, error, lines } = stockfish;
 
   const handleCopyPgn = () => {
       navigator.clipboard.writeText(game.pgn());
@@ -53,20 +62,26 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
 
   useEffect(() => {
      if (isReady && isAnalyzing) {
-         // Start Analysis
+         // Start Analysis - proper UCI command sequence
          sendCommand('stop');
+
+         // Reset engine state for new analysis
+         sendCommand('ucinewgame');
 
          // Apply settings
          sendCommand(`setoption name MultiPV value ${engineSettings.lines}`);
          sendCommand(`setoption name Threads value ${engineSettings.threads}`);
          sendCommand(`setoption name Hash value ${engineSettings.hash}`);
 
+         // Sync command - engine processes commands in order
+         sendCommand('isready');
+
          // Use the passed FEN or fallback to game.fen()
          const targetFen = fen || game.fen();
 
          sendCommand(`position fen ${targetFen}`);
          sendCommand(`go depth ${depth}`);
-     } else {
+     } else if (!isAnalyzing) {
          sendCommand('stop');
      }
   }, [fen, game, isAnalyzing, depth, isReady, sendCommand, engineSettings]);
@@ -106,7 +121,13 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
         {/* Engine Lines */}
         {isAnalyzing && (
             <div className="p-2 bg-[#211f1c] border-b border-white/5 min-h-[100px] font-mono text-xs overflow-y-auto max-h-[150px]">
-                 {lines.length === 0 ? (
+                 {error ? (
+                     <div className="text-red-400 italic p-2">Engine error: {error}</div>
+                 ) : isLoading ? (
+                     <div className="text-[#706c66] italic p-2">Loading engine...</div>
+                 ) : !isReady ? (
+                     <div className="text-[#706c66] italic p-2">Initializing...</div>
+                 ) : lines.length === 0 ? (
                      <div className="text-[#706c66] italic p-2">Calculating...</div>
                  ) : (
                      lines.map((line: any) => {
